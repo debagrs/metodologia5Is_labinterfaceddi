@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 272 133" role="img" aria-labelledby="title desc">
+  <title id="title">Marca da Metodologia 5I’s</title>
+  <desc id="desc">Selo turquesa com 5 em violeta e I’s em branco.</desc>
+  <path fill="#39B3A4" d="M39 1h194c25 0 39 12 39 38v52c0 27-14 41-39 41H39C13 132 0 119 0 92V40C0 14 13 1 39 1Z"/>
+  <text x="24" y="96" fill="#5B60A9" font-family="Arial Black, Arial, sans-serif" font-size="83" font-weight="900">5</text>
+  <rect x="92" y="69" width="17" height="17" fill="#5B60A9"/>
+  <text x="119" y="97" fill="#FFFFFF" font-family="Rockwell, Courier New, serif" font-size="78" font-weight="900">I’s</text>
+</svg>
