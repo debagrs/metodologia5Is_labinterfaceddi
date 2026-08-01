@@ -1,0 +1,6 @@
+{
+  "name": "Metodologia 5I’s",
+  "description": "Metodologia científica e ambiente de inteligência projetual para design de interfaces baseado em cinco fases: Ideação, Inambulação, Instauração, Inspeção e Implementação.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
