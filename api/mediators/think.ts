@@ -1,5 +1,5 @@
-import { generateMediatorInsight } from '../_lib/mediatorEngine.js';
-import { consumeAiQuota, validateSessionToken } from '../_lib/turso.js';
+import { generateMediatorInsight } from '../_lib/mediatorEngine';
+import { consumeAiQuota, validateSessionToken } from '../_lib/turso';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
