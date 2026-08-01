@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
@@ -6,6 +6,10 @@ import {
 } from 'lucide-react';
 import { ThoughtNode, Project, Phase } from '../types';
 import MediatorSticker from './MediatorSticker';
+
+export interface InfiniteCanvasHandle {
+  getCenteredCardPosition: (cardWidth?: number, cardHeight?: number) => { x: number; y: number };
+}
 
 interface InfiniteCanvasProps {
   project: Project;
@@ -17,7 +21,7 @@ interface InfiniteCanvasProps {
   onDeleteNode: (id: string) => void;
 }
 
-export default function InfiniteCanvas({
+const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(function InfiniteCanvas({
   project,
   nodes,
   activePhase,
@@ -25,13 +29,34 @@ export default function InfiniteCanvas({
   onAddCustomThought,
   onUpdateNodeContent,
   onDeleteNode
-}: InfiniteCanvasProps) {
+}, ref) {
   const [panOffset, setPanOffset] = useState({ x: 50, y: 50 });
   const [zoom, setZoom] = useState(0.9);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
+
+  useImperativeHandle(ref, () => ({
+    getCenteredCardPosition: (cardWidth = 360, cardHeight = 460) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+
+      if (!rect) {
+        return { x: 1000, y: 1000 };
+      }
+
+      // Converte o centro visível do viewport para coordenadas reais do canvas.
+      // A metade do tamanho estimado do card é descontada para que o card,
+      // e não apenas seu canto superior esquerdo, nasça centralizado.
+      const centerCanvasX = (rect.width / 2 - panOffset.x) / zoom;
+      const centerCanvasY = (rect.height / 2 - panOffset.y) / zoom;
+
+      return {
+        x: Math.max(0, centerCanvasX - cardWidth / 2),
+        y: Math.max(0, centerCanvasY - cardHeight / 2),
+      };
+    },
+  }), [panOffset.x, panOffset.y, zoom]);
 
   // Center on project core node on mount
   useEffect(() => {
@@ -519,4 +544,6 @@ export default function InfiniteCanvas({
 
     </div>
   );
-}
+});
+
+export default InfiniteCanvas;
