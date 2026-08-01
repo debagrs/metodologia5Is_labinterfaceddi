@@ -1,4 +1,4 @@
-import { readWorkspace, saveWorkspace, validateSessionToken } from './_lib/turso.js';
+import { readWorkspace, saveWorkspace, validateSessionToken } from './_lib/turso';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
