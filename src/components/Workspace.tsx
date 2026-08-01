@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
@@ -6,7 +6,7 @@ import {
   Menu, X, ShieldCheck, Code2
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile } from '../types';
-import InfiniteCanvas from './InfiniteCanvas';
+import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import MediatorSticker from './MediatorSticker';
 import BrandMark from './BrandMark';
 import { ensureTursoSession } from '../lib/turso';
@@ -154,6 +154,7 @@ export default function Workspace({
   const [genError, setGenError] = useState<string>('');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
+  const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
 
@@ -189,21 +190,15 @@ export default function Workspace({
     setGenError('');
 
     try {
-      // Find core node to calculate offset coordinates
       const coreNode = nodes.find(n => n.type === 'core');
       const coreNodeId = coreNode ? coreNode.id : 'node-core';
-      const coreNodeX = coreNode ? coreNode.x : 1000;
-      const coreNodeY = coreNode ? coreNode.y : 1000;
-      
-      // Calculate coordinates around core node for new spawning card
-      const existingOfThisPhase = nodes.filter(n => n.phase === project.activePhase);
-      const offsetCount = existingOfThisPhase.length;
-      
-      // Cascade placement on infinite board
-      const angle = (offsetCount * 45 * Math.PI) / 180;
-      const radius = 220 + (offsetCount * 30);
-      const spawnX = coreNodeX + Math.cos(angle) * radius;
-      const spawnY = coreNodeY + Math.sin(angle) * radius;
+
+      // O novo questionamento nasce no centro da área do canvas que a pessoa
+      // está vendo agora, respeitando pan e zoom. Antes, ele era calculado em
+      // torno da âncora central e podia aparecer muito abaixo ou fora da tela.
+      const centeredPosition = canvasRef.current?.getCenteredCardPosition(360, 460);
+      const spawnX = centeredPosition?.x ?? coreNode?.x ?? 1000;
+      const spawnY = centeredPosition?.y ?? coreNode?.y ?? 1000;
 
       const session = await ensureTursoSession().catch(() => null);
       const response = await fetch('/api/mediators/think', {
@@ -518,6 +513,7 @@ export default function Workspace({
 
         {/* Center Section: Infinite Canvas Board */}
         <InfiniteCanvas
+          ref={canvasRef}
           project={project}
           nodes={nodes}
           activePhase={project.activePhase}
