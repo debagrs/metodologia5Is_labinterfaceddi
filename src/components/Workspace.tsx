@@ -235,12 +235,26 @@ export default function Workspace({
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha ao buscar insights do Mediador.');
+      const rawResponse = await response.text();
+      let insight: any = {};
+
+      try {
+        insight = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch {
+        throw new Error(
+          response.ok
+            ? 'A IA devolveu uma resposta em formato inválido.'
+            : `A função de IA falhou na Vercel (HTTP ${response.status}). Consulte os logs do deploy.`
+        );
       }
 
-      const insight = await response.json();
+      if (!response.ok) {
+        throw new Error(insight.error || `Falha ao buscar insights do Mediador (HTTP ${response.status}).`);
+      }
+
+      if (!insight.question || !Array.isArray(insight.provocations)) {
+        throw new Error('A resposta da IA veio incompleta. Tente novamente.');
+      }
 
       // Add the generated thought node to the infinite canvas
       onAddNode({
