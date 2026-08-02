@@ -114,7 +114,86 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ members });
     }
 
-    res.setHeader('Allow', 'GET, POST');
+
+    if (req.method === 'GET' && req.query?.admin) {
+      const [membersResult, invitationsResult] = await pipeline([
+        { sql: `SELECT u.id, u.name, u.email, m.classroom_id, c.name, m.joined_at
+          FROM classroom_members m
+          JOIN users u ON u.id = m.user_id
+          JOIN shared_classrooms c ON c.id = m.classroom_id
+          WHERE c.advisor_id = ?
+          ORDER BY c.name, u.name`, args: [arg(advisorId)] },
+        { sql: `SELECT i.token, i.classroom_id, c.name, i.created_at, i.expires_at, i.accepted_by
+          FROM classroom_invitations i
+          JOIN shared_classrooms c ON c.id = i.classroom_id
+          WHERE i.advisor_id = ?
+          ORDER BY i.created_at DESC`, args: [arg(advisorId)] },
+      ]);
+
+      const members = (membersResult?.rows || []).map((row: any[]) => ({
+        id: String(cell(row[0])),
+        name: String(cell(row[1])),
+        email: String(cell(row[2])),
+        classroomId: String(cell(row[3])),
+        classroomName: String(cell(row[4])),
+        joinedAt: String(cell(row[5])),
+      }));
+      const invitations = (invitationsResult?.rows || []).map((row: any[]) => ({
+        token: String(cell(row[0])),
+        classroomId: String(cell(row[1])),
+        classroomName: String(cell(row[2])),
+        createdAt: String(cell(row[3])),
+        expiresAt: String(cell(row[4])),
+        acceptedBy: cell(row[5]),
+      }));
+      return res.status(200).json({ members, invitations });
+    }
+
+    if (req.method === 'DELETE') {
+      const action = String(req.body?.action || '');
+
+      if (action === 'deleteClassroom') {
+        const classroomId = String(req.body?.classroomId || '');
+        if (!classroomId) return res.status(400).json({ error: 'Turma não informada.' });
+        const [ownerResult] = await pipeline([
+          { sql: 'SELECT id FROM shared_classrooms WHERE id = ? AND advisor_id = ? LIMIT 1', args: [arg(classroomId), arg(advisorId)] },
+        ]);
+        if (!ownerResult?.rows?.length) return res.status(404).json({ error: 'Turma compartilhada não encontrada.' });
+        await pipeline([
+          { sql: 'DELETE FROM classroom_members WHERE classroom_id = ?', args: [arg(classroomId)] },
+          { sql: 'DELETE FROM classroom_invitations WHERE classroom_id = ? AND advisor_id = ?', args: [arg(classroomId), arg(advisorId)] },
+          { sql: 'DELETE FROM shared_classrooms WHERE id = ? AND advisor_id = ?', args: [arg(classroomId), arg(advisorId)] },
+        ]);
+        return res.status(200).json({ ok: true });
+      }
+
+      if (action === 'removeMember') {
+        const classroomId = String(req.body?.classroomId || '');
+        const userId = String(req.body?.userId || '');
+        if (!classroomId || !userId) return res.status(400).json({ error: 'Participante ou turma não informado.' });
+        const [ownerResult] = await pipeline([
+          { sql: 'SELECT id FROM shared_classrooms WHERE id = ? AND advisor_id = ? LIMIT 1', args: [arg(classroomId), arg(advisorId)] },
+        ]);
+        if (!ownerResult?.rows?.length) return res.status(403).json({ error: 'Você não administra esta turma.' });
+        await pipeline([
+          { sql: 'DELETE FROM classroom_members WHERE classroom_id = ? AND user_id = ?', args: [arg(classroomId), arg(userId)] },
+        ]);
+        return res.status(200).json({ ok: true });
+      }
+
+      if (action === 'cancelInvitation') {
+        const token = String(req.body?.token || '');
+        if (!token) return res.status(400).json({ error: 'Convite não informado.' });
+        await pipeline([
+          { sql: 'DELETE FROM classroom_invitations WHERE token = ? AND advisor_id = ? AND accepted_by IS NULL', args: [arg(token), arg(advisorId)] },
+        ]);
+        return res.status(200).json({ ok: true });
+      }
+
+      return res.status(400).json({ error: 'Ação administrativa inválida.' });
+    }
+
+    res.setHeader('Allow', 'GET, POST, DELETE');
     return res.status(405).json({ error: 'Método não permitido.' });
   } catch (error: any) {
     console.error('[5I API /api/invitations]', error);
