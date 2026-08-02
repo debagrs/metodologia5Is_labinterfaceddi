@@ -49,55 +49,69 @@ export default function AdvisorDashboard({
     const raw = localStorage.getItem('5is_auth_session');
     let token = '';
     try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
-    if (!token) return;
+
+    if (!token) {
+      setInviteLoadError('Sua sessão expirou. Saia e entre novamente.');
+      return;
+    }
 
     setLoadingInvitedStudents(true);
     setInviteLoadError('');
+
     try {
       const response = await fetch(`/api/invitations?classroomId=${encodeURIComponent(classroomId)}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os alunos convidados.');
 
       const members = Array.isArray(data.members) ? data.members : [];
-      const mapped: StudentProfile[] = await Promise.all(members.map(async (member: any) => {
-        let snapshot = member.snapshot || null;
 
-        // Busca diretamente o workspace real do estudante. Isso evita depender
-        // de cópias antigas retornadas pela rota de convites.
+      const mapped = await Promise.all(members.map(async (member: any): Promise<StudentProfile> => {
+        let snapshot: any = member.snapshot || null;
+
         try {
-          const workspaceResponse = await fetch(`/api/workspace?ownerId=${encodeURIComponent(String(member.id))}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const workspaceResponse = await fetch(
+            `/api/workspace?ownerId=${encodeURIComponent(String(member.id))}&t=${Date.now()}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: 'no-store',
+            },
+          );
           const workspaceData = await workspaceResponse.json().catch(() => ({}));
           if (workspaceResponse.ok) snapshot = workspaceData?.payload || snapshot;
         } catch (error) {
-          console.error('[5I] Falha ao carregar workspace do estudante:', error);
+          console.error('[5I] Falha ao carregar workspace do estudante:', member.id, error);
         }
 
-        snapshot = snapshot || {};
-        const snapshotStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
+        const snapshotStudents = Array.isArray(snapshot?.students) ? snapshot.students : [];
         const normalizedName = String(member.name || '').trim().toLowerCase();
-        const matchingStudent = snapshotStudents.find((student: any) =>
-          student?.classroomId === classroomId &&
-          String(student?.name || '').trim().toLowerCase() === normalizedName
-        );
+        const matchingStudent = snapshotStudents.find((student: any) => {
+          const sameClass = student?.classroomId === classroomId;
+          const sameName = String(student?.name || '').trim().toLowerCase() === normalizedName;
+          return sameClass || sameName;
+        });
 
-        const project = matchingStudent?.project || snapshot.soloProject || undefined;
-        const nodes = matchingStudent?.nodes || snapshot.soloNodes || [];
+        const project = matchingStudent?.project || snapshot?.soloProject || undefined;
+        const nodes = Array.isArray(matchingStudent?.nodes)
+          ? matchingStudent.nodes
+          : Array.isArray(snapshot?.soloNodes)
+            ? snapshot.soloNodes
+            : [];
 
         return {
           id: `remote-${member.id}`,
           remoteOwnerId: String(member.id),
-          remoteSnapshot: snapshot,
+          remoteSnapshot: snapshot || undefined,
           name: String(member.name || 'Estudante'),
           email: String(member.email || ''),
           classroomId,
           project,
-          nodes: Array.isArray(nodes) ? nodes : [],
+          nodes,
         };
       }));
+
       setInvitedStudents(mapped);
     } catch (error: any) {
       setInviteLoadError(error?.message || 'Falha ao carregar alunos convidados.');
@@ -173,8 +187,8 @@ export default function AdvisorDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFDFB] font-sans p-4 sm:p-8 select-none">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-[100dvh] bg-[#FDFDFB] font-sans px-3 py-4 sm:p-8 select-none overflow-x-hidden" style={{ WebkitTextSizeAdjust: '100%' }}>
+      <div className="w-full max-w-6xl mx-auto space-y-5 sm:space-y-6">
         
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#E0E0DE] pb-6 gap-4">
