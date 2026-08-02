@@ -423,6 +423,19 @@ export default function App() {
     saveActiveProjectAndNodes(project, updated);
   };
 
+  const handleClearAllContent = () => {
+    if (!project) return;
+    const core = nodes.find((node) => node.type === 'core');
+    const cleanCore: ThoughtNode = core
+      ? { ...core, content: project.problem, connections: [], comments: [], attachments: [], isCompleted: false }
+      : {
+          id: 'node-core', type: 'core', title: project.name, content: project.problem,
+          phase: project.activePhase, x: 1000, y: 1000, connections: [],
+          createdAt: new Date().toISOString(), comments: [], attachments: []
+        };
+    saveActiveProjectAndNodes(project, [cleanCore]);
+  };
+
   const handleAddNode = (newNodeDetails: Omit<ThoughtNode, 'id' | 'createdAt'>) => {
     const newNode: ThoughtNode = {
       ...newNodeDetails,
@@ -493,6 +506,7 @@ export default function App() {
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
+            onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={viewingStudent.name}
           />
@@ -547,6 +561,7 @@ export default function App() {
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
+            onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={viewingStudent.name}
           />
@@ -568,6 +583,7 @@ export default function App() {
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
+            onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={activeProfile.institution || 'Parceiro'}
           />
@@ -712,6 +728,7 @@ export default function App() {
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
+            onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={activeClassroom?.name || 'Sua Turma'}
           />
@@ -766,6 +783,7 @@ export default function App() {
           onAddNode={handleAddNode}
           onUpdatePhase={handleUpdatePhase}
           onExit={handleExit}
+          onClearAll={handleClearAllContent}
           currentUser={activeProfile}
         />
       </div>
