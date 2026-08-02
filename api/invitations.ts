@@ -83,6 +83,80 @@ export default async function handler(req: any, res: any) {
     const advisorId = validateSessionToken(req.headers.authorization);
     if (!advisorId) return res.status(401).json({ error: 'Sessão inválida.' });
 
+    // Busca contas já cadastradas para inclusão manual em uma turma.
+    if (req.method === 'GET' && req.query?.searchUsers) {
+      const query = String(req.query.searchUsers || '').trim().toLowerCase();
+      if (query.length < 2) return res.status(200).json({ users: [] });
+
+      const like = `%${query}%`;
+      const [result] = await pipeline([{
+        sql: `SELECT id, name, email, role, classroom_id
+          FROM users
+          WHERE id <> ?
+            AND (lower(email) LIKE ? OR lower(name) LIKE ?)
+          ORDER BY name
+          LIMIT 20`,
+        args: [arg(advisorId), arg(like), arg(like)],
+      }]);
+
+      const users = (result?.rows || []).map((row: any[]) => ({
+        id: String(cell(row[0])),
+        name: String(cell(row[1])),
+        email: String(cell(row[2])),
+        role: String(cell(row[3])),
+        classroomId: cell(row[4]) || undefined,
+      })).filter((user: any) => !['advisor', 'teacher', 'professor'].includes(user.role.toLowerCase()));
+
+      return res.status(200).json({ users });
+    }
+
+    if (req.method === 'POST' && req.body?.action === 'addExistingMember') {
+      const classroom = req.body?.classroom;
+      const userId = String(req.body?.userId || '');
+      if (!classroom?.id || !classroom?.name || !classroom?.code || !userId) {
+        return res.status(400).json({ error: 'Turma ou aluno não informado.' });
+      }
+
+      const [userResult] = await pipeline([{
+        sql: 'SELECT id, name, email, role FROM users WHERE id = ? LIMIT 1',
+        args: [arg(userId)],
+      }]);
+      const userRow = userResult?.rows?.[0];
+      if (!userRow) return res.status(404).json({ error: 'Conta não encontrada.' });
+      const userRole = String(cell(userRow[3]) || '').toLowerCase();
+      if (['advisor', 'teacher', 'professor'].includes(userRole)) {
+        return res.status(400).json({ error: 'Uma conta de professora não pode ser incluída como aluna.' });
+      }
+
+      await pipeline([
+        {
+          sql: `INSERT INTO shared_classrooms (id, advisor_id, name, code, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET advisor_id=excluded.advisor_id, name=excluded.name, code=excluded.code`,
+          args: [arg(classroom.id), arg(advisorId), arg(classroom.name), arg(classroom.code)],
+        },
+        {
+          sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
+            VALUES (?, ?, datetime('now'))`,
+          args: [arg(classroom.id), arg(userId)],
+        },
+        {
+          sql: `UPDATE users SET role = 'student', classroom_id = ? WHERE id = ?`,
+          args: [arg(classroom.id), arg(userId)],
+        },
+      ]);
+
+      return res.status(200).json({
+        ok: true,
+        member: {
+          id: String(cell(userRow[0])),
+          name: String(cell(userRow[1])),
+          email: String(cell(userRow[2])),
+          classroomId: classroom.id,
+        },
+      });
+    }
+
     if (req.method === 'POST') {
       const classroom = req.body?.classroom;
       if (!classroom?.id || !classroom?.name || !classroom?.code) return res.status(400).json({ error: 'Turma inválida.' });
@@ -102,87 +176,54 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'GET' && req.query?.classroomId) {
       const classroomId = String(req.query.classroomId);
 
+      // Confirma que a turma realmente pertence à professora logada.
       const [classResult] = await pipeline([
-        {
-          sql: `SELECT id, name, code
-            FROM shared_classrooms
-            WHERE id = ? AND advisor_id = ?
-            LIMIT 1`,
-          args: [arg(classroomId), arg(advisorId)],
-        },
+        { sql: 'SELECT id FROM shared_classrooms WHERE id = ? AND advisor_id = ? LIMIT 1', args: [arg(classroomId), arg(advisorId)] },
       ]);
-
       if (!classResult?.rows?.length) {
-        return res.status(404).json({ error: 'Turma não encontrada para esta professora.' });
+        return res.status(200).json({ members: [], repaired: 0 });
       }
 
-      // Fonte de verdade: convites efetivamente aceitos + vínculos já existentes.
-      // Isso evita misturar alunos locais antigos ou pessoas de outras turmas.
-      const [acceptedResult, linkedResult] = await pipeline([
-        {
-          sql: `SELECT DISTINCT
-              u.id,
-              u.name,
-              u.email,
-              COALESCE(i.accepted_at, u.created_at) AS joined_at,
-              w.payload
-            FROM classroom_invitations i
-            JOIN users u ON u.id = i.accepted_by
-            LEFT JOIN workspace_snapshots w ON w.owner_id = u.id
-            WHERE i.classroom_id = ?
-              AND i.advisor_id = ?
-              AND i.accepted_by IS NOT NULL
-              AND u.id <> ?
-            ORDER BY joined_at DESC`,
-          args: [arg(classroomId), arg(advisorId), arg(advisorId)],
-        },
-        {
-          sql: `SELECT DISTINCT
-              u.id,
-              u.name,
-              u.email,
-              COALESCE(m.joined_at, u.created_at) AS joined_at,
-              w.payload
-            FROM classroom_members m
-            JOIN users u ON u.id = m.user_id
-            LEFT JOIN workspace_snapshots w ON w.owner_id = u.id
-            WHERE m.classroom_id = ?
-              AND u.id <> ?
-            ORDER BY joined_at DESC`,
-          args: [arg(classroomId), arg(advisorId)],
-        },
+      // Reparação automática: versões anteriores permitiam que a própria conta
+      // da professora aceitasse um convite e fosse convertida em estudante.
+      // Removemos esse vínculo incorreto e restauramos o papel da orientadora.
+      await pipeline([
+        { sql: `DELETE FROM classroom_members WHERE classroom_id = ? AND user_id = ?`, args: [arg(classroomId), arg(advisorId)] },
+        { sql: `UPDATE users SET role = 'advisor', classroom_id = NULL WHERE id = ?`, args: [arg(advisorId)] },
       ]);
 
-      const byId = new Map<string, any[]>();
-      for (const row of [...(acceptedResult?.rows || []), ...(linkedResult?.rows || [])]) {
-        const id = String(cell(row[0]) || '');
-        if (id && !byId.has(id)) byId.set(id, row);
-      }
+      // Recupera alunos por DUAS vias:
+      // 1) vínculo normal em classroom_members;
+      // 2) fallback pelo classroom_id salvo na conta do usuário.
+      // Esse fallback corrige contas que aceitaram o convite, mas ficaram sem a linha de vínculo.
+      const [membersResult] = await pipeline([
+        { sql: `SELECT DISTINCT
+            u.id,
+            u.name,
+            u.email,
+            COALESCE(m.joined_at, u.created_at) AS joined_at,
+            w.payload
+          FROM users u
+          LEFT JOIN classroom_members m
+            ON m.user_id = u.id AND m.classroom_id = ?
+          LEFT JOIN workspace_snapshots w
+            ON w.owner_id = u.id
+          WHERE u.role = 'student'
+            AND u.id <> ?
+            AND (m.classroom_id = ? OR u.classroom_id = ?)
+          ORDER BY joined_at DESC`,
+          args: [arg(classroomId), arg(advisorId), arg(classroomId), arg(classroomId)] },
+      ]);
 
-      const rows = Array.from(byId.values());
+      const rows = membersResult?.rows || [];
 
-      // Repara automaticamente o vínculo e o classroom_id dos convites aceitos.
+      // Repara automaticamente os vínculos antigos que estiverem faltando.
       if (rows.length > 0) {
-        await pipeline(rows.flatMap((row: any[]) => {
-          const userId = String(cell(row[0]));
-          return [
-            {
-              sql: `INSERT OR IGNORE INTO classroom_members
-                (classroom_id, user_id, joined_at)
-                VALUES (?, ?, datetime('now'))`,
-              args: [arg(classroomId), arg(userId)],
-            },
-            {
-              sql: `UPDATE users
-                SET classroom_id = ?, role = CASE
-                  WHEN lower(role) IN ('advisor','teacher','professor') THEN role
-                  ELSE 'student'
-                END
-                WHERE id = ?`,
-              args: [arg(classroomId), arg(userId)],
-            },
-          ];
-        }));
+        await pipeline(rows.map((row: any[]) => ({
+          sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
+            VALUES (?, ?, datetime('now'))`,
+          args: [arg(classroomId), arg(cell(row[0]))],
+        })));
       }
 
       const members = rows.map((row: any[]) => {
@@ -197,7 +238,6 @@ export default async function handler(req: any, res: any) {
           email: String(cell(row[2])),
           joinedAt: String(cell(row[3])),
           snapshot,
-          hasWorkspace: Boolean(snapshot),
         };
       });
 
@@ -282,40 +322,18 @@ export default async function handler(req: any, res: any) {
 
 
     if (req.method === 'GET' && req.query?.admin) {
-      // Administração mostra somente contas reais ligadas às turmas da professora.
-      // Alunos locais antigos não entram nesta lista.
       const [membersResult, invitationsResult] = await pipeline([
-        {
-          sql: `SELECT DISTINCT
-              u.id,
-              u.name,
-              u.email,
-              c.id,
-              c.name,
-              COALESCE(i.accepted_at, m.joined_at, u.created_at) AS joined_at
-            FROM shared_classrooms c
-            LEFT JOIN classroom_invitations i
-              ON i.classroom_id = c.id
-              AND i.advisor_id = c.advisor_id
-              AND i.accepted_by IS NOT NULL
-            LEFT JOIN classroom_members m
-              ON m.classroom_id = c.id
-              AND (m.user_id = i.accepted_by OR i.accepted_by IS NULL)
-            JOIN users u
-              ON u.id = COALESCE(i.accepted_by, m.user_id)
-            WHERE c.advisor_id = ?
-              AND u.id <> ?
-            ORDER BY c.name, u.name`,
-          args: [arg(advisorId), arg(advisorId)],
-        },
-        {
-          sql: `SELECT i.token, i.classroom_id, c.name, i.created_at, i.expires_at, i.accepted_by
-            FROM classroom_invitations i
-            JOIN shared_classrooms c ON c.id = i.classroom_id
-            WHERE i.advisor_id = ?
-            ORDER BY i.created_at DESC`,
-          args: [arg(advisorId)],
-        },
+        { sql: `SELECT u.id, u.name, u.email, m.classroom_id, c.name, m.joined_at
+          FROM classroom_members m
+          JOIN users u ON u.id = m.user_id
+          JOIN shared_classrooms c ON c.id = m.classroom_id
+          WHERE c.advisor_id = ?
+          ORDER BY c.name, u.name`, args: [arg(advisorId)] },
+        { sql: `SELECT i.token, i.classroom_id, c.name, i.created_at, i.expires_at, i.accepted_by
+          FROM classroom_invitations i
+          JOIN shared_classrooms c ON c.id = i.classroom_id
+          WHERE i.advisor_id = ?
+          ORDER BY i.created_at DESC`, args: [arg(advisorId)] },
       ]);
 
       const members = (membersResult?.rows || []).map((row: any[]) => ({
@@ -326,7 +344,6 @@ export default async function handler(req: any, res: any) {
         classroomName: String(cell(row[4])),
         joinedAt: String(cell(row[5])),
       }));
-
       const invitations = (invitationsResult?.rows || []).map((row: any[]) => ({
         token: String(cell(row[0])),
         classroomId: String(cell(row[1])),
@@ -335,7 +352,6 @@ export default async function handler(req: any, res: any) {
         expiresAt: String(cell(row[4])),
         acceptedBy: cell(row[5]),
       }));
-
       return res.status(200).json({ members, invitations });
     }
 
