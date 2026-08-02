@@ -110,6 +110,14 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({ members: [], repaired: 0 });
       }
 
+      // Reparação automática: versões anteriores permitiam que a própria conta
+      // da professora aceitasse um convite e fosse convertida em estudante.
+      // Removemos esse vínculo incorreto e restauramos o papel da orientadora.
+      await pipeline([
+        { sql: `DELETE FROM classroom_members WHERE classroom_id = ? AND user_id = ?`, args: [arg(classroomId), arg(advisorId)] },
+        { sql: `UPDATE users SET role = 'advisor', classroom_id = NULL WHERE id = ?`, args: [arg(advisorId)] },
+      ]);
+
       // Recupera alunos por DUAS vias:
       // 1) vínculo normal em classroom_members;
       // 2) fallback pelo classroom_id salvo na conta do usuário.
@@ -127,9 +135,10 @@ export default async function handler(req: any, res: any) {
           LEFT JOIN workspace_snapshots w
             ON w.owner_id = u.id
           WHERE u.role = 'student'
+            AND u.id <> ?
             AND (m.classroom_id = ? OR u.classroom_id = ?)
           ORDER BY joined_at DESC`,
-          args: [arg(classroomId), arg(classroomId), arg(classroomId)] },
+          args: [arg(classroomId), arg(advisorId), arg(classroomId), arg(classroomId)] },
       ]);
 
       const rows = membersResult?.rows || [];
