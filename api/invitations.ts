@@ -118,38 +118,47 @@ export default async function handler(req: any, res: any) {
         { sql: `UPDATE users SET role = 'advisor', classroom_id = NULL WHERE id = ?`, args: [arg(advisorId)] },
       ]);
 
-      // Recupera alunos por DUAS vias:
-      // 1) vínculo normal em classroom_members;
-      // 2) fallback pelo classroom_id salvo na conta do usuário.
-      // Esse fallback corrige contas que aceitaram o convite, mas ficaram sem a linha de vínculo.
+      // Recupera todos que pertencem à turma por qualquer vínculo válido:
+      // matrícula, classroom_id da conta ou convite já aceito.
       const [membersResult] = await pipeline([
         { sql: `SELECT DISTINCT
             u.id,
             u.name,
             u.email,
-            COALESCE(m.joined_at, u.created_at) AS joined_at,
+            COALESCE(m.joined_at, i.accepted_at, u.created_at) AS joined_at,
             w.payload
           FROM users u
           LEFT JOIN classroom_members m
             ON m.user_id = u.id AND m.classroom_id = ?
+          LEFT JOIN classroom_invitations i
+            ON i.accepted_by = u.id AND i.classroom_id = ?
           LEFT JOIN workspace_snapshots w
             ON w.owner_id = u.id
-          WHERE u.role = 'student'
-            AND u.id <> ?
-            AND (m.classroom_id = ? OR u.classroom_id = ?)
+          WHERE u.id <> ?
+            AND (m.classroom_id = ? OR u.classroom_id = ? OR i.accepted_by IS NOT NULL)
           ORDER BY joined_at DESC`,
-          args: [arg(classroomId), arg(advisorId), arg(classroomId), arg(classroomId)] },
+          args: [arg(classroomId), arg(classroomId), arg(advisorId), arg(classroomId), arg(classroomId)] },
       ]);
 
       const rows = membersResult?.rows || [];
 
-      // Repara automaticamente os vínculos antigos que estiverem faltando.
+      // Repara matrícula e papel de estudante para contas aceitas corretamente.
       if (rows.length > 0) {
-        await pipeline(rows.map((row: any[]) => ({
-          sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
-            VALUES (?, ?, datetime('now'))`,
-          args: [arg(classroomId), arg(cell(row[0]))],
-        })));
+        const repairs: any[] = [];
+        for (const row of rows) {
+          const userId = String(cell(row[0]));
+          repairs.push({
+            sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
+              VALUES (?, ?, datetime('now'))`,
+            args: [arg(classroomId), arg(userId)],
+          });
+          repairs.push({
+            sql: `UPDATE users SET role = 'student', classroom_id = ?
+              WHERE id = ? AND role <> 'advisor'`,
+            args: [arg(classroomId), arg(userId)],
+          });
+        }
+        await pipeline(repairs);
       }
 
       const members = rows.map((row: any[]) => {
@@ -164,6 +173,7 @@ export default async function handler(req: any, res: any) {
           email: String(cell(row[2])),
           joinedAt: String(cell(row[3])),
           snapshot,
+          hasWorkspace: !!snapshot,
         };
       });
 
