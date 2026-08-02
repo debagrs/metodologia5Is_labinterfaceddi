@@ -18,6 +18,7 @@ interface WorkspaceProps {
   onAddCustomThought: (x: number, y: number) => void;
   onUpdateNodeContent: (id: string, text: string, completed?: boolean) => void;
   onDeleteNode: (id: string) => void;
+  onUpdateNode: (node: ThoughtNode) => void;
   onAddNode: (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => void;
   onUpdatePhase: (phase: Phase) => void;
   onExit: () => void;
@@ -143,6 +144,7 @@ export default function Workspace({
   onAddCustomThought,
   onUpdateNodeContent,
   onDeleteNode,
+  onUpdateNode,
   onAddNode,
   onUpdatePhase,
   onExit,
@@ -521,6 +523,8 @@ export default function Workspace({
           onAddCustomThought={onAddCustomThought}
           onUpdateNodeContent={onUpdateNodeContent}
           onDeleteNode={onDeleteNode}
+          onUpdateNode={onUpdateNode}
+          currentUser={currentUser!}
         />
 
         {/* Right Sidebar: Intelligent Mediators Panel */}
