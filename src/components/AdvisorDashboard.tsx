@@ -61,14 +61,31 @@ export default function AdvisorDashboard({
       if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os alunos convidados.');
 
       const members = Array.isArray(data.members) ? data.members : [];
-      const mapped: StudentProfile[] = members.map((member: any) => {
-        const snapshot = member.snapshot || {};
+      const mapped: StudentProfile[] = await Promise.all(members.map(async (member: any) => {
+        let snapshot = member.snapshot || null;
+
+        // Busca diretamente o workspace real do estudante. Isso evita depender
+        // de cópias antigas retornadas pela rota de convites.
+        try {
+          const workspaceResponse = await fetch(`/api/workspace?ownerId=${encodeURIComponent(String(member.id))}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const workspaceData = await workspaceResponse.json().catch(() => ({}));
+          if (workspaceResponse.ok) snapshot = workspaceData?.payload || snapshot;
+        } catch (error) {
+          console.error('[5I] Falha ao carregar workspace do estudante:', error);
+        }
+
+        snapshot = snapshot || {};
         const snapshotStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
         const normalizedName = String(member.name || '').trim().toLowerCase();
         const matchingStudent = snapshotStudents.find((student: any) =>
           student?.classroomId === classroomId &&
           String(student?.name || '').trim().toLowerCase() === normalizedName
         );
+
+        const project = matchingStudent?.project || snapshot.soloProject || undefined;
+        const nodes = matchingStudent?.nodes || snapshot.soloNodes || [];
 
         return {
           id: `remote-${member.id}`,
@@ -77,10 +94,10 @@ export default function AdvisorDashboard({
           name: String(member.name || 'Estudante'),
           email: String(member.email || ''),
           classroomId,
-          project: matchingStudent?.project || snapshot.soloProject || undefined,
-          nodes: matchingStudent?.nodes || snapshot.soloNodes || [],
+          project,
+          nodes: Array.isArray(nodes) ? nodes : [],
         };
-      });
+      }));
       setInvitedStudents(mapped);
     } catch (error: any) {
       setInviteLoadError(error?.message || 'Falha ao carregar alunos convidados.');
