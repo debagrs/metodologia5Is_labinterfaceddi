@@ -342,6 +342,34 @@ export default function App() {
       setStudents(updatedStudents);
       localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
       setViewingStudent(prev => prev ? { ...prev, project: updatedProject || undefined, nodes: updatedNodes } : null);
+
+      // Quando o estudante entrou por convite, salva no MESMO workspace da conta dele.
+      if (viewingStudent.remoteOwnerId) {
+        const auth = readAuthSession();
+        if (auth?.token) {
+          fetch('/api/invitations', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${auth.token}`,
+            },
+            body: JSON.stringify({
+              action: 'saveMemberWorkspace',
+              classroomId: viewingStudent.classroomId,
+              userId: viewingStudent.remoteOwnerId,
+              project: updatedProject,
+              nodes: updatedNodes,
+            }),
+          }).then(async (response) => {
+            if (!response.ok) {
+              const data = await response.json().catch(() => ({}));
+              console.error('[5I] Falha ao salvar no workspace do aluno:', data?.error || response.status);
+            }
+          }).catch((error) => {
+            console.error('[5I] Falha de rede ao salvar no workspace do aluno:', error);
+          });
+        }
+      }
     } else if (activeProfile?.role === 'student') {
       const studentNameNorm = activeProfile.name.trim().toLowerCase();
       const updatedStudents = students.map(s => {
