@@ -103,15 +103,105 @@ export default async function handler(req: any, res: any) {
       const classroomId = String(req.query.classroomId);
       const [classResult, membersResult] = await pipeline([
         { sql: 'SELECT id FROM shared_classrooms WHERE id = ? AND advisor_id = ? LIMIT 1', args: [arg(classroomId), arg(advisorId)] },
-        { sql: `SELECT u.id, u.name, u.email, m.joined_at
-          FROM classroom_members m JOIN users u ON u.id = m.user_id
-          WHERE m.classroom_id = ? ORDER BY m.joined_at DESC`, args: [arg(classroomId)] },
+        { sql: `SELECT u.id, u.name, u.email, m.joined_at, w.payload
+          FROM classroom_members m
+          JOIN users u ON u.id = m.user_id
+          LEFT JOIN workspace_snapshots w ON w.owner_id = u.id
+          WHERE m.classroom_id = ?
+          ORDER BY m.joined_at DESC`, args: [arg(classroomId)] },
       ]);
       if (!classResult?.rows?.length) return res.status(200).json({ members: [] });
-      const members = (membersResult?.rows || []).map((row: any[]) => ({
-        id: String(cell(row[0])), name: String(cell(row[1])), email: String(cell(row[2])), joinedAt: String(cell(row[3]))
-      }));
+      const members = (membersResult?.rows || []).map((row: any[]) => {
+        let snapshot = null;
+        const rawPayload = cell(row[4]);
+        if (typeof rawPayload === 'string') {
+          try { snapshot = JSON.parse(rawPayload); } catch { snapshot = null; }
+        }
+        return {
+          id: String(cell(row[0])),
+          name: String(cell(row[1])),
+          email: String(cell(row[2])),
+          joinedAt: String(cell(row[3])),
+          snapshot,
+        };
+      });
       return res.status(200).json({ members });
+    }
+
+    if (req.method === 'PUT') {
+      const action = String(req.body?.action || '');
+      if (action !== 'saveMemberWorkspace') {
+        return res.status(400).json({ error: 'Ação de atualização inválida.' });
+      }
+
+      const classroomId = String(req.body?.classroomId || '');
+      const userId = String(req.body?.userId || '');
+      const project = req.body?.project ?? null;
+      const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
+      if (!classroomId || !userId) {
+        return res.status(400).json({ error: 'Aluno ou turma não informado.' });
+      }
+
+      const [permissionResult, workspaceResult, userResult] = await pipeline([
+        { sql: `SELECT m.user_id FROM classroom_members m
+          JOIN shared_classrooms c ON c.id = m.classroom_id
+          WHERE m.classroom_id = ? AND m.user_id = ? AND c.advisor_id = ? LIMIT 1`,
+          args: [arg(classroomId), arg(userId), arg(advisorId)] },
+        { sql: 'SELECT payload FROM workspace_snapshots WHERE owner_id = ? LIMIT 1', args: [arg(userId)] },
+        { sql: 'SELECT name FROM users WHERE id = ? LIMIT 1', args: [arg(userId)] },
+      ]);
+
+      if (!permissionResult?.rows?.length) {
+        return res.status(403).json({ error: 'Você não pode editar o projeto deste aluno.' });
+      }
+
+      let snapshot: any = {};
+      const raw = workspaceResult?.rows?.[0]?.[0] ? cell(workspaceResult.rows[0][0]) : null;
+      if (typeof raw === 'string') {
+        try { snapshot = JSON.parse(raw); } catch { snapshot = {}; }
+      }
+
+      const studentName = String(cell(userResult?.rows?.[0]?.[0]) || 'Estudante');
+      const existingStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
+      const normalizedName = studentName.trim().toLowerCase();
+      let found = false;
+      const nextStudents = existingStudents.map((student: any) => {
+        const sameClass = student?.classroomId === classroomId;
+        const sameName = String(student?.name || '').trim().toLowerCase() === normalizedName;
+        if (sameClass && sameName) {
+          found = true;
+          return { ...student, project: project || undefined, nodes };
+        }
+        return student;
+      });
+      if (!found) {
+        nextStudents.push({
+          id: `student-${userId}`,
+          name: studentName,
+          classroomId,
+          project: project || undefined,
+          nodes,
+        });
+      }
+
+      const nextSnapshot = {
+        ...snapshot,
+        students: nextStudents,
+        soloProject: project,
+        soloNodes: nodes,
+      };
+      const serialized = JSON.stringify(nextSnapshot);
+      if (Buffer.byteLength(serialized, 'utf8') > 1_500_000) {
+        return res.status(413).json({ error: 'O projeto do aluno ultrapassou o limite de 1,5 MB.' });
+      }
+
+      await pipeline([{
+        sql: `INSERT INTO workspace_snapshots (owner_id, payload, created_at, updated_at)
+          VALUES (?, ?, datetime('now'), datetime('now'))
+          ON CONFLICT(owner_id) DO UPDATE SET payload = excluded.payload, updated_at = datetime('now')`,
+        args: [arg(userId), arg(serialized)],
+      }]);
+      return res.status(200).json({ ok: true, snapshot: nextSnapshot });
     }
 
 
@@ -193,7 +283,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Ação administrativa inválida.' });
     }
 
-    res.setHeader('Allow', 'GET, POST, DELETE');
+    res.setHeader('Allow', 'GET, POST, PUT, DELETE');
     return res.status(405).json({ error: 'Método não permitido.' });
   } catch (error: any) {
     console.error('[5I API /api/invitations]', error);
