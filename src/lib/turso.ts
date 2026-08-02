@@ -35,8 +35,9 @@ export async function ensureTursoSession(): Promise<StoredTursoSession> {
   return session;
 }
 
-export async function readWorkspace(token: string) {
-  const response = await fetch('/api/workspace', {
+export async function readWorkspace(token: string, ownerId?: string) {
+  const query = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+  const response = await fetch(`/api/workspace${query}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await response.json().catch(() => ({}));
@@ -44,8 +45,9 @@ export async function readWorkspace(token: string) {
   return data?.payload ?? null;
 }
 
-export async function saveWorkspace(token: string, payload: unknown) {
-  const response = await fetch('/api/workspace', {
+export async function saveWorkspace(token: string, payload: unknown, ownerId?: string) {
+  const query = ownerId ? `?ownerId=${encodeURIComponent(ownerId)}` : '';
+  const response = await fetch(`/api/workspace${query}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
