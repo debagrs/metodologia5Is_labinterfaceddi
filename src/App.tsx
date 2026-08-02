@@ -532,18 +532,19 @@ export default function App() {
     if (viewingStudent) {
       if (!project) {
         return (
-          <div className="min-h-screen bg-[#FDFDFB] flex flex-col items-center justify-center p-6 text-center">
-            <GraduationCap size={40} className="text-neutral-400 mb-2" />
-            <h2 className="text-lg font-bold text-neutral-900">Mesa Não Iniciada</h2>
-            <p className="text-xs text-neutral-500 max-w-sm mt-1">
-              O aluno <strong>{viewingStudent.name}</strong> ainda não iniciou as fases de modelagem científica do projeto.
-            </p>
-            <button 
-              onClick={() => setViewingStudent(null)}
-              className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft size={13} /> Voltar ao Painel
-            </button>
+          <div className="min-h-screen bg-brand-beige">
+            <div className="fixed top-3 left-3 z-[100] flex items-center gap-2">
+              <button
+                onClick={() => setViewingStudent(null)}
+                className="px-3 py-2 bg-black text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer shadow-lg"
+              >
+                <ArrowLeft size={13} /> Voltar ao Painel
+              </button>
+              <span className="hidden sm:inline-flex px-3 py-2 bg-white/95 border border-neutral-200 rounded-xl text-xs font-bold shadow-sm">
+                Iniciando a mesa de {viewingStudent.name}
+              </span>
+            </div>
+            <FirstExperience onStart={handleStartProject} />
           </div>
         );
       }
