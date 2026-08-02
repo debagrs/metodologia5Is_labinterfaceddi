@@ -62,6 +62,34 @@ async function ensureDatabase() {
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )`,
     },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, role TEXT NOT NULL,
+        partner_type TEXT, classroom_id TEXT, institution TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS shared_classrooms (
+        id TEXT PRIMARY KEY NOT NULL, advisor_id TEXT NOT NULL, name TEXT NOT NULL,
+        code TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS classroom_members (
+        classroom_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (classroom_id, user_id)
+      )`,
+    },
+    {
+      sql: `CREATE TABLE IF NOT EXISTS classroom_invitations (
+        token TEXT PRIMARY KEY NOT NULL, classroom_id TEXT NOT NULL, advisor_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')), expires_at TEXT NOT NULL,
+        accepted_by TEXT, accepted_at TEXT
+      )`,
+    },
   ]);
 }
 
@@ -98,10 +126,33 @@ export default async function handler(req: any, res: any) {
 
     await ensureDatabase();
 
+    const requestedOwnerId = String(req.query?.ownerId || req.body?.ownerId || ownerId).trim();
+    const targetOwnerId = requestedOwnerId || ownerId;
+
+    if (targetOwnerId !== ownerId) {
+      const [permission] = await pipeline([{
+        sql: `SELECT 1
+          FROM shared_classrooms c
+          LEFT JOIN classroom_members m
+            ON m.classroom_id = c.id AND m.user_id = ?
+          LEFT JOIN classroom_invitations i
+            ON i.classroom_id = c.id AND i.accepted_by = ?
+          LEFT JOIN users u
+            ON u.id = ? AND u.classroom_id = c.id
+          WHERE c.advisor_id = ?
+            AND (m.user_id IS NOT NULL OR i.accepted_by IS NOT NULL OR u.id IS NOT NULL)
+          LIMIT 1`,
+        args: [arg(targetOwnerId), arg(targetOwnerId), arg(targetOwnerId), arg(ownerId)],
+      }]);
+      if (!permission?.rows?.length) {
+        return res.status(403).json({ error: 'Você não tem acesso ao workspace deste estudante.', stage: 'permission' });
+      }
+    }
+
     if (req.method === 'GET') {
       const [result] = await pipeline([{
         sql: 'SELECT payload FROM workspace_snapshots WHERE owner_id = ? LIMIT 1',
-        args: [arg(ownerId)],
+        args: [arg(targetOwnerId)],
       }]);
       const payload = cellValue(result?.rows?.[0]?.[0]);
       if (typeof payload !== 'string') return res.status(200).json({ payload: null });
@@ -124,7 +175,7 @@ export default async function handler(req: any, res: any) {
               ON CONFLICT(owner_id) DO UPDATE SET
                 payload = excluded.payload,
                 updated_at = datetime('now')`,
-        args: [arg(ownerId), arg(serialized)],
+        args: [arg(targetOwnerId), arg(serialized)],
       }]);
       return res.status(200).json({ ok: true });
     }
