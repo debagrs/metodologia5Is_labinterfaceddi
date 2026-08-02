@@ -281,6 +281,23 @@ export default function App() {
     localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
   };
 
+  const handleDeleteClassroom = (classroomId: string) => {
+    const updatedClassrooms = classrooms.filter((classroom) => classroom.id !== classroomId);
+    const updatedStudents = students.filter((student) => student.classroomId !== classroomId);
+    setClassrooms(updatedClassrooms);
+    setStudents(updatedStudents);
+    localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(updatedClassrooms));
+    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
+    if (viewingStudent?.classroomId === classroomId) setViewingStudent(null);
+  };
+
+  const handleDeleteStudent = (studentId: string) => {
+    const updatedStudents = students.filter((student) => student.id !== studentId);
+    setStudents(updatedStudents);
+    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
+    if (viewingStudent?.id === studentId) setViewingStudent(null);
+  };
+
   const handleViewStudentProject = (student: StudentProfile) => {
     setViewingStudent(student);
   };
@@ -532,6 +549,8 @@ export default function App() {
         onAddClassroom={handleAddClassroom}
         onAddStudent={handleAddStudent}
         onViewStudentProject={handleViewStudentProject}
+        onDeleteClassroom={handleDeleteClassroom}
+        onDeleteStudent={handleDeleteStudent}
         onLogout={handleLogout}
       />
     );
