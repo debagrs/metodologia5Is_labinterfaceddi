@@ -152,11 +152,15 @@ export default function App() {
   const [localLoaded, setLocalLoaded] = useState(false);
 
   const applyCloudSnapshot = (snapshot: WorkspaceSnapshot) => {
-    setActiveProfile(snapshot.activeProfile || null);
-    setClassrooms(snapshot.classrooms?.length ? snapshot.classrooms : DEFAULT_CLASSROOMS);
-    setStudents(snapshot.students?.length ? snapshot.students : DEFAULT_STUDENTS);
+    /*
+     * Um workspace remoto vazio deve continuar vazio.
+     * Não injeta turmas e alunos demonstrativos dentro de uma conta real.
+     */
+    setActiveProfile(snapshot.activeProfile || readAuthSession()?.user || null);
+    setClassrooms(Array.isArray(snapshot.classrooms) ? snapshot.classrooms : []);
+    setStudents(Array.isArray(snapshot.students) ? snapshot.students : []);
     setSoloProject(snapshot.soloProject || null);
-    setSoloNodes(snapshot.soloNodes || []);
+    setSoloNodes(Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : []);
 
     if (snapshot.activeProfile) localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(snapshot.activeProfile));
     if (snapshot.classrooms) localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(snapshot.classrooms));
