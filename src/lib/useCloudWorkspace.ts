@@ -8,6 +8,7 @@ import {
 import type {
   Classroom,
   Project,
+  ProjectWorkspace,
   StudentProfile,
   ThoughtNode,
   UserProfile,
@@ -19,6 +20,8 @@ export interface WorkspaceSnapshot {
   students: StudentProfile[];
   soloProject: Project | null;
   soloNodes: ThoughtNode[];
+  projectWorkspaces: ProjectWorkspace[];
+  activeProjectId: string | null;
 }
 
 interface Options extends WorkspaceSnapshot {
@@ -42,6 +45,8 @@ function normalizeSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
     students: Array.isArray(snapshot.students) ? snapshot.students : [],
     soloProject: snapshot.soloProject ?? null,
     soloNodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
+    projectWorkspaces: Array.isArray(snapshot.projectWorkspaces) ? snapshot.projectWorkspaces : [],
+    activeProjectId: snapshot.activeProjectId ?? null,
   };
 }
 
@@ -63,6 +68,8 @@ export function useCloudWorkspace(options: Options): CloudState {
     students: options.students,
     soloProject: options.soloProject,
     soloNodes: options.soloNodes,
+    projectWorkspaces: options.projectWorkspaces,
+    activeProjectId: options.activeProjectId,
   });
   const lastSavedSerialized = useRef<string | null>(null);
   const hydrationStarted = useRef(false);
@@ -76,6 +83,8 @@ export function useCloudWorkspace(options: Options): CloudState {
       students: options.students,
       soloProject: options.soloProject,
       soloNodes: options.soloNodes,
+      projectWorkspaces: options.projectWorkspaces,
+      activeProjectId: options.activeProjectId,
     }),
     [
       options.activeProfile,
@@ -83,6 +92,8 @@ export function useCloudWorkspace(options: Options): CloudState {
       options.students,
       options.soloProject,
       options.soloNodes,
+      options.projectWorkspaces,
+      options.activeProjectId,
     ],
   );
 
