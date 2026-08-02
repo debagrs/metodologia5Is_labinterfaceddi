@@ -22,56 +22,56 @@ const STICKERS: Record<string, {
   accentSoft: string;
   rotate: number;
 }> = {
-  'med-pesquisa': {
+  'agent-idea': {
     symbol: Compass,
     face: 'rounded-[46%_54%_52%_48%/52%_45%_55%_48%]',
     accent: '#F6B73C',
     accentSoft: '#FFF1C7',
     rotate: -4,
   },
-  'med-ux': {
+  'agent-passeio': {
     symbol: Activity,
     face: 'rounded-[55%_45%_47%_53%/42%_52%_48%_58%]',
     accent: '#43B581',
     accentSoft: '#DDF7EA',
     rotate: 3,
   },
-  'med-bioetico': {
+  'agent-ativista': {
     symbol: Heart,
     face: 'rounded-[50%_50%_42%_58%/45%_48%_52%_55%]',
     accent: '#F0627E',
     accentSoft: '#FFE1E8',
     rotate: -2,
   },
-  'med-acessibilidade': {
+  'agent-responsa': {
     symbol: Accessibility,
     face: 'rounded-[43%_57%_54%_46%/52%_48%_52%_48%]',
     accent: '#6C63D9',
     accentSoft: '#E7E5FF',
     rotate: 4,
   },
-  'med-visual': {
+  'agent-instaura': {
     symbol: LayoutGrid,
     face: 'rounded-[58%_42%_48%_52%/46%_56%_44%_54%]',
     accent: '#9A65D6',
     accentSoft: '#F0E2FF',
     rotate: -5,
   },
-  'med-documentacao': {
+  'agent-rede': {
     symbol: BookOpen,
     face: 'rounded-[47%_53%_57%_43%/54%_43%_57%_46%]',
     accent: '#4DA5D9',
     accentSoft: '#DFF3FF',
     rotate: 3,
   },
-  'med-heuristicas': {
+  'agent-inspetor': {
     symbol: ShieldCheck,
     face: 'rounded-[52%_48%_44%_56%/47%_55%_45%_53%]',
     accent: '#2D9C72',
     accentSoft: '#D8F6E9',
     rotate: -3,
   },
-  'med-implementacao': {
+  'agent-implementa': {
     symbol: Code2,
     face: 'rounded-[45%_55%_50%_50%/55%_45%_55%_45%]',
     accent: '#1689C7',
@@ -81,13 +81,13 @@ const STICKERS: Record<string, {
 };
 
 export default function MediatorSticker({
-  mediatorId = 'med-pesquisa',
+  mediatorId = 'agent-idea',
   size = 72,
   state = 'idle',
   className = '',
   label,
 }: MediatorStickerProps) {
-  const config = STICKERS[mediatorId] || STICKERS['med-pesquisa'];
+  const config = STICKERS[mediatorId] || STICKERS['agent-idea'];
   const Symbol = config.symbol;
 
   const animate = state === 'thinking'
