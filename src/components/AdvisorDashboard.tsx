@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw
 } from 'lucide-react';
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
 import InviteClassroomPanel from './InviteClassroomPanel';
@@ -41,9 +41,69 @@ export default function AdvisorDashboard({
   const [errorStudent, setErrorStudent] = useState('');
   const [inviteClassroom, setInviteClassroom] = useState<Classroom | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [invitedStudents, setInvitedStudents] = useState<StudentProfile[]>([]);
+  const [loadingInvitedStudents, setLoadingInvitedStudents] = useState(false);
+  const [inviteLoadError, setInviteLoadError] = useState('');
+
+  const loadInvitedStudents = async (classroomId: string) => {
+    const raw = localStorage.getItem('5is_auth_session');
+    let token = '';
+    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
+    if (!token) return;
+
+    setLoadingInvitedStudents(true);
+    setInviteLoadError('');
+    try {
+      const response = await fetch(`/api/invitations?classroomId=${encodeURIComponent(classroomId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os alunos convidados.');
+
+      const mapped: StudentProfile[] = (data.members || []).map((member: any) => {
+        const snapshot = member.snapshot || {};
+        const snapshotStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
+        const normalizedName = String(member.name || '').trim().toLowerCase();
+        const matchingStudent = snapshotStudents.find((student: any) =>
+          student?.classroomId === classroomId &&
+          String(student?.name || '').trim().toLowerCase() === normalizedName
+        );
+
+        return {
+          id: `remote-${member.id}`,
+          remoteOwnerId: String(member.id),
+          remoteSnapshot: snapshot,
+          name: String(member.name || 'Estudante'),
+          email: String(member.email || ''),
+          classroomId,
+          project: matchingStudent?.project || snapshot.soloProject || undefined,
+          nodes: matchingStudent?.nodes || snapshot.soloNodes || [],
+        };
+      });
+      setInvitedStudents(mapped);
+    } catch (error: any) {
+      setInviteLoadError(error?.message || 'Falha ao carregar alunos convidados.');
+      setInvitedStudents([]);
+    } finally {
+      setLoadingInvitedStudents(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedClassId) loadInvitedStudents(selectedClassId);
+    else setInvitedStudents([]);
+  }, [selectedClassId]);
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
-  const activeClassStudents = students.filter(s => s.classroomId === selectedClassId);
+  const activeClassStudents = useMemo(() => {
+    const localStudents = students.filter((student) => student.classroomId === selectedClassId);
+    const remoteIds = new Set(invitedStudents.map((student) => student.remoteOwnerId));
+    const remoteNames = new Set(invitedStudents.map((student) => student.name.trim().toLowerCase()));
+    const localsWithoutDuplicate = localStudents.filter((student) =>
+      !remoteIds.has(student.remoteOwnerId) && !remoteNames.has(student.name.trim().toLowerCase())
+    );
+    return [...invitedStudents, ...localsWithoutDuplicate];
+  }, [students, invitedStudents, selectedClassId]);
 
   const handleCreateClassroom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,6 +335,15 @@ export default function AdvisorDashboard({
 
                   <div className="flex flex-wrap gap-2">
                     <button
+                      onClick={() => loadInvitedStudents(activeClassroom.id)}
+                      disabled={loadingInvitedStudents}
+                      className="sm:self-center px-3 py-1.5 rounded-xl border border-[#E0E0DE] bg-white text-neutral-600 hover:text-black hover:border-black transition-colors flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wide cursor-pointer disabled:opacity-50"
+                      title="Atualizar alunos que entraram por convite"
+                    >
+                      <RefreshCw size={13} className={loadingInvitedStudents ? 'animate-spin' : ''} />
+                      <span className="hidden md:inline">Atualizar</span>
+                    </button>
+                    <button
                       onClick={() => setInviteClassroom(activeClassroom)}
                       className="sm:self-center px-3.5 py-1.5 rounded-xl border border-black bg-white text-black hover:bg-neutral-100 transition-colors flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wide cursor-pointer shadow-sm"
                     >
@@ -324,6 +393,17 @@ export default function AdvisorDashboard({
                   </form>
                 )}
 
+                {inviteLoadError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {inviteLoadError}
+                  </div>
+                )}
+                {loadingInvitedStudents && (
+                  <div className="rounded-xl border border-[#E0E0DE] bg-[#F9F9F8] px-3 py-2 text-xs text-neutral-500 flex items-center gap-2">
+                    <RefreshCw size={13} className="animate-spin" /> Buscando alunos que entraram pelo convite...
+                  </div>
+                )}
+
                 {/* STUDENTS TABLE */}
                 <div className="space-y-3">
                   {activeClassStudents.length > 0 ? (
@@ -339,6 +419,12 @@ export default function AdvisorDashboard({
                         >
                           <div className="space-y-1">
                             <h3 className="font-bold text-neutral-900 text-sm">{s.name}</h3>
+                            {s.email && <span className="text-[10px] text-neutral-400 font-mono block">{s.email}</span>}
+                            {s.remoteOwnerId && (
+                              <span className="inline-flex mt-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[9px] font-mono font-bold uppercase text-emerald-700">
+                                Conta conectada
+                              </span>
+                            )}
                             {hasProject ? (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs text-neutral-700 font-medium block">
@@ -362,7 +448,7 @@ export default function AdvisorDashboard({
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-[11px] text-neutral-400 italic block">Sem projeto iniciado</span>
+                              <span className="text-[11px] text-neutral-400 italic block">{s.remoteOwnerId ? 'Conta criada, mas o projeto ainda não foi iniciado' : 'Sem projeto iniciado'}</span>
                             )}
                           </div>
 
