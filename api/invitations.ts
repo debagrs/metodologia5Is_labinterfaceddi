@@ -101,17 +101,49 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET' && req.query?.classroomId) {
       const classroomId = String(req.query.classroomId);
-      const [classResult, membersResult] = await pipeline([
+
+      // Confirma que a turma realmente pertence à professora logada.
+      const [classResult] = await pipeline([
         { sql: 'SELECT id FROM shared_classrooms WHERE id = ? AND advisor_id = ? LIMIT 1', args: [arg(classroomId), arg(advisorId)] },
-        { sql: `SELECT u.id, u.name, u.email, m.joined_at, w.payload
-          FROM classroom_members m
-          JOIN users u ON u.id = m.user_id
-          LEFT JOIN workspace_snapshots w ON w.owner_id = u.id
-          WHERE m.classroom_id = ?
-          ORDER BY m.joined_at DESC`, args: [arg(classroomId)] },
       ]);
-      if (!classResult?.rows?.length) return res.status(200).json({ members: [] });
-      const members = (membersResult?.rows || []).map((row: any[]) => {
+      if (!classResult?.rows?.length) {
+        return res.status(200).json({ members: [], repaired: 0 });
+      }
+
+      // Recupera alunos por DUAS vias:
+      // 1) vínculo normal em classroom_members;
+      // 2) fallback pelo classroom_id salvo na conta do usuário.
+      // Esse fallback corrige contas que aceitaram o convite, mas ficaram sem a linha de vínculo.
+      const [membersResult] = await pipeline([
+        { sql: `SELECT DISTINCT
+            u.id,
+            u.name,
+            u.email,
+            COALESCE(m.joined_at, u.created_at) AS joined_at,
+            w.payload
+          FROM users u
+          LEFT JOIN classroom_members m
+            ON m.user_id = u.id AND m.classroom_id = ?
+          LEFT JOIN workspace_snapshots w
+            ON w.owner_id = u.id
+          WHERE u.role = 'student'
+            AND (m.classroom_id = ? OR u.classroom_id = ?)
+          ORDER BY joined_at DESC`,
+          args: [arg(classroomId), arg(classroomId), arg(classroomId)] },
+      ]);
+
+      const rows = membersResult?.rows || [];
+
+      // Repara automaticamente os vínculos antigos que estiverem faltando.
+      if (rows.length > 0) {
+        await pipeline(rows.map((row: any[]) => ({
+          sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
+            VALUES (?, ?, datetime('now'))`,
+          args: [arg(classroomId), arg(cell(row[0]))],
+        })));
+      }
+
+      const members = rows.map((row: any[]) => {
         let snapshot = null;
         const rawPayload = cell(row[4]);
         if (typeof rawPayload === 'string') {
@@ -125,7 +157,8 @@ export default async function handler(req: any, res: any) {
           snapshot,
         };
       });
-      return res.status(200).json({ members });
+
+      return res.status(200).json({ members, repaired: rows.length });
     }
 
     if (req.method === 'PUT') {
