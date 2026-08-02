@@ -18,6 +18,8 @@ interface AdvisorDashboardProps {
   onDeleteClassroom: (classroomId: string) => void;
   onDeleteStudent: (studentId: string) => void;
   onLogout: () => void;
+  loadingStudentWorkspace?: boolean;
+  studentWorkspaceError?: string;
 }
 
 export default function AdvisorDashboard({
@@ -29,7 +31,9 @@ export default function AdvisorDashboard({
   onViewStudentProject,
   onDeleteClassroom,
   onDeleteStudent,
-  onLogout
+  onLogout,
+  loadingStudentWorkspace = false,
+  studentWorkspaceError = ''
 }: AdvisorDashboardProps) {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(
     classrooms.length > 0 ? classrooms[0].id : null
@@ -476,6 +480,12 @@ export default function AdvisorDashboard({
                   </div>
                 )}
 
+                {studentWorkspaceError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {studentWorkspaceError}
+                  </div>
+                )}
+
                 {/* STUDENTS TABLE */}
                 <div className="space-y-3">
                   {activeClassStudents.length > 0 ? (
@@ -526,11 +536,12 @@ export default function AdvisorDashboard({
 
                           <button
                             onClick={() => onViewStudentProject(s)}
-                            className="w-full sm:w-auto px-4 py-2 bg-neutral-900 hover:bg-black text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                            disabled={loadingStudentWorkspace}
+                            className="w-full sm:w-auto px-4 py-2 bg-neutral-900 hover:bg-black text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-wait"
                           >
-                            <Sparkles size={13} />
-                            <span>Acessar Canvas</span>
-                            <ChevronRight size={13} />
+                            {loadingStudentWorkspace ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                            <span>{loadingStudentWorkspace ? 'Carregando...' : 'Acessar Canvas'}</span>
+                            {!loadingStudentWorkspace && <ChevronRight size={13} />}
                           </button>
                         </div>
                       );
