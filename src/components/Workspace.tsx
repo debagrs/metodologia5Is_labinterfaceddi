@@ -10,6 +10,7 @@ import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import MediatorSticker from './MediatorSticker';
 import BrandMark from './BrandMark';
 import AllCommentsPanel from './AllCommentsPanel';
+import AgentChatPanel from './AgentChatPanel';
 import { ensureTursoSession } from '../lib/turso';
 
 interface WorkspaceProps {
@@ -30,84 +31,84 @@ interface WorkspaceProps {
 
 const MEDIATORS: Mediator[] = [
   {
-    id: 'med-pesquisa',
-    name: 'Prof. Dra. Helena Mendes',
-    role: 'Etnografia de Campo & Pesquisa Científica',
-    description: 'Aprofunda o contexto social, triangulação e amostragem.',
-    bio: 'Pós-doutora em Antropologia Digital. Defensora do design participativo real, Helena instiga o questionamento de campo para evitar suposições vazias e obter saturação empírica.',
-    iconName: 'Compass',
+    id: 'agent-idea',
+    name: 'Idea',
+    role: 'Ideação, repertório e conexões',
+    description: 'Abre possibilidades sem transformar o problema em solução pronta.',
+    bio: 'Agente de Ideação da Metodologia 5I’s. Organiza repertórios, mapas mentais, hipóteses, perguntas e relações latentes. Trabalha com Gasparetto, Santaella, Manovich e Flusser para ampliar imaginação sem apagar autoria, contexto ou diferença.',
+    iconName: 'Sparkles',
     themeColor: 'amber',
-    greeting: 'Que premissas nós tomamos como verdades sem antes ouvir os silêncios da comunidade?'
+    greeting: 'Que relações ainda não foram percebidas porque o problema foi nomeado cedo demais?'
   },
   {
-    id: 'med-ux',
-    name: 'Dr. Théo Vasconcelos',
-    role: 'Ergonomia Cognitiva & Arquitetura UX',
-    description: 'Analisa modelos mentais e minimiza carga cognitiva.',
-    bio: 'Pesquisador sênior de interações humano-computador. Théo avalia a interface sob o filtro das limitações do processamento de informação humana, carga visual e fluxo de tarefas.',
-    iconName: 'Activity',
+    id: 'agent-passeio',
+    name: 'Passeio',
+    role: 'Inambulação, campo e escuta',
+    description: 'Faz o projeto caminhar no território, nas pessoas e nas interfaces existentes.',
+    bio: 'Agente de Inambulação. Convoca observação, escuta, cartografia, benchmarking crítico, pesquisa participante e contato com o ecossistema real. Dialoga com Latour, Costanza-Chock e métodos de pesquisa em design.',
+    iconName: 'Compass',
     themeColor: 'emerald',
-    greeting: 'Como o fluxo projetado se conecta com a rotina e os esquemas mentais que o usuário já domina?'
+    greeting: 'O que muda quando saímos da tela e caminhamos com quem vive o problema?'
   },
   {
-    id: 'med-bioetico',
-    name: 'Filósofa Mariana Solis',
-    role: 'Design de Justiça & Impacto Bioético',
-    description: 'Sintoniza valores sociais e impede dark patterns.',
-    bio: 'Escritora e ativista em ética tecnológica. Mariana examina as ramificações de poder, justiça social e sustentabilidade, garantindo alinhamento genuíno com os ODS ecológicos e sociais.',
-    iconName: 'Heart',
-    themeColor: 'rose',
-    greeting: 'Quem é excluído quando este sistema funciona exatamente como foi planejado?'
-  },
-  {
-    id: 'med-acessibilidade',
-    name: 'Pesquisador Jonas Ramos',
-    role: 'Acessibilidade Universal & Inclusão WCAG',
-    description: 'Valida conformidade sensorial e motora universal.',
-    bio: 'Auditor líder de acessibilidade digital. Jonas guia o design focado na diversidade funcional humana (visual, motora, cognitiva, auditiva), garantindo que a interface seja operável por todos.',
-    iconName: 'UserCheck',
-    themeColor: 'indigo',
-    greeting: 'Como alguém que interage exclusivamente por teclado ou leitor de telas reconstrói esta experiência na mente?'
-  },
-  {
-    id: 'med-visual',
-    name: 'Mestre Cláudio Gropius',
-    role: 'Semiótica Sintática & Design Visual',
-    description: 'Refina Gestalt, tipografia vernacular e ritmos.',
-    bio: 'Especialista em design de sistemas visuais com influência Bauhaus-Ulm. Cláudio investiga se a estética comunica a função de forma intuitiva, avaliando semiótica e ritmos de espaçamento.',
+    id: 'agent-instaura',
+    name: 'Instaura',
+    role: 'Instauração, forma e prototipação',
+    description: 'Transforma pesquisa em arquitetura, fluxos, rabiscoframes e experiências testáveis.',
+    bio: 'Agente de Instauração. Ajuda a materializar relações em arquitetura da informação, jornadas, wireframes, protótipos, linguagem visual e sistemas de componentes. Usa Norman, Preece, Rogers e Sharp, Gestalt, Heller e semiótica sem cair no figmarismo.',
     iconName: 'Layout',
     themeColor: 'violet',
-    greeting: 'As relações de contraste, pesos e silêncios tipográficos direcionam a atenção ou geram ruído visual?'
+    greeting: 'Que estrutura torna visível a lógica do projeto sem aprisioná-la em um template?'
   },
   {
-    id: 'med-documentacao',
-    name: 'Engenheira Beatriz Lin',
-    role: 'Sistemas de Design, Handoff & ADRs',
-    description: 'Estrutura taxonomia de tokens e decisões.',
-    bio: 'Engenheira de computação e especialista em Design Operations. Beatriz assegura que as tomadas de decisão de design sejam catalogáveis e traduzíveis em código limpo com impacto de governança.',
-    iconName: 'BookOpen',
-    themeColor: 'sky',
-    greeting: 'Como podemos modularizar este pensamento em regras e especificações que resistam ao tempo?'
-  },
-  {
-    id: 'med-heuristicas',
-    name: 'Analista Lina Nielsen',
-    role: 'Heurísticas de Usabilidade & 101 UX Rules',
-    description: 'Inspeciona consistência, feedback, erros e esforço cognitivo.',
-    bio: 'Especialista em inspeção sistemática de interfaces. Lina cruza as heurísticas de Nielsen, princípios de Norman e regras práticas de UX sem transformar listas em respostas automáticas.',
+    id: 'agent-inspetor',
+    name: 'Inspetor',
+    role: 'Inspeção, usabilidade e evidências',
+    description: 'Procura fricções, erros, exclusões e diferenças entre intenção e uso real.',
+    bio: 'Agente de Inspeção contínua. Cruza heurísticas de Nielsen, princípios de Norman, ergonomia cognitiva, acessibilidade, testes e evidências comportamentais. Não aprova por gosto: pede critérios, participantes e registros observáveis.',
     iconName: 'ShieldCheck',
-    themeColor: 'emerald',
-    greeting: 'Qual violação observável impede a pessoa de compreender, prever ou recuperar-se nesta interação?'
+    themeColor: 'indigo',
+    greeting: 'Que evidência mostra que a experiência funciona para além da nossa própria familiaridade?'
   },
   {
-    id: 'med-implementacao',
-    name: 'Arquiteta Ada Torres',
-    role: 'Implementação, Requisitos & Qualidade Técnica',
-    description: 'Traduz decisões em critérios verificáveis e arquitetura segura.',
-    bio: 'Arquiteta de software orientada a produto. Ada relaciona decisões projetuais a requisitos, critérios de aceite, desempenho, segurança, LGPD e estratégias de teste.',
+    id: 'agent-rede',
+    name: 'Rede',
+    role: 'Relações sociotécnicas e ecossistemas',
+    description: 'Mapeia atores humanos, não humanos, plataformas, infraestruturas e dependências.',
+    bio: 'Agente sociotécnico inspirado em Latour, Simondon e Haraway. Ajuda a ver o projeto como rede híbrida: pessoas, códigos, instituições, dados, animais, ambientes, dispositivos e disputas de poder.',
+    iconName: 'Activity',
+    themeColor: 'sky',
+    greeting: 'Quem e o que sustenta esta solução — e quem fica invisível quando a rede é simplificada?'
+  },
+  {
+    id: 'agent-ativista',
+    name: 'Ativista',
+    role: 'Bioética, justiça de design e participação',
+    description: 'Tensiona poder, exclusão, sustentabilidade e consequências humanas e não humanas.',
+    bio: 'Agente de bioética e design justice. Trabalha com Potter, Haraway, Costanza-Chock, Zuboff e educação humanitária. Questiona dark patterns, colonialidade, extração de dados, impacto ambiental e participação real.',
+    iconName: 'Heart',
+    themeColor: 'rose',
+    greeting: 'Quem recebe os benefícios, quem assume os riscos e quem teve poder para decidir?'
+  },
+  {
+    id: 'agent-responsa',
+    name: 'Responsa',
+    role: 'Acessibilidade, privacidade e responsabilidade',
+    description: 'Transforma valores em salvaguardas, requisitos e critérios verificáveis.',
+    bio: 'Agente transversal de responsabilidade projetual. Relaciona WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência algorítmica e sustentabilidade computacional.',
+    iconName: 'UserCheck',
+    themeColor: 'emerald',
+    greeting: 'Que requisito verificável garante acesso, autonomia, privacidade e possibilidade de recusa?'
+  },
+  {
+    id: 'agent-implementa',
+    name: 'Implementa',
+    role: 'Implementação, documentação e continuidade',
+    description: 'Leva o pensamento ao código sem perder decisões, contexto e critérios.',
+    bio: 'Agente de Implementação da Metodologia 5I’s. Organiza design systems, tokens, componentes, critérios de aceite, testes, documentação, handoff, publicação e manutenção. Trata o MVP como experimento vivo, não como encerramento.',
     iconName: 'Code2',
     themeColor: 'sky',
-    greeting: 'Que requisito verificável preserva esta decisão quando ela deixa o canvas e entra no código?'
+    greeting: 'Como esta decisão será preservada, testada e revisada quando virar sistema funcional?'
   }
 ];
 
@@ -154,12 +155,13 @@ export default function Workspace({
   currentUser,
   studentName
 }: WorkspaceProps) {
-  const [selectedMediatorId, setSelectedMediatorId] = useState<string>('med-pesquisa');
+  const [selectedMediatorId, setSelectedMediatorId] = useState<string>('agent-idea');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [genError, setGenError] = useState<string>('');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
+  const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
@@ -176,6 +178,7 @@ export default function Workspace({
       case 'BookOpen': return <BookOpen size={size} className={className} />;
       case 'ShieldCheck': return <ShieldCheck size={size} className={className} />;
       case 'Code2': return <Code2 size={size} className={className} />;
+      case 'Sparkles': return <Sparkles size={size} className={className} />;
       default: return <Compass size={size} className={className} />;
     }
   };
@@ -399,7 +402,7 @@ export default function Workspace({
                   ? 'bg-black text-white border-black shadow-sm' 
                   : 'bg-[#F5F5F3] text-neutral-600 border-[#E0E0DE] hover:bg-neutral-100'
               }`}
-              title="Mediadores Inteligentes"
+              title="Agentes 5I’s"
             >
               <Sparkles size={14} />
               <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden sm:inline">Mediadores</span>
@@ -422,6 +425,32 @@ export default function Workspace({
           }}
         />
       )}
+      {isAgentChatOpen && (
+        <AgentChatPanel
+          project={project}
+          nodes={nodes}
+          mediator={activeMediator}
+          onClose={() => setIsAgentChatOpen(false)}
+          onAddToCanvas={(message) => {
+            const coreNode = nodes.find((node) => node.type === 'core');
+            const centered = canvasRef.current?.getCenteredCardPosition(360, 430);
+            onAddNode({
+              type: 'insight',
+              title: `${activeMediator.name} — conversa`,
+              content: message,
+              phase: project.activePhase,
+              x: centered?.x ?? coreNode?.x ?? 1000,
+              y: centered?.y ?? coreNode?.y ?? 1000,
+              mediatorId: activeMediator.id,
+              scientificContext: `Conversa com o agente ${activeMediator.name}, vinculada à fase ${project.activePhase}.`,
+              provocations: [],
+              connections: coreNode ? [coreNode.id] : [],
+              isCompleted: false
+            });
+          }}
+        />
+      )}
+
 
       {/* Main workspace layout content splits */}
       <div id="workspace-body" className="flex-1 flex relative overflow-hidden">
@@ -585,15 +614,15 @@ export default function Workspace({
               <span className="text-[9px] font-mono font-bold tracking-widest text-[#70706E] uppercase block mb-1">
                 INTELIGÊNCIA PROJETUAL
               </span>
-              <h3 className="text-sm font-semibold text-[#1A1A1A]">Mediadores Inteligentes</h3>
+              <h3 className="text-sm font-semibold text-[#1A1A1A]">Agentes 5I’s</h3>
               <p className="text-[11px] text-[#70706E] mt-1 font-light leading-relaxed">
-                Nossos mediadores não escrevem soluções para você. Eles provocam reflexões científicas e metodológicas profundas.
+                Agentes artificiais com linguagem da Metodologia 5I’s. Converse, questione e transforme a conversa em registro no canvas.
               </p>
             </div>
 
             {/* Micro grid select of Mediators */}
             <div className="p-4 border-b border-[#F0F0EE]">
-              <span className="text-[9px] font-mono text-[#70706E] uppercase tracking-wider block mb-3 font-semibold">CONVOCAR MEDIADOR DE OUTRO EIXO</span>
+              <span className="text-[9px] font-mono text-[#70706E] uppercase tracking-wider block mb-3 font-semibold">CONVOCAR AGENTE</span>
               <div className="grid grid-cols-3 gap-1.5">
                 {MEDIATORS.map((m) => {
                   const isSelected = m.id === selectedMediatorId;
@@ -615,7 +644,7 @@ export default function Workspace({
                         state={isSelected ? 'selected' : 'idle'}
                         label={`Sticker de ${m.name}`}
                       />
-                      <span className="text-[9px] font-mono font-bold truncate max-w-[85px]">{m.name.split(' ').slice(-1)[0]}</span>
+                      <span className="text-[9px] font-mono font-bold truncate max-w-[85px]">{m.name}</span>
                       <span className={`h-1 w-1 rounded-full transition-all ${isSelected ? 'bg-black scale-100' : 'bg-transparent scale-0'}`} />
                     </button>
                   );
@@ -630,10 +659,10 @@ export default function Workspace({
                   mediatorId={activeMediator.id}
                   size={68}
                   state={isGenerating ? 'thinking' : 'selected'}
-                  label={`Mediador ativo: ${activeMediator.name}`}
+                  label={`Agente ativo: ${activeMediator.name}`}
                 />
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-mono font-bold text-[#70706E] uppercase">MEDIADOR ATIVO</span>
+                  <span className="text-[9px] font-mono font-bold text-[#70706E] uppercase">AGENTE ATIVO</span>
                   <h4 className="text-sm font-bold text-neutral-900 leading-snug">{activeMediator.name}</h4>
                   <span className="text-[10px] text-black font-mono tracking-wider font-semibold leading-none mt-0.5">{activeMediator.role}</span>
                 </div>
@@ -666,6 +695,14 @@ export default function Workspace({
               </p>
             )}
 
+            <button
+              onClick={() => setIsAgentChatOpen(true)}
+              className="w-full bg-white text-black border-2 border-black hover:bg-[#F5F5F3] transition-colors py-3.5 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.13em] cursor-pointer"
+            >
+              <MessageCircle size={15} />
+              <span>CONVERSAR COM {activeMediator.name}</span>
+            </button>
+
             <motion.button
               onClick={handleTriggerMediator}
               disabled={isGenerating}
@@ -688,7 +725,7 @@ export default function Workspace({
             
             <div className="text-center">
               <span className="text-[9px] font-mono text-gray-400 uppercase tracking-widest block">
-                O questionamento será integrado ao canvas ativo
+                A conversa pode ser transformada em card no canvas
               </span>
             </div>
           </div>
