@@ -198,7 +198,7 @@ export default function AdminPanel({
         <div className="shrink-0 px-3 sm:px-5 py-3 border-b border-[#E0E0DE] bg-white flex items-center gap-2 overflow-x-auto overscroll-x-contain">
           {([
             ['turmas', BookOpen, `Turmas (${classrooms.length})`],
-            ['alunos', Users, `Alunos (${students.length + cloudMembers.length})`],
+            ['alunos', Users, `Alunos (${cloudMembers.length})`],
             ['convites', Mail, `Convites (${cloudInvitations.length})`],
           ] as const).map(([id, Icon, label]) => (
             <button key={id} onClick={() => setTab(id)} className={`flex-none px-3.5 py-2 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-2 cursor-pointer whitespace-nowrap ${tab === id ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-[#E0E0DE] hover:border-black'}`}>
@@ -234,35 +234,25 @@ export default function AdminPanel({
           )}
 
           {tab === 'alunos' && (
-            <div className="space-y-5">
-              <section>
-                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2">Alunos da lista do projeto</h3>
-                <div className="space-y-2">
-                  {students.map((student) => {
-                    const classroom = classrooms.find((c) => c.id === student.classroomId);
-                    return (
-                      <article key={student.id} className="p-3.5 bg-white border border-[#E0E0DE] rounded-xl flex items-center justify-between gap-3">
-                        <div><strong className="text-sm block">{student.name}</strong><span className="text-[10px] text-neutral-500 font-mono">{classroom?.name || 'Turma não encontrada'}</span></div>
-                        <button onClick={() => deleteLocalStudent(student)} className="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 cursor-pointer" title="Remover aluno"><UserMinus size={16} /></button>
-                      </article>
-                    );
-                  })}
-                  {students.length === 0 && <p className="text-xs text-neutral-400">Nenhum aluno local.</p>}
-                </div>
-              </section>
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-xs text-sky-900">
+                Aqui aparecem somente contas reais que entraram nas suas turmas pelo convite. Cadastros locais antigos não são misturados nesta lista.
+              </div>
 
-              <section>
-                <h3 className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2">Contas que entraram por convite</h3>
-                <div className="space-y-2">
-                  {cloudMembers.map((member) => (
-                    <article key={`${member.classroomId}-${member.id}`} className="p-3.5 bg-white border border-[#E0E0DE] rounded-xl flex items-center justify-between gap-3">
-                      <div><strong className="text-sm block">{member.name}</strong><span className="text-[10px] text-neutral-500 font-mono">{member.email} · {member.classroomName}</span></div>
-                      <button onClick={() => removeCloudMember(member)} className="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 cursor-pointer" title="Remover da turma"><UserMinus size={16} /></button>
-                    </article>
-                  ))}
-                  {cloudMembers.length === 0 && <p className="text-xs text-neutral-400">Nenhuma conta entrou por convite ainda.</p>}
-                </div>
-              </section>
+              {cloudMembers.map((member) => (
+                <article key={`${member.classroomId}-${member.id}`} className="p-3.5 bg-white border border-[#E0E0DE] rounded-xl flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <strong className="text-sm block truncate">{member.name}</strong>
+                    <span className="text-[10px] text-neutral-500 font-mono block break-all">{member.email}</span>
+                    <span className="text-[10px] text-neutral-400 font-mono block mt-1">Turma: {member.classroomName}</span>
+                  </div>
+                  <button onClick={() => removeCloudMember(member)} className="p-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 cursor-pointer shrink-0" title="Remover da turma"><UserMinus size={16} /></button>
+                </article>
+              ))}
+
+              {cloudMembers.length === 0 && (
+                <p className="text-center text-sm text-neutral-400 py-10">Nenhuma conta de estudante vinculada às suas turmas.</p>
+              )}
             </div>
           )}
 
