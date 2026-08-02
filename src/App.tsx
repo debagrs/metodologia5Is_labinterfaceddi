@@ -216,6 +216,16 @@ export default function App() {
     setActiveProfile(profile);
     localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
 
+    if (profile.invitedClassroom) {
+      const invitedClass = profile.invitedClassroom;
+      const classroomExists = classrooms.some((classroom) => classroom.id === invitedClass.id);
+      if (!classroomExists) {
+        const updatedClassrooms = [...classrooms, invitedClass];
+        setClassrooms(updatedClassrooms);
+        localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(updatedClassrooms));
+      }
+    }
+
     if (profile.role === 'student') {
       const studentNameNorm = profile.name.trim().toLowerCase();
       const existingStudent = students.find(s => 
