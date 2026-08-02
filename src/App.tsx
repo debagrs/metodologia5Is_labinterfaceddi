@@ -7,6 +7,7 @@ import AdvisorDashboard from './components/AdvisorDashboard';
 import { Project, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile } from './types';
 import { Users, Sparkles, LogOut, ArrowLeft, GraduationCap, Globe, Building } from 'lucide-react';
 import { useCloudWorkspace, WorkspaceSnapshot } from './lib/useCloudWorkspace';
+import { readAuthSession, clearAuthSession } from './lib/auth';
 
 const STORAGE_PROFILE_KEY = "5is_platform_active_profile";
 const STORAGE_CLASSROOMS_KEY = "5is_platform_classrooms";
@@ -171,14 +172,18 @@ export default function App() {
 
   // Load from localStorage on mount
   useEffect(() => {
+    const authSession = readAuthSession();
     const savedProfile = localStorage.getItem(STORAGE_PROFILE_KEY);
     const savedClassrooms = localStorage.getItem(STORAGE_CLASSROOMS_KEY);
     const savedStudents = localStorage.getItem(STORAGE_STUDENTS_KEY);
     const savedSoloProject = localStorage.getItem(STORAGE_PROJECT_KEY);
     const savedSoloNodes = localStorage.getItem(STORAGE_NODES_KEY);
 
-    if (savedProfile) {
-      try { setActiveProfile(JSON.parse(savedProfile)); } catch(e) {}
+    if (authSession?.user) {
+      setActiveProfile(authSession.user);
+      localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(authSession.user));
+    } else if (savedProfile) {
+      localStorage.removeItem(STORAGE_PROFILE_KEY);
     }
 
     if (savedClassrooms) {
@@ -238,6 +243,7 @@ export default function App() {
     setSoloProject(null);
     setSoloNodes([]);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
+    clearAuthSession();
   };
 
   // Advisor / Professor Actions
@@ -402,6 +408,11 @@ export default function App() {
     saveActiveProjectAndNodes(project, updated);
   };
 
+  const handleUpdateNode = (updatedNode: ThoughtNode) => {
+    const updated = nodes.map(n => n.id === updatedNode.id ? updatedNode : n);
+    saveActiveProjectAndNodes(project, updated);
+  };
+
   const handleDeleteNode = (id: string) => {
     const updated = nodes
       .filter(n => n.id !== id)
@@ -478,6 +489,7 @@ export default function App() {
             onAddCustomThought={handleAddCustomThought}
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
+            onUpdateNode={handleUpdateNode}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -531,6 +543,7 @@ export default function App() {
             onAddCustomThought={handleAddCustomThought}
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
+            onUpdateNode={handleUpdateNode}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -551,6 +564,7 @@ export default function App() {
             onAddCustomThought={handleAddCustomThought}
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
+            onUpdateNode={handleUpdateNode}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -694,6 +708,7 @@ export default function App() {
             onAddCustomThought={handleAddCustomThought}
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
+            onUpdateNode={handleUpdateNode}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -747,6 +762,7 @@ export default function App() {
           onAddCustomThought={handleAddCustomThought}
           onUpdateNodeContent={handleUpdateNodeContent}
           onDeleteNode={handleDeleteNode}
+          onUpdateNode={handleUpdateNode}
           onAddNode={handleAddNode}
           onUpdatePhase={handleUpdatePhase}
           onExit={handleExit}
