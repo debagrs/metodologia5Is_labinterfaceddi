@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings
 } from 'lucide-react';
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
 import InviteClassroomPanel from './InviteClassroomPanel';
+import AdminPanel from './AdminPanel';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -13,6 +14,8 @@ interface AdvisorDashboardProps {
   onAddClassroom: (name: string) => void;
   onAddStudent: (classroomId: string, name: string) => void;
   onViewStudentProject: (student: StudentProfile) => void;
+  onDeleteClassroom: (classroomId: string) => void;
+  onDeleteStudent: (studentId: string) => void;
   onLogout: () => void;
 }
 
@@ -23,6 +26,8 @@ export default function AdvisorDashboard({
   onAddClassroom,
   onAddStudent,
   onViewStudentProject,
+  onDeleteClassroom,
+  onDeleteStudent,
   onLogout
 }: AdvisorDashboardProps) {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(
@@ -35,6 +40,7 @@ export default function AdvisorDashboard({
   const [errorClass, setErrorClass] = useState('');
   const [errorStudent, setErrorStudent] = useState('');
   const [inviteClassroom, setInviteClassroom] = useState<Classroom | null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
   const activeClassStudents = students.filter(s => s.classroomId === selectedClassId);
@@ -107,13 +113,22 @@ export default function AdvisorDashboard({
             </div>
           </div>
 
-          <button
-            onClick={onLogout}
-            className="px-4 py-2 border border-[#E0E0DE] hover:border-red-200 text-neutral-600 hover:text-red-600 hover:bg-red-50/50 rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-          >
-            <LogOut size={13} />
-            <span>Sair do Painel</span>
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <Settings size={13} />
+              <span>Administração</span>
+            </button>
+            <button
+              onClick={onLogout}
+              className="px-4 py-2 border border-[#E0E0DE] hover:border-red-200 text-neutral-600 hover:text-red-600 hover:bg-red-50/50 rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <LogOut size={13} />
+              <span>Sair do Painel</span>
+            </button>
+          </div>
         </header>
 
         {/* METRICS ROW */}
@@ -389,6 +404,15 @@ export default function AdvisorDashboard({
         <InviteClassroomPanel
           classroom={inviteClassroom}
           onClose={() => setInviteClassroom(null)}
+        />
+      )}
+      {showAdmin && (
+        <AdminPanel
+          classrooms={classrooms}
+          students={students}
+          onDeleteClassroom={onDeleteClassroom}
+          onDeleteStudent={onDeleteStudent}
+          onClose={() => setShowAdmin(false)}
         />
       )}
     </div>
