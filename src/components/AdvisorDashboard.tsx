@@ -6,6 +6,7 @@ import {
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
+import { readAuthSession } from '../lib/auth';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -46,9 +47,8 @@ export default function AdvisorDashboard({
   const [inviteLoadError, setInviteLoadError] = useState('');
 
   const loadInvitedStudents = async (classroomId: string) => {
-    const raw = localStorage.getItem('5is_auth_session');
-    let token = '';
-    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
+    const auth = readAuthSession();
+    const token = auth?.token || '';
 
     if (!token) {
       setInviteLoadError('Sua sessão expirou. Saia e entre novamente.');
@@ -128,14 +128,11 @@ export default function AdvisorDashboard({
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
   const activeClassStudents = useMemo(() => {
-    const localStudents = students.filter((student) => student.classroomId === selectedClassId);
-    const remoteIds = new Set(invitedStudents.map((student) => student.remoteOwnerId));
-    const remoteNames = new Set(invitedStudents.map((student) => student.name.trim().toLowerCase()));
-    const localsWithoutDuplicate = localStudents.filter((student) =>
-      !remoteIds.has(student.remoteOwnerId) && !remoteNames.has(student.name.trim().toLowerCase())
-    );
-    return [...invitedStudents, ...localsWithoutDuplicate];
-  }, [students, invitedStudents, selectedClassId]);
+    // A turma mostra somente contas reais recuperadas do Turso.
+    // Isso evita misturar cadastros locais antigos ou alunos de outras turmas.
+    return invitedStudents;
+  }, [invitedStudents]);
+
 
   const handleCreateClassroom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,7 +496,7 @@ export default function AdvisorDashboard({
                     <div className="text-center py-12 border-2 border-dashed border-[#E0E0DE] rounded-2xl">
                       <Users size={28} className="mx-auto text-neutral-300 mb-2" />
                       <p className="text-xs text-neutral-400 font-light max-w-sm mx-auto">
-                        Nenhuma conta conectada apareceu nesta turma. Clique em “Atualizar”. Se a conta entrou por convite antes desta correção, o sistema fará o vínculo automaticamente.
+                        Nenhuma conta conectada apareceu nesta turma. Clique em “Atualizar”. A lista deve mostrar exatamente as contas que aceitaram convites desta turma.
                       </p>
                     </div>
                   )}
