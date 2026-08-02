@@ -90,6 +90,11 @@ export interface StudentProfile {
   id: string;
   name: string;
   classroomId: string;
+  email?: string;
+  /** ID real da conta no Turso quando o aluno entrou por convite. */
+  remoteOwnerId?: string;
+  /** Snapshot completo da conta, usado para a professora editar o mesmo canvas. */
+  remoteSnapshot?: Record<string, unknown>;
   project?: Project;
   nodes?: ThoughtNode[];
 }
