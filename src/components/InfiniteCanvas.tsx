@@ -10,6 +10,7 @@ import MediatorSticker from './MediatorSticker';
 
 export interface InfiniteCanvasHandle {
   getCenteredCardPosition: (cardWidth?: number, cardHeight?: number) => { x: number; y: number };
+  focusNode: (nodeId: string, openCollaboration?: boolean) => void;
 }
 
 interface InfiniteCanvasProps {
@@ -62,7 +63,20 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         y: Math.max(0, centerCanvasY - cardHeight / 2),
       };
     },
-  }), [panOffset.x, panOffset.y, zoom]);
+    focusNode: (nodeId: string, openCollaboration = false) => {
+      const node = nodes.find((item) => item.id === nodeId);
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!node || !rect) return;
+      const estimatedWidth = node.type === 'core' ? 480 : 360;
+      const estimatedHeight = node.type === 'core' ? 320 : 460;
+      setPanOffset({
+        x: rect.width / 2 - (node.x + estimatedWidth / 2) * zoom,
+        y: rect.height / 2 - (node.y + estimatedHeight / 2) * zoom,
+      });
+      setSelectedNodeId(nodeId);
+      if (openCollaboration) setCollaborationNodeId(nodeId);
+    },
+  }), [nodes, panOffset.x, panOffset.y, zoom]);
 
   // Center on project core node on mount
   useEffect(() => {
@@ -87,29 +101,37 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
   };
 
-  // Handle background panning
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // Only pan if clicking on background grid
+  // Pan unificado do canvas com mouse, caneta ou um dedo no celular.
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('.thought-card') || target.closest('.canvas-control')) return;
+    e.preventDefault();
 
+    const pointerId = e.pointerId;
+    const viewport = e.currentTarget as HTMLElement;
+    viewport.setPointerCapture?.(pointerId);
     const startX = e.clientX - panOffset.x;
     const startY = e.clientY - panOffset.y;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       setPanOffset({
         x: moveEvent.clientX - startX,
-        y: moveEvent.clientY - startY
+        y: moveEvent.clientY - startY,
       });
     };
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      viewport.releasePointerCapture?.(pointerId);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
   };
 
   // Handle double click to spawn notes
@@ -128,30 +150,43 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     onAddCustomThought(canvasX, canvasY);
   };
 
-  // Handle dragging nodes
-  const handleNodeDragStart = (e: React.MouseEvent, id: string) => {
+  // Arraste unificado para mouse, caneta e toque. O cabeçalho inteiro funciona
+  // como uma alça grande, facilitando o uso no celular.
+  const handleNodePointerDown = (e: React.PointerEvent, id: string) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select')) return;
     e.stopPropagation();
-    const node = nodes.find(n => n.id === id);
+    e.preventDefault();
+
+    const node = nodes.find((item) => item.id === id);
     if (!node) return;
 
+    const pointerId = e.pointerId;
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture?.(pointerId);
     const startX = e.clientX;
     const startY = e.clientY;
     const initialX = node.x;
     const initialY = node.y;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       const dx = (moveEvent.clientX - startX) / zoom;
       const dy = (moveEvent.clientY - startY) / zoom;
       onUpdateNodeCoords(id, initialX + dx, initialY + dy);
     };
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      handle.releasePointerCapture?.(pointerId);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('pointermove', handlePointerMove, { passive: false });
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
   };
 
   const handleSaveAnswer = (nodeId: string) => {
@@ -173,8 +208,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     <div 
       id="canvas-viewport"
       ref={containerRef}
-      onMouseDown={handleMouseDown}
+      onPointerDown={handleCanvasPointerDown}
       onDoubleClick={handleDoubleClick}
+      style={{ touchAction: 'none' }}
       className="relative flex-1 h-full overflow-hidden bg-[#FDFDFB] select-none cursor-grab active:cursor-grabbing"
     >
       {/* Absolute floating guide */}
@@ -291,8 +327,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 
                 {/* Drag Handle Bar */}
                 <div 
-                  onMouseDown={(e) => handleNodeDragStart(e, node.id)}
-                  className={`px-4 py-2.5 flex items-center justify-between cursor-grab active:cursor-grabbing border-b ${
+                  onPointerDown={(e) => handleNodePointerDown(e, node.id)}
+                  style={{ touchAction: 'none' }}
+                  className={`px-4 py-3.5 sm:py-3 flex items-center justify-between cursor-grab active:cursor-grabbing border-b select-none ${
                     isCore 
                       ? 'bg-[#1A1A1A] border-black text-white' 
                       : isQuestion 
