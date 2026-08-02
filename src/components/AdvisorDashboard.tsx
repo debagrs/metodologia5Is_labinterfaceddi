@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, Search, UserPlus, Loader2
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw
 } from 'lucide-react';
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
+import { readAuthSession } from '../lib/auth';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
 
@@ -35,10 +36,9 @@ export default function AdvisorDashboard({
   );
   const [newClassName, setNewClassName] = useState('');
   const [newStudentName, setNewStudentName] = useState('');
-  const [accountQuery, setAccountQuery] = useState('');
   const [accountResults, setAccountResults] = useState<any[]>([]);
   const [searchingAccounts, setSearchingAccounts] = useState(false);
-  const [addingAccountId, setAddingAccountId] = useState<string | null>(null);
+  const [addingAccountId, setAddingAccountId] = useState('');
   const [showAddClassForm, setShowAddClassForm] = useState(false);
   const [showAddStudentForm, setShowAddStudentForm] = useState(false);
   const [errorClass, setErrorClass] = useState('');
@@ -50,10 +50,12 @@ export default function AdvisorDashboard({
   const [inviteLoadError, setInviteLoadError] = useState('');
 
   const loadInvitedStudents = async (classroomId: string) => {
-    const raw = localStorage.getItem('5is_auth_session');
-    let token = '';
-    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
-    if (!token) return;
+    const auth = readAuthSession();
+    const token = auth?.token || '';
+    if (!token) {
+      setInviteLoadError('Sua sessão expirou. Saia e entre novamente.');
+      return;
+    }
 
     setLoadingInvitedStudents(true);
     setInviteLoadError('');
@@ -100,15 +102,7 @@ export default function AdvisorDashboard({
   }, [selectedClassId]);
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
-  const activeClassStudents = useMemo(() => {
-    const localStudents = students.filter((student) => student.classroomId === selectedClassId);
-    const remoteIds = new Set(invitedStudents.map((student) => student.remoteOwnerId));
-    const remoteNames = new Set(invitedStudents.map((student) => student.name.trim().toLowerCase()));
-    const localsWithoutDuplicate = localStudents.filter((student) =>
-      !remoteIds.has(student.remoteOwnerId) && !remoteNames.has(student.name.trim().toLowerCase())
-    );
-    return [...invitedStudents, ...localsWithoutDuplicate];
-  }, [students, invitedStudents, selectedClassId]);
+  const activeClassStudents = useMemo(() => invitedStudents, [invitedStudents]);
 
   const handleCreateClassroom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,84 +123,68 @@ export default function AdvisorDashboard({
     }, 50);
   };
 
-  const handleAddStudentSubmit = (e: React.FormEvent) => {
+  const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedClassId) return;
-    if (!newStudentName.trim()) {
-      setErrorStudent('Por favor, digite o nome do aluno.');
+    const query = newStudentName.trim();
+    if (!query) {
+      setErrorStudent('Digite o nome ou o e-mail da conta cadastrada.');
       return;
     }
-    onAddStudent(selectedClassId, newStudentName.trim());
-    setNewStudentName('');
-    setShowAddStudentForm(false);
-    setErrorStudent('');
-  };
-
-  const searchRegisteredAccounts = async () => {
-    const query = accountQuery.trim();
-    if (query.length < 2) {
-      setErrorStudent('Digite pelo menos 2 letras do nome ou do e-mail.');
-      return;
-    }
-    const raw = localStorage.getItem('5is_auth_session');
-    let token = '';
-    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
-    if (!token) {
-      setErrorStudent('Sua sessão expirou. Entre novamente.');
+    const auth = readAuthSession();
+    if (!auth?.token) {
+      setErrorStudent('Sua sessão expirou. Saia e entre novamente.');
       return;
     }
     setSearchingAccounts(true);
     setErrorStudent('');
+    setAccountResults([]);
     try {
       const response = await fetch(`/api/invitations?searchUsers=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${auth.token}` },
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Não foi possível buscar as contas.');
       setAccountResults(Array.isArray(data.users) ? data.users : []);
-      if (!data.users?.length) setErrorStudent('Nenhuma conta encontrada com esse nome ou e-mail.');
+      if (!data.users?.length) setErrorStudent('Nenhuma conta cadastrada foi encontrada.');
     } catch (error: any) {
-      setAccountResults([]);
       setErrorStudent(error?.message || 'Falha ao buscar contas.');
     } finally {
       setSearchingAccounts(false);
     }
   };
 
-  const addRegisteredAccount = async (user: any) => {
+  const addRegisteredAccount = async (account: any) => {
     if (!activeClassroom) return;
-    const raw = localStorage.getItem('5is_auth_session');
-    let token = '';
-    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
-    if (!token) {
-      setErrorStudent('Sua sessão expirou. Entre novamente.');
+    const auth = readAuthSession();
+    if (!auth?.token) {
+      setErrorStudent('Sua sessão expirou. Saia e entre novamente.');
       return;
     }
-    setAddingAccountId(user.id);
+    setAddingAccountId(String(account.id));
     setErrorStudent('');
     try {
       const response = await fetch('/api/invitations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${auth.token}`,
         },
         body: JSON.stringify({
           action: 'addExistingMember',
           classroom: activeClassroom,
-          userId: user.id,
+          userId: account.id,
         }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error || 'Não foi possível incluir o aluno.');
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível adicionar esta conta.');
+      setAccountResults([]);
+      setNewStudentName('');
+      setShowAddStudentForm(false);
       await loadInvitedStudents(activeClassroom.id);
-      setAccountResults((current) => current.filter((item) => item.id !== user.id));
-      setAccountQuery('');
-      setErrorStudent(`${user.name} foi incluído(a) na turma.`);
     } catch (error: any) {
-      setErrorStudent(error?.message || 'Falha ao incluir o aluno.');
+      setErrorStudent(error?.message || 'Falha ao adicionar a conta à turma.');
     } finally {
-      setAddingAccountId(null);
+      setAddingAccountId('');
     }
   };
 
@@ -433,68 +411,58 @@ export default function AdvisorDashboard({
                   </div>
                 </div>
 
-                {/* ADD REGISTERED STUDENT FORM */}
+                {/* ADD STUDENT FORM */}
                 {showAddStudentForm && (
-                  <div className="p-4 bg-[#F5F5F3] rounded-xl border border-[#E0E0DE] space-y-3">
+                  <form onSubmit={handleAddStudentSubmit} className="p-4 bg-[#F5F5F3] rounded-xl border border-[#E0E0DE] space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase tracking-wide block">Adicionar conta já cadastrada</span>
+                      <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase tracking-wide block">Buscar conta já cadastrada</span>
                       <button
                         type="button"
-                        onClick={() => { setShowAddStudentForm(false); setAccountResults([]); setErrorStudent(''); }}
+                        onClick={() => setShowAddStudentForm(false)}
                         className="text-[10px] text-neutral-400 hover:text-black font-mono cursor-pointer"
                       >
                         Fechar
                       </button>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <div className="relative flex-1">
-                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                        <input
-                          type="search"
-                          placeholder="Nome ou e-mail já cadastrado"
-                          value={accountQuery}
-                          onChange={(e) => setAccountQuery(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchRegisteredAccounts(); } }}
-                          className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-lg py-2 pl-9 pr-3 text-base sm:text-xs outline-none"
-                          autoFocus
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        placeholder="Nome ou e-mail cadastrado"
+                        value={newStudentName}
+                        onChange={(e) => setNewStudentName(e.target.value)}
+                        className="flex-1 bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-lg p-2 text-xs outline-none"
+                        autoFocus
+                      />
                       <button
-                        type="button"
-                        onClick={searchRegisteredAccounts}
+                        type="submit"
                         disabled={searchingAccounts}
-                        className="px-4 py-2 bg-black text-white rounded-lg text-xs font-mono font-bold uppercase cursor-pointer hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="px-4 py-2 bg-black text-white rounded-lg text-xs font-mono font-bold uppercase cursor-pointer hover:bg-neutral-800"
                       >
-                        {searchingAccounts ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                        Buscar
+                        Registrar
                       </button>
                     </div>
                     {accountResults.length > 0 && (
                       <div className="space-y-2">
-                        {accountResults.map((user) => {
-                          const alreadyInClass = invitedStudents.some((student) => student.remoteOwnerId === user.id);
-                          return (
-                            <div key={user.id} className="bg-white border border-[#E0E0DE] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <strong className="text-sm block truncate">{user.name}</strong>
-                                <span className="text-[11px] font-mono text-neutral-500 block break-all">{user.email}</span>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={alreadyInClass || addingAccountId === user.id}
-                                onClick={() => addRegisteredAccount(user)}
-                                className="px-3 py-2 rounded-lg bg-black text-white text-xs font-mono font-bold uppercase flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
-                              >
-                                {addingAccountId === user.id ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                                {alreadyInClass ? 'Já está na turma' : 'Adicionar'}
-                              </button>
+                        {accountResults.map((account) => (
+                          <div key={account.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-xl border border-[#E0E0DE] bg-white p-3">
+                            <div className="min-w-0">
+                              <strong className="text-sm block truncate">{account.name}</strong>
+                              <span className="text-[11px] text-neutral-500 font-mono block truncate">{account.email}</span>
                             </div>
-                          );
-                        })}
+                            <button
+                              type="button"
+                              onClick={() => addRegisteredAccount(account)}
+                              disabled={addingAccountId === String(account.id)}
+                              className="px-3 py-2 rounded-lg bg-black text-white text-xs font-mono font-bold uppercase disabled:opacity-50"
+                            >
+                              {addingAccountId === String(account.id) ? 'Adicionando...' : 'Adicionar à turma'}
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
-                    {errorStudent && <p className={`text-xs font-semibold ${errorStudent.includes('incluído') ? 'text-emerald-700' : 'text-red-600'}`}>{errorStudent}</p>}
-                  </div>
+                    {errorStudent && <p className="text-xs text-red-600 font-semibold">{errorStudent}</p>}
+                  </form>
                 )}
 
                 {inviteLoadError && (
