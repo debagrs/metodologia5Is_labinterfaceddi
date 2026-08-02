@@ -150,6 +150,8 @@ export default function App() {
   const [viewingStudent, setViewingStudent] = useState<StudentProfile | null>(null);
   const [viewingStudentProjects, setViewingStudentProjects] = useState<ProjectWorkspace[]>([]);
   const [viewingStudentActiveProjectId, setViewingStudentActiveProjectId] = useState<string | null>(null);
+  const [loadingStudentWorkspace, setLoadingStudentWorkspace] = useState(false);
+  const [studentWorkspaceError, setStudentWorkspaceError] = useState('');
 
   // Solo project states
   const [soloProject, setSoloProject] = useState<Project | null>(null);
@@ -343,27 +345,57 @@ export default function App() {
     if (viewingStudent?.id === studentId) setViewingStudent(null);
   };
 
-  const handleViewStudentProject = (student: StudentProfile) => {
-    const snapshot = (student.remoteSnapshot || {}) as unknown as WorkspaceSnapshot;
-    const remoteProjects: ProjectWorkspace[] = Array.isArray(snapshot.projectWorkspaces) && snapshot.projectWorkspaces.length
-      ? snapshot.projectWorkspaces
-      : snapshot.soloProject
-        ? [{
-            project: snapshot.soloProject,
-            nodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
-            updatedAt: new Date().toISOString(),
-          }]
-        : student.project
-          ? [{
-              project: student.project,
-              nodes: Array.isArray(student.nodes) ? student.nodes : [],
-              updatedAt: student.project.createdAt || new Date().toISOString(),
-            }]
-          : [];
+  const handleViewStudentProject = async (student: StudentProfile) => {
+    setLoadingStudentWorkspace(true);
+    setStudentWorkspaceError('');
 
-    setViewingStudent(student);
-    setViewingStudentProjects(remoteProjects);
-    setViewingStudentActiveProjectId(null);
+    try {
+      let snapshot = (student.remoteSnapshot || {}) as unknown as WorkspaceSnapshot;
+
+      // Busca diretamente o workspace atual da conta do aluno.
+      // A lista da turma pode conter um snapshot antigo, enquanto o aluno já salvou
+      // novos projetos em /api/workspace.
+      if (student.remoteOwnerId) {
+        const auth = readAuthSession();
+        if (!auth?.token) throw new Error('Sua sessão expirou. Saia e entre novamente.');
+
+        const response = await fetch(
+          `/api/workspace?ownerId=${encodeURIComponent(student.remoteOwnerId)}`,
+          { headers: { Authorization: `Bearer ${auth.token}` } },
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Não foi possível carregar os projetos deste aluno.');
+        }
+        snapshot = (data?.payload || {}) as WorkspaceSnapshot;
+      }
+
+      const remoteProjects: ProjectWorkspace[] =
+        Array.isArray(snapshot.projectWorkspaces) && snapshot.projectWorkspaces.length
+          ? snapshot.projectWorkspaces
+          : snapshot.soloProject
+            ? [{
+                project: snapshot.soloProject,
+                nodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
+                updatedAt: snapshot.soloProject.createdAt || new Date().toISOString(),
+              }]
+            : student.project
+              ? [{
+                  project: student.project,
+                  nodes: Array.isArray(student.nodes) ? student.nodes : [],
+                  updatedAt: student.project.createdAt || new Date().toISOString(),
+                }]
+              : [];
+
+      setViewingStudent({ ...student, remoteSnapshot: snapshot as unknown as Record<string, unknown> });
+      setViewingStudentProjects(remoteProjects);
+      setViewingStudentActiveProjectId(null);
+    } catch (error: any) {
+      console.error('[5I] Falha ao abrir workspace do aluno:', error);
+      setStudentWorkspaceError(error?.message || 'Não foi possível carregar os projetos deste aluno.');
+    } finally {
+      setLoadingStudentWorkspace(false);
+    }
   };
 
   // Helper to retrieve the current active project & nodes
@@ -715,6 +747,8 @@ export default function App() {
         onDeleteClassroom={handleDeleteClassroom}
         onDeleteStudent={handleDeleteStudent}
         onLogout={handleLogout}
+        loadingStudentWorkspace={loadingStudentWorkspace}
+        studentWorkspaceError={studentWorkspaceError}
       />
     );
   }
