@@ -40,6 +40,17 @@ function validateSessionToken(rawHeader: string | undefined) {
 }
 async function ensureDatabase() {
   await pipeline([
+    { sql: `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, role TEXT NOT NULL,
+      partner_type TEXT, classroom_id TEXT, institution TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )` },
+    { sql: `CREATE TABLE IF NOT EXISTS workspace_snapshots (
+      owner_id TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )` },
     { sql: `CREATE TABLE IF NOT EXISTS shared_classrooms (
       id TEXT PRIMARY KEY NOT NULL, advisor_id TEXT NOT NULL, name TEXT NOT NULL,
       code TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -83,75 +94,66 @@ export default async function handler(req: any, res: any) {
     const advisorId = validateSessionToken(req.headers.authorization);
     if (!advisorId) return res.status(401).json({ error: 'Sessão inválida.' });
 
-    // Busca contas já cadastradas para inclusão manual em uma turma.
+    // Busca contas reais já cadastradas para inclusão manual na turma.
     if (req.method === 'GET' && req.query?.searchUsers) {
       const query = String(req.query.searchUsers || '').trim().toLowerCase();
       if (query.length < 2) return res.status(200).json({ users: [] });
-
       const like = `%${query}%`;
       const [result] = await pipeline([{
         sql: `SELECT id, name, email, role, classroom_id
           FROM users
           WHERE id <> ?
-            AND (lower(email) LIKE ? OR lower(name) LIKE ?)
+            AND (lower(name) LIKE ? OR lower(email) LIKE ?)
           ORDER BY name
           LIMIT 20`,
         args: [arg(advisorId), arg(like), arg(like)],
       }]);
-
       const users = (result?.rows || []).map((row: any[]) => ({
         id: String(cell(row[0])),
         name: String(cell(row[1])),
         email: String(cell(row[2])),
         role: String(cell(row[3])),
         classroomId: cell(row[4]) || undefined,
-      })).filter((user: any) => !['advisor', 'teacher', 'professor'].includes(user.role.toLowerCase()));
-
+      }));
       return res.status(200).json({ users });
     }
 
+    // Liga uma conta já cadastrada a uma turma da professora.
     if (req.method === 'POST' && req.body?.action === 'addExistingMember') {
       const classroom = req.body?.classroom;
       const userId = String(req.body?.userId || '');
       if (!classroom?.id || !classroom?.name || !classroom?.code || !userId) {
-        return res.status(400).json({ error: 'Turma ou aluno não informado.' });
+        return res.status(400).json({ error: 'Turma ou conta não informada.' });
       }
 
       const [userResult] = await pipeline([{
         sql: 'SELECT id, name, email, role FROM users WHERE id = ? LIMIT 1',
         args: [arg(userId)],
       }]);
-      const userRow = userResult?.rows?.[0];
-      if (!userRow) return res.status(404).json({ error: 'Conta não encontrada.' });
-      const userRole = String(cell(userRow[3]) || '').toLowerCase();
-      if (['advisor', 'teacher', 'professor'].includes(userRole)) {
-        return res.status(400).json({ error: 'Uma conta de professora não pode ser incluída como aluna.' });
+      const row = userResult?.rows?.[0];
+      if (!row) return res.status(404).json({ error: 'Conta não encontrada.' });
+      const role = String(cell(row[3]) || '').toLowerCase();
+      if (['advisor', 'teacher', 'professor'].includes(role)) {
+        return res.status(403).json({ error: 'Uma conta de professora não pode ser adicionada como aluna.' });
       }
 
       await pipeline([
-        {
-          sql: `INSERT INTO shared_classrooms (id, advisor_id, name, code, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET advisor_id=excluded.advisor_id, name=excluded.name, code=excluded.code`,
-          args: [arg(classroom.id), arg(advisorId), arg(classroom.name), arg(classroom.code)],
-        },
-        {
-          sql: `INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, joined_at)
-            VALUES (?, ?, datetime('now'))`,
-          args: [arg(classroom.id), arg(userId)],
-        },
-        {
-          sql: `UPDATE users SET role = 'student', classroom_id = ? WHERE id = ?`,
-          args: [arg(classroom.id), arg(userId)],
-        },
+        { sql: `INSERT INTO shared_classrooms (id, advisor_id, name, code, created_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(id) DO UPDATE SET advisor_id=excluded.advisor_id, name=excluded.name, code=excluded.code`,
+          args: [arg(classroom.id), arg(advisorId), arg(classroom.name), arg(classroom.code)] },
+        { sql: `INSERT OR REPLACE INTO classroom_members (classroom_id, user_id, joined_at)
+          VALUES (?, ?, datetime('now'))`, args: [arg(classroom.id), arg(userId)] },
+        { sql: `UPDATE users SET role='student', classroom_id=? WHERE id=?`,
+          args: [arg(classroom.id), arg(userId)] },
       ]);
 
       return res.status(200).json({
         ok: true,
         member: {
-          id: String(cell(userRow[0])),
-          name: String(cell(userRow[1])),
-          email: String(cell(userRow[2])),
+          id: String(cell(row[0])),
+          name: String(cell(row[1])),
+          email: String(cell(row[2])),
           classroomId: classroom.id,
         },
       });
@@ -208,8 +210,7 @@ export default async function handler(req: any, res: any) {
             ON m.user_id = u.id AND m.classroom_id = ?
           LEFT JOIN workspace_snapshots w
             ON w.owner_id = u.id
-          WHERE u.role = 'student'
-            AND u.id <> ?
+          WHERE u.id <> ?
             AND (m.classroom_id = ? OR u.classroom_id = ?)
           ORDER BY joined_at DESC`,
           args: [arg(classroomId), arg(advisorId), arg(classroomId), arg(classroomId)] },
