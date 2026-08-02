@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send
 } from 'lucide-react';
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
+import InviteClassroomPanel from './InviteClassroomPanel';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -33,6 +34,7 @@ export default function AdvisorDashboard({
   const [showAddStudentForm, setShowAddStudentForm] = useState(false);
   const [errorClass, setErrorClass] = useState('');
   const [errorStudent, setErrorStudent] = useState('');
+  const [inviteClassroom, setInviteClassroom] = useState<Classroom | null>(null);
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
   const activeClassStudents = students.filter(s => s.classroomId === selectedClassId);
@@ -256,13 +258,22 @@ export default function AdvisorDashboard({
                     <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">Código da Turma: {activeClassroom.code}</span>
                   </div>
 
-                  <button
-                    onClick={() => setShowAddStudentForm(!showAddStudentForm)}
-                    className="sm:self-center px-3.5 py-1.5 rounded-xl bg-black text-white hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs font-mono font-bold uppercase tracking-wide cursor-pointer shadow-sm"
-                  >
-                    <Plus size={14} />
-                    <span>Incluir Aluno</span>
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setInviteClassroom(activeClassroom)}
+                      className="sm:self-center px-3.5 py-1.5 rounded-xl border border-black bg-white text-black hover:bg-neutral-100 transition-colors flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wide cursor-pointer shadow-sm"
+                    >
+                      <Send size={14} />
+                      <span>Convidar</span>
+                    </button>
+                    <button
+                      onClick={() => setShowAddStudentForm(!showAddStudentForm)}
+                      className="sm:self-center px-3.5 py-1.5 rounded-xl bg-black text-white hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs font-mono font-bold uppercase tracking-wide cursor-pointer shadow-sm"
+                    >
+                      <Plus size={14} />
+                      <span>Incluir Manualmente</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* ADD STUDENT FORM */}
@@ -374,6 +385,12 @@ export default function AdvisorDashboard({
         </div>
 
       </div>
+      {inviteClassroom && (
+        <InviteClassroomPanel
+          classroom={inviteClassroom}
+          onClose={() => setInviteClassroom(null)}
+        />
+      )}
     </div>
   );
 }
