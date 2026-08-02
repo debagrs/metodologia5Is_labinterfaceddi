@@ -13,6 +13,26 @@ export interface Project {
 
 export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight';
 
+export interface NodeComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorRole: UserRole;
+  text: string;
+  createdAt: string;
+}
+
+export interface NodeAttachment {
+  id: string;
+  url: string;
+  name: string;
+  type: 'image' | 'video';
+  contentType?: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+}
+
 export interface ThoughtNode {
   id: string;
   type: ThoughtType;
@@ -27,7 +47,10 @@ export interface ThoughtNode {
   connections: string[]; // IDs of other thought nodes connected to this one
   createdAt: string;
   isCompleted?: boolean;
+  comments?: NodeComment[];
+  attachments?: NodeAttachment[];
 }
+
 
 export interface Mediator {
   id: string;
@@ -47,6 +70,7 @@ export type PartnerType = 'comunidade' | 'empresa' | 'governo' | 'cliente';
 export interface UserProfile {
   id: string;
   name: string;
+  email?: string;
   role: UserRole;
   partnerType?: PartnerType;
   classroomId?: string;
