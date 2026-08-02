@@ -148,6 +148,8 @@ export default function App() {
   
   // Inspecting student project (for advisor/partner modes)
   const [viewingStudent, setViewingStudent] = useState<StudentProfile | null>(null);
+  const [viewingStudentProjects, setViewingStudentProjects] = useState<ProjectWorkspace[]>([]);
+  const [viewingStudentActiveProjectId, setViewingStudentActiveProjectId] = useState<string | null>(null);
 
   // Solo project states
   const [soloProject, setSoloProject] = useState<Project | null>(null);
@@ -342,15 +344,37 @@ export default function App() {
   };
 
   const handleViewStudentProject = (student: StudentProfile) => {
+    const snapshot = (student.remoteSnapshot || {}) as unknown as WorkspaceSnapshot;
+    const remoteProjects: ProjectWorkspace[] = Array.isArray(snapshot.projectWorkspaces) && snapshot.projectWorkspaces.length
+      ? snapshot.projectWorkspaces
+      : snapshot.soloProject
+        ? [{
+            project: snapshot.soloProject,
+            nodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
+            updatedAt: new Date().toISOString(),
+          }]
+        : student.project
+          ? [{
+              project: student.project,
+              nodes: Array.isArray(student.nodes) ? student.nodes : [],
+              updatedAt: student.project.createdAt || new Date().toISOString(),
+            }]
+          : [];
+
     setViewingStudent(student);
+    setViewingStudentProjects(remoteProjects);
+    setViewingStudentActiveProjectId(null);
   };
 
   // Helper to retrieve the current active project & nodes
   const getActiveData = (): { project: Project | null; nodes: ThoughtNode[] } => {
     if (viewingStudent) {
+      const activeWorkspace = viewingStudentProjects.find(
+        (item) => item.project.id === viewingStudentActiveProjectId,
+      );
       return {
-        project: viewingStudent.project || null,
-        nodes: viewingStudent.nodes || []
+        project: activeWorkspace?.project || null,
+        nodes: activeWorkspace?.nodes || [],
       };
     }
 
@@ -373,14 +397,35 @@ export default function App() {
   // Helper to persist edits back to their respective sources
   const saveActiveProjectAndNodes = (updatedProject: Project | null, updatedNodes: ThoughtNode[]) => {
     if (viewingStudent) {
-      const updatedStudents = students.map(s => 
-        s.id === viewingStudent.id 
-          ? { ...s, project: updatedProject || undefined, nodes: updatedNodes } 
-          : s
+      if (!updatedProject) return;
+      const now = new Date().toISOString();
+      const updatedViewingProjects = viewingStudentProjects.some(
+        (item) => item.project.id === updatedProject.id,
+      )
+        ? viewingStudentProjects.map((item) =>
+            item.project.id === updatedProject.id
+              ? { project: updatedProject, nodes: updatedNodes, updatedAt: now }
+              : item,
+          )
+        : [...viewingStudentProjects, { project: updatedProject, nodes: updatedNodes, updatedAt: now }];
+
+      setViewingStudentProjects(updatedViewingProjects);
+      setViewingStudentActiveProjectId(updatedProject.id);
+      setViewingStudent((previous) => previous
+        ? {
+            ...previous,
+            project: updatedProject,
+            nodes: updatedNodes,
+            remoteSnapshot: {
+              ...(previous.remoteSnapshot || {}),
+              projectWorkspaces: updatedViewingProjects,
+              activeProjectId: updatedProject.id,
+              soloProject: updatedProject,
+              soloNodes: updatedNodes,
+            },
+          }
+        : null,
       );
-      setStudents(updatedStudents);
-      localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
-      setViewingStudent(prev => prev ? { ...prev, project: updatedProject || undefined, nodes: updatedNodes } : null);
 
       // Quando o estudante entrou por convite, salva no MESMO workspace da conta dele.
       if (viewingStudent.remoteOwnerId) {
@@ -398,6 +443,8 @@ export default function App() {
               userId: viewingStudent.remoteOwnerId,
               project: updatedProject,
               nodes: updatedNodes,
+              projectWorkspaces: updatedViewingProjects,
+              activeProjectId: updatedProject.id,
             }),
           }).then(async (response) => {
             if (!response.ok) {
@@ -551,8 +598,13 @@ export default function App() {
 
   const handleExit = () => {
     if (viewingStudent) {
-      // Exit student workspace back to advisor/partner dashboard
+      if (viewingStudentActiveProjectId) {
+        setViewingStudentActiveProjectId(null);
+        return;
+      }
+      // Exit student projects back to advisor/partner dashboard
       setViewingStudent(null);
+      setViewingStudentProjects([]);
     } else if (activeProfile?.role === 'student') {
       setActiveProjectId(null);
       setSoloProject(null);
@@ -579,6 +631,18 @@ export default function App() {
     localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(workspace.nodes));
   };
 
+  const handleOpenViewingStudentProject = (projectId: string) => {
+    const workspace = viewingStudentProjects.find((item) => item.project.id === projectId);
+    if (!workspace) return;
+    setViewingStudentActiveProjectId(projectId);
+  };
+
+  const handleBackFromViewingStudentProjects = () => {
+    setViewingStudent(null);
+    setViewingStudentProjects([]);
+    setViewingStudentActiveProjectId(null);
+  };
+
   const handleDeleteStudentProject = (projectId: string) => {
     const target = projectWorkspaces.find((item) => item.project.id === projectId);
     if (!target || !confirm(`Excluir o projeto “${target.project.name}”? Esta ação não poderá ser desfeita.`)) return;
@@ -603,21 +667,19 @@ export default function App() {
   // ADVISOR ROLE VIEW
   if (activeProfile.role === 'advisor') {
     if (viewingStudent) {
-      if (!project) {
+      if (!viewingStudentActiveProjectId) {
         return (
-          <div className="min-h-screen bg-[#FDFDFB] flex flex-col items-center justify-center p-6 text-center">
-            <GraduationCap size={40} className="text-neutral-400 mb-2" />
-            <h2 className="text-lg font-bold text-neutral-900">Mesa Não Iniciada</h2>
-            <p className="text-xs text-neutral-500 max-w-sm mt-1">
-              O aluno <strong>{viewingStudent.name}</strong> ainda não iniciou as fases de modelagem científica do projeto.
-            </p>
-            <button 
-              onClick={() => setViewingStudent(null)}
-              className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft size={13} /> Voltar ao Painel
-            </button>
-          </div>
+          <StudentProjectsDashboard
+            user={{ ...activeProfile, name: viewingStudent.name }}
+            classroomName={classrooms.find((item) => item.id === viewingStudent.classroomId)?.name}
+            projects={viewingStudentProjects}
+            onOpen={handleOpenViewingStudentProject}
+            onBack={handleBackFromViewingStudentProjects}
+            readOnly
+            title={`Projetos de ${viewingStudent.name}`}
+            emptyTitle="Mesa não iniciada"
+            emptyDescription={`O aluno ${viewingStudent.name} ainda não criou nenhum projeto.`}
+          />
         );
       }
 
@@ -660,21 +722,19 @@ export default function App() {
   // PARTNER ROLE VIEW
   if (activeProfile.role === 'partner') {
     if (viewingStudent) {
-      if (!project) {
+      if (!viewingStudentActiveProjectId) {
         return (
-          <div className="min-h-screen bg-[#FDFDFB] flex flex-col items-center justify-center p-6 text-center">
-            <Users size={40} className="text-neutral-400 mb-2" />
-            <h2 className="text-lg font-bold text-neutral-900">Mesa Não Iniciada</h2>
-            <p className="text-xs text-neutral-500 max-w-sm mt-1">
-              Este aluno ainda não configurou uma mesa de projeto ativa para co-desenho.
-            </p>
-            <button 
-              onClick={() => setViewingStudent(null)}
-              className="mt-4 px-4 py-2 bg-black text-white rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowLeft size={13} /> Voltar ao Painel
-            </button>
-          </div>
+          <StudentProjectsDashboard
+            user={{ ...activeProfile, name: viewingStudent.name }}
+            classroomName={classrooms.find((item) => item.id === viewingStudent.classroomId)?.name}
+            projects={viewingStudentProjects}
+            onOpen={handleOpenViewingStudentProject}
+            onBack={handleBackFromViewingStudentProjects}
+            readOnly
+            title={`Projetos de ${viewingStudent.name}`}
+            emptyTitle="Mesa não iniciada"
+            emptyDescription="Este aluno ainda não configurou uma mesa de projeto ativa para co-desenho."
+          />
         );
       }
 
