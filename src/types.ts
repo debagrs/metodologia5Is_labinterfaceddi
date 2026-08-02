@@ -11,6 +11,12 @@ export interface Project {
   activePhase: Phase;
 }
 
+export interface ProjectWorkspace {
+  project: Project;
+  nodes: ThoughtNode[];
+  updatedAt: string;
+}
+
 export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight';
 
 export interface NodeComment {
