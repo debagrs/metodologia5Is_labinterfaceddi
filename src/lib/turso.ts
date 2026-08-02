@@ -83,3 +83,4 @@ export async function saveWorkspace(token: string, payload: unknown) {
     throw new Error(data?.error || 'Falha ao salvar o workspace.');
   }
 }
+
