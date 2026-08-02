@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import MediatorSticker from './MediatorSticker';
 import BrandMark from './BrandMark';
+import AllCommentsPanel from './AllCommentsPanel';
 import { ensureTursoSession } from '../lib/turso';
 
 interface WorkspaceProps {
@@ -22,6 +23,7 @@ interface WorkspaceProps {
   onAddNode: (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => void;
   onUpdatePhase: (phase: Phase) => void;
   onExit: () => void;
+  onClearAll: () => void;
   currentUser?: UserProfile | null;
   studentName?: string;
 }
@@ -148,6 +150,7 @@ export default function Workspace({
   onAddNode,
   onUpdatePhase,
   onExit,
+  onClearAll,
   currentUser,
   studentName
 }: WorkspaceProps) {
@@ -156,9 +159,11 @@ export default function Workspace({
   const [genError, setGenError] = useState<string>('');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
+  const totalComments = nodes.reduce((sum, node) => sum + (node.comments?.length || 0), 0);
 
   // Helper to resolve icon React node
   const getMediatorIcon = (iconName: string, size = 16, className = "") => {
@@ -346,7 +351,27 @@ export default function Workspace({
         </div>
 
         {/* Current status telemetry & Mobile Panel toggles */}
-        <div className="flex items-center gap-1.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            onClick={() => setIsCommentsOpen(true)}
+            className="relative p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Ver todos os comentários"
+          >
+            <MessageCircle size={15} />
+            <span className="hidden sm:inline text-[9px] font-mono font-bold uppercase">Comentários</span>
+            {totalComments > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">{totalComments}</span>}
+          </button>
+          <button
+            onClick={() => {
+              const first = window.confirm('Apagar todo o conteúdo do canvas? A âncora central do projeto será mantida vazia.');
+              if (first && window.confirm('Tem certeza? Esta ação não pode ser desfeita.')) onClearAll();
+            }}
+            className="p-2 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Apagar todo o conteúdo do canvas"
+          >
+            <Trash2 size={15} />
+            <span className="hidden xl:inline text-[9px] font-mono font-bold uppercase">Limpar canvas</span>
+          </button>
           <div className="flex items-center gap-1.5 lg:hidden">
             <button
               onClick={() => {
@@ -386,6 +411,17 @@ export default function Workspace({
           </span>
         </div>
       </header>
+
+      {isCommentsOpen && (
+        <AllCommentsPanel
+          nodes={nodes}
+          onClose={() => setIsCommentsOpen(false)}
+          onOpenNode={(nodeId) => {
+            setIsCommentsOpen(false);
+            window.setTimeout(() => canvasRef.current?.focusNode(nodeId, true), 80);
+          }}
+        />
+      )}
 
       {/* Main workspace layout content splits */}
       <div id="workspace-body" className="flex-1 flex relative overflow-hidden">
