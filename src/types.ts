@@ -75,6 +75,7 @@ export interface UserProfile {
   partnerType?: PartnerType;
   classroomId?: string;
   institution?: string;
+  invitedClassroom?: Classroom;
 }
 
 export interface Classroom {
