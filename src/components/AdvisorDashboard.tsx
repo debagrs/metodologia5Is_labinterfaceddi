@@ -60,7 +60,8 @@ export default function AdvisorDashboard({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os alunos convidados.');
 
-      const mapped: StudentProfile[] = (data.members || []).map((member: any) => {
+      const members = Array.isArray(data.members) ? data.members : [];
+      const mapped: StudentProfile[] = members.map((member: any) => {
         const snapshot = member.snapshot || {};
         const snapshotStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
         const normalizedName = String(member.name || '').trim().toLowerCase();
@@ -467,7 +468,7 @@ export default function AdvisorDashboard({
                     <div className="text-center py-12 border-2 border-dashed border-[#E0E0DE] rounded-2xl">
                       <Users size={28} className="mx-auto text-neutral-300 mb-2" />
                       <p className="text-xs text-neutral-400 font-light max-w-sm mx-auto">
-                        Nenhum aluno incluído nesta turma ainda. Use o botão "Incluir Aluno" acima para matricular seu primeiro estudante.
+                        Nenhuma conta conectada apareceu nesta turma. Clique em “Atualizar”. Se a conta entrou por convite antes desta correção, o sistema fará o vínculo automaticamente.
                       </p>
                     </div>
                   )}
