@@ -171,37 +171,48 @@ export default function AdminPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/45 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
-      <section className="w-full max-w-5xl max-h-[92vh] bg-[#FDFDFB] border border-black/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
-        <header className="px-5 py-4 border-b border-[#E0E0DE] flex items-center justify-between bg-white">
+    <div
+      className="fixed inset-0 z-[120] bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center overflow-hidden"
+      style={{
+        paddingTop: 'max(8px, env(safe-area-inset-top))',
+        paddingRight: 'max(8px, env(safe-area-inset-right))',
+        paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(8px, env(safe-area-inset-left))',
+      }}
+    >
+      <section
+        className="w-full max-w-5xl h-[calc(100dvh-16px)] sm:h-auto sm:max-h-[92dvh] bg-[#FDFDFB] border border-black/10 rounded-[24px] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col overscroll-contain"
+        style={{ WebkitTextSizeAdjust: '100%' }}
+      >
+        <header className="shrink-0 px-4 sm:px-5 py-3 sm:py-4 border-b border-[#E0E0DE] flex items-center justify-between bg-white gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center"><Settings size={19} /></div>
             <div>
               <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">Painel de administração</span>
-              <h2 className="text-lg font-bold text-neutral-950">Turmas, alunos e convites</h2>
+              <h2 className="text-base sm:text-lg font-bold text-neutral-950 leading-tight">Turmas, alunos e convites</h2>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl border border-[#E0E0DE] hover:bg-neutral-100 cursor-pointer" aria-label="Fechar administração"><X size={18} /></button>
         </header>
 
-        <div className="px-4 sm:px-5 py-3 border-b border-[#E0E0DE] bg-white flex flex-wrap items-center gap-2">
+        <div className="shrink-0 px-3 sm:px-5 py-3 border-b border-[#E0E0DE] bg-white flex items-center gap-2 overflow-x-auto overscroll-x-contain">
           {([
             ['turmas', BookOpen, `Turmas (${classrooms.length})`],
             ['alunos', Users, `Alunos (${students.length + cloudMembers.length})`],
             ['convites', Mail, `Convites (${cloudInvitations.length})`],
           ] as const).map(([id, Icon, label]) => (
-            <button key={id} onClick={() => setTab(id)} className={`px-3.5 py-2 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-2 cursor-pointer ${tab === id ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-[#E0E0DE] hover:border-black'}`}>
+            <button key={id} onClick={() => setTab(id)} className={`flex-none px-3.5 py-2 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-2 cursor-pointer whitespace-nowrap ${tab === id ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-[#E0E0DE] hover:border-black'}`}>
               <Icon size={14} /> {label}
             </button>
           ))}
-          <button onClick={loadCloudData} disabled={loading} className="ml-auto p-2 rounded-xl border border-[#E0E0DE] hover:border-black cursor-pointer disabled:opacity-50" title="Atualizar dados do Turso">
+          <button onClick={loadCloudData} disabled={loading} className="ml-auto flex-none p-2 rounded-xl border border-[#E0E0DE] hover:border-black cursor-pointer disabled:opacity-50" title="Atualizar dados do Turso">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
           </button>
         </div>
 
         {message && <div className="mx-5 mt-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">{message}</div>}
 
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-5 overflow-y-auto flex-1 min-h-0 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
           {tab === 'turmas' && (
             <div className="space-y-3">
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex gap-2 text-xs text-red-800"><AlertTriangle size={16} className="shrink-0" /><span>Excluir uma turma remove a turma da sua lista, os alunos locais, os convites e os vínculos no Turso. A confirmação exige digitar EXCLUIR.</span></div>
