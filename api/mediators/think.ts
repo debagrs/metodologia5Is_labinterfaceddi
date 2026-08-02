@@ -83,38 +83,84 @@ async function consumeAiQuota(ownerId: string, dailyLimit: number) {
   return Math.max(0, limit - count);
 }
 
-const REFERENCES = {
-  pesquisa: 'Triangulação metodológica; etnografia de design; pesquisa participante; saturação teórica; cartografia; métodos mistos.',
-  ux: 'Don Norman; Preece, Rogers e Sharp; Jakob Nielsen; John Sweller; teoria da atividade; modelos mentais; 101 UX Principles.',
-  bioetica: 'Van Rensselaer Potter; bioética; educação humanitária; justiça de design; alteridade; prevenção de dark patterns; impactos humanos e não humanos.',
-  acessibilidade: 'WCAG; e-MAG; desenho universal; modelo social da deficiência; tecnologias assistivas; multimodalidade; linguagem simples.',
-  visual: 'Gestalt; semiótica; Josef Albers; Eva Heller; Itten; Müller-Brockmann; tipografia; hierarquia e ritmo visual.',
-  documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
-  heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
-  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.'
+const METHODOLOGY = {
+  Ideação: {
+    purpose: 'abrir o problema, organizar repertórios, produzir conexões, hipóteses e perguntas sem fechar a solução',
+    practices: 'mapas mentais, levantamento inicial, repertório visual, referências, personas provisórias, problematização, delimitação do escopo',
+    cautions: 'evitar solucionismo, homogeneização algorítmica, persona inventada e fechamento precoce'
+  },
+  Inambulação: {
+    purpose: 'caminhar no contexto, observar, escutar e compreender o ecossistema real do projeto',
+    practices: 'pesquisa de campo, cartografia, entrevistas, observação, pesquisa participante, benchmarking crítico, análise de similares e decisões tecnológicas situadas',
+    cautions: 'não substituir campo por síntese de IA; não confundir benchmarking com cópia; registrar vozes, fricções, territorialidades e ausências'
+  },
+  Instauração: {
+    purpose: 'materializar relações em estruturas, fluxos e protótipos experimentáveis',
+    practices: 'arquitetura da informação, jornadas, rabiscoframes, wireframes, fluxos, linguagem visual, semiótica, design system e protótipos funcionais',
+    cautions: 'não cair no figmarismo, no template universal ou na estética sem contexto; preservar diferença, autoria e vínculo com a pesquisa'
+  },
+  Inspeção: {
+    purpose: 'avaliar continuamente escolhas, usos, barreiras, riscos e diferenças entre intenção e experiência observada',
+    practices: 'testes com participantes, heurísticas, acessibilidade, ergonomia cognitiva, mapas de calor usados criticamente, severidade, feedback e iteração',
+    cautions: 'não tratar dados comportamentais como neutros; respeitar privacidade, consentimento, LGPD e limites do capitalismo de vigilância'
+  },
+  Implementação: {
+    purpose: 'transformar decisões em sistema funcional, documentado, testável e passível de continuidade',
+    practices: 'componentes, tokens, critérios de aceite, requisitos, código, testes, segurança, desempenho, publicação, documentação e manutenção',
+    cautions: 'não entender implementação como fim linear; preservar rastreabilidade, acessibilidade, bioética, contexto e possibilidade de revisão'
+  }
 };
 
-function referenceFor(role) {
-  const value = role.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (value.includes('pesquisa')) return REFERENCES.pesquisa;
-  if (value.includes('bio')) return REFERENCES.bioetica;
-  if (value.includes('acess')) return REFERENCES.acessibilidade;
-  if (value.includes('visual')) return REFERENCES.visual;
-  if (value.includes('document')) return REFERENCES.documentacao;
-  if (value.includes('heur')) return REFERENCES.heuristicas;
-  if (value.includes('implement')) return REFERENCES.implementacao;
-  return REFERENCES.ux;
+const AGENT_GUIDES = {
+  'agent-idea': 'Priorize Ideação. Use Gasparetto, Santaella, Manovich e Flusser para ampliar repertório, subjetividade, cultura visual e imaginação crítica.',
+  'agent-passeio': 'Priorize Inambulação. Use cartografia, pesquisa participante, etnografia de interfaces, Latour e Costanza-Chock. Sempre devolva a pessoa ao território e à escuta.',
+  'agent-instaura': 'Priorize Instauração. Use Norman, Preece/Rogers/Sharp, Gestalt, Heller, semiótica, arquitetura da informação e prototipação. Evite figmarismo e respostas visuais genéricas.',
+  'agent-inspetor': 'Priorize Inspeção. Use Nielsen, Norman, ergonomia cognitiva, testes, WCAG/e-MAG e evidências observáveis. Diferencie opinião de problema documentado.',
+  'agent-rede': 'Leia o projeto como rede sociotécnica com Latour, Simondon e Haraway: humanos, não humanos, instituições, dados, dispositivos, plataformas e infraestruturas.',
+  'agent-ativista': 'Atue por bioética, design justice e educação humanitária com Potter, Haraway, Costanza-Chock e Zuboff. Pergunte sobre poder, participação, extração, sustentabilidade e impactos humanos e não humanos.',
+  'agent-responsa': 'Converta responsabilidade em requisitos verificáveis: WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência e possibilidade de recusa.',
+  'agent-implementa': 'Priorize Implementação como experimentação contínua: design systems, tokens, componentes, documentação, critérios de aceite, testes, publicação e manutenção.'
+};
+
+function phaseGuide(phase) {
+  return METHODOLOGY[phase] || METHODOLOGY.Ideação;
+}
+
+function agentGuide(mediator) {
+  return AGENT_GUIDES[mediator?.id] || mediator?.bio || 'Atue como mediador crítico da Metodologia 5I’s.';
+}
+
+function canvasSummary(body) {
+  return body.existingThoughts?.length
+    ? body.existingThoughts.slice(-18).map((item) => `- [${item.phase}] ${item.title}: ${item.content}`).join('\n')
+    : 'Ainda não há registros no canvas.';
+}
+
+function baseSystem(body) {
+  const guide = phaseGuide(body.phase);
+  return `Você integra o 5I’s Design Intelligence Lab, baseado na Metodologia 5I’s de Débora Aita Gasparetto: Ideação, Inambulação, Instauração, Inspeção e Implementação.
+
+Você é ${body.mediator.name}, um agente artificial de ${body.mediator.role}.
+IDENTIDADE DO AGENTE: ${agentGuide(body.mediator)}
+
+FASE ATIVA — ${body.phase}
+Objetivo: ${guide.purpose}.
+Práticas esperadas: ${guide.practices}.
+Cuidados críticos: ${guide.cautions}.
+
+ORIENTAÇÃO EPISTEMOLÓGICA
+- A IA é mediação sociotécnica e extensão de co-criação, não autora soberana nem resposta automática.
+- Não substitua campo, escuta, participação, decisão humana ou autoria do estudante.
+- Questione solucionismo, padronização, figmarismo, desigualdades, opacidade, extração de dados e impactos ambientais.
+- Preserve subjetividade, diferença, territorialidade, acessibilidade, bioética e participação.
+- Só cite autores, normas ou conceitos quando forem pertinentes. Nunca invente referência, dado, lei ou resultado de pesquisa.
+- Fale em português do Brasil, com linguagem direta, crítica, afetiva e metodologicamente exigente.
+- Não elogie de forma vazia. Mostre o que está forte, o que falta e qual próximo movimento é coerente com a fase.`;
 }
 
 function buildMessages(body) {
-  const thoughts = body.existingThoughts?.length
-    ? body.existingThoughts.slice(-18).map((item) => `- [${item.phase}] ${item.title}: ${item.content}`).join('\n')
-    : 'Ainda não há registros no canvas.';
-
-  const system = `Você integra a Metodologia 5I’s: Ideação, Inambulação, Instauração, Inspeção e Implementação.
-Você é ${body.mediator.name}, agente de ${body.mediator.role}. ${body.mediator.bio}
-Base conceitual: ${referenceFor(body.mediator.role)}
-Regras: não substitua a autoria; não entregue solução acabada; questione premissas; relacione à fase ${body.phase}; não invente autores, normas ou dados; use português do Brasil; retorne somente JSON válido no formato {"title":"...","question":"...","provocations":["...","..."],"scientificContext":"..."}.`;
+  const system = `${baseSystem(body)}
+Para esta tarefa, retorne somente JSON válido no formato {"title":"...","question":"...","provocations":["...","..."],"scientificContext":"..."}.`;
 
   const user = `PROJETO
 Nome: ${body.project.name}
@@ -124,10 +170,44 @@ Comunidade: ${body.project.community}
 ODS: ${body.project.ods}
 Fase: ${body.phase}
 
-REGISTROS
-${thoughts}
+REGISTROS DO CANVAS
+${canvasSummary(body)}
 
-Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas.`;
+Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas. O contexto científico deve explicar por que essas ações pertencem à fase ativa e ao eixo do agente.`;
+
+  return { system, user };
+}
+
+function buildChatMessages(body) {
+  const history = Array.isArray(body.conversation)
+    ? body.conversation.slice(-12).map((item) => `${item.role === 'assistant' ? body.mediator.name : 'Pessoa'}: ${item.text}`).join('\n\n')
+    : '';
+
+  const system = `${baseSystem(body)}
+Você está em uma conversa. Responda de modo dialógico, em até 260 palavras.
+Estruture naturalmente a resposta com:
+1) uma leitura do que a pessoa trouxe;
+2) uma tensão ou pergunta que faça avançar;
+3) um próximo movimento concreto compatível com a fase;
+4) uma referência teórica ou metodológica apenas quando realmente ajudar.
+Você pode discordar com cuidado. Não entregue solução fechada. Não retorne JSON dentro do campo reply.`;
+
+  const user = `PROJETO
+Nome: ${body.project.name}
+Tipo: ${body.project.projectType}
+Problema: ${body.project.problem}
+Comunidade: ${body.project.community}
+ODS: ${body.project.ods}
+Fase: ${body.phase}
+
+REGISTROS DO CANVAS
+${canvasSummary(body)}
+
+CONVERSA RECENTE
+${history || 'Início da conversa.'}
+
+MENSAGEM ATUAL
+${body.message}`;
 
   return { system, user };
 }
@@ -247,6 +327,39 @@ async function callGemini(system, user) {
   };
 }
 
+
+async function callGeminiChat(system, user) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
+
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const timeoutMs = Number(process.env.AI_TIMEOUT_MS || 25000);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+
+  const response = await fetchWithTimeout(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: { temperature: 0.55, maxOutputTokens: 900 }
+    })
+  }, timeoutMs);
+
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu uma resposta não JSON (HTTP ${response.status}).`); }
+  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
+
+  const text = data?.candidates?.[0]?.content?.parts
+    ?.map((part) => typeof part?.text === 'string' ? part.text : '')
+    .join('')
+    .trim();
+
+  if (!text) throw new Error('O Gemini não devolveu conteúdo para a conversa.');
+  return { reply: text, provider: 'Gemini', model };
+}
+
 function offlineInsight(body) {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -287,6 +400,12 @@ function offlineInsight(body) {
 async function generateMediatorInsight(body) {
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'chat') {
+    if (!String(body.message || '').trim()) throw new Error('Escreva uma mensagem para conversar com o agente.');
+    const { system, user } = buildChatMessages(body);
+    return callGeminiChat(system, user);
   }
 
   const { system, user } = buildMessages(body);
