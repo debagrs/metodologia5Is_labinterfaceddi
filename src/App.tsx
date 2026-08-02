@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import FirstExperience from './components/FirstExperience';
 import BrandMark from './components/BrandMark';
 import Workspace from './components/Workspace';
@@ -8,6 +8,7 @@ import { Project, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile } f
 import { Users, Sparkles, LogOut, ArrowLeft, GraduationCap, Globe, Building } from 'lucide-react';
 import { useCloudWorkspace, WorkspaceSnapshot } from './lib/useCloudWorkspace';
 import { readAuthSession, clearAuthSession } from './lib/auth';
+import { readWorkspace, saveWorkspace } from './lib/turso';
 
 const STORAGE_PROFILE_KEY = "5is_platform_active_profile";
 const STORAGE_CLASSROOMS_KEY = "5is_platform_classrooms";
@@ -145,29 +146,31 @@ export default function App() {
   
   // Inspecting student project (for advisor/partner modes)
   const [viewingStudent, setViewingStudent] = useState<StudentProfile | null>(null);
+  const [loadingStudentWorkspace, setLoadingStudentWorkspace] = useState(false);
+  const [studentWorkspaceError, setStudentWorkspaceError] = useState('');
 
   // Solo project states
   const [soloProject, setSoloProject] = useState<Project | null>(null);
   const [soloNodes, setSoloNodes] = useState<ThoughtNode[]>([]);
   const [localLoaded, setLocalLoaded] = useState(false);
 
-  const applyCloudSnapshot = (snapshot: WorkspaceSnapshot) => {
-    /*
-     * Um workspace remoto vazio deve continuar vazio.
-     * Não injeta turmas e alunos demonstrativos dentro de uma conta real.
-     */
-    setActiveProfile(snapshot.activeProfile || readAuthSession()?.user || null);
+  const applyCloudSnapshot = useCallback((snapshot: WorkspaceSnapshot) => {
+    const authenticatedUser = readAuthSession()?.user || null;
+    const resolvedProfile = authenticatedUser || snapshot.activeProfile || null;
+
+    setActiveProfile(resolvedProfile);
     setClassrooms(Array.isArray(snapshot.classrooms) ? snapshot.classrooms : []);
     setStudents(Array.isArray(snapshot.students) ? snapshot.students : []);
     setSoloProject(snapshot.soloProject || null);
     setSoloNodes(Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : []);
 
-    if (snapshot.activeProfile) localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(snapshot.activeProfile));
-    if (snapshot.classrooms) localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(snapshot.classrooms));
-    if (snapshot.students) localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(snapshot.students));
+    if (resolvedProfile) localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(resolvedProfile));
+    localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(Array.isArray(snapshot.classrooms) ? snapshot.classrooms : []));
+    localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(Array.isArray(snapshot.students) ? snapshot.students : []));
     if (snapshot.soloProject) localStorage.setItem(STORAGE_PROJECT_KEY, JSON.stringify(snapshot.soloProject));
-    if (snapshot.soloNodes) localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(snapshot.soloNodes));
-  };
+    else localStorage.removeItem(STORAGE_PROJECT_KEY);
+    localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : []));
+  }, []);
 
   const cloudState = useCloudWorkspace({
     activeProfile, classrooms, students, soloProject, soloNodes, localLoaded,
@@ -302,8 +305,38 @@ export default function App() {
     if (viewingStudent?.id === studentId) setViewingStudent(null);
   };
 
-  const handleViewStudentProject = (student: StudentProfile) => {
-    setViewingStudent(student);
+  const handleViewStudentProject = async (student: StudentProfile) => {
+    setStudentWorkspaceError('');
+
+    if (!student.remoteOwnerId) {
+      setViewingStudent(student);
+      return;
+    }
+
+    const auth = readAuthSession();
+    if (!auth?.token) {
+      setStudentWorkspaceError('Sua sessão expirou. Saia e entre novamente.');
+      return;
+    }
+
+    setLoadingStudentWorkspace(true);
+    try {
+      const payload = await readWorkspace(auth.token, student.remoteOwnerId);
+      const remote = payload && typeof payload === 'object' ? payload as WorkspaceSnapshot : null;
+      const remoteProject = remote?.soloProject || student.project || null;
+      const remoteNodes = Array.isArray(remote?.soloNodes) ? remote!.soloNodes : (student.nodes || []);
+
+      setViewingStudent({
+        ...student,
+        project: remoteProject || undefined,
+        nodes: remoteNodes,
+        remoteSnapshot: remote || {},
+      });
+    } catch (error: any) {
+      setStudentWorkspaceError(error?.message || 'Não foi possível abrir o canvas deste aluno.');
+    } finally {
+      setLoadingStudentWorkspace(false);
+    }
   };
 
   // Helper to retrieve the current active project & nodes
@@ -316,14 +349,9 @@ export default function App() {
     }
 
     if (activeProfile?.role === 'student') {
-      const studentNameNorm = activeProfile.name.trim().toLowerCase();
-      const currentStudent = students.find(s => 
-        s.classroomId === activeProfile.classroomId && 
-        s.name.trim().toLowerCase() === studentNameNorm
-      );
       return {
-        project: currentStudent?.project || null,
-        nodes: currentStudent?.nodes || []
+        project: soloProject,
+        nodes: soloNodes,
       };
     }
 
@@ -338,64 +366,47 @@ export default function App() {
   // Helper to persist edits back to their respective sources
   const saveActiveProjectAndNodes = (updatedProject: Project | null, updatedNodes: ThoughtNode[]) => {
     if (viewingStudent) {
-      const updatedStudents = students.map(s => 
-        s.id === viewingStudent.id 
-          ? { ...s, project: updatedProject || undefined, nodes: updatedNodes } 
-          : s
-      );
-      setStudents(updatedStudents);
-      localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
-      setViewingStudent(prev => prev ? { ...prev, project: updatedProject || undefined, nodes: updatedNodes } : null);
+      const updatedViewingStudent = {
+        ...viewingStudent,
+        project: updatedProject || undefined,
+        nodes: updatedNodes,
+      };
+      setViewingStudent(updatedViewingStudent);
 
-      // Quando o estudante entrou por convite, salva no MESMO workspace da conta dele.
       if (viewingStudent.remoteOwnerId) {
         const auth = readAuthSession();
         if (auth?.token) {
-          fetch('/api/invitations', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${auth.token}`,
-            },
-            body: JSON.stringify({
-              action: 'saveMemberWorkspace',
-              classroomId: viewingStudent.classroomId,
-              userId: viewingStudent.remoteOwnerId,
-              project: updatedProject,
-              nodes: updatedNodes,
-            }),
-          }).then(async (response) => {
-            if (!response.ok) {
-              const data = await response.json().catch(() => ({}));
-              console.error('[5I] Falha ao salvar no workspace do aluno:', data?.error || response.status);
-            }
-          }).catch((error) => {
-            console.error('[5I] Falha de rede ao salvar no workspace do aluno:', error);
-          });
+          const baseSnapshot = viewingStudent.remoteSnapshot && typeof viewingStudent.remoteSnapshot === 'object'
+            ? viewingStudent.remoteSnapshot
+            : {};
+          const remotePayload = {
+            ...baseSnapshot,
+            activeProfile: (baseSnapshot as any).activeProfile || null,
+            classrooms: Array.isArray((baseSnapshot as any).classrooms) ? (baseSnapshot as any).classrooms : [],
+            students: Array.isArray((baseSnapshot as any).students) ? (baseSnapshot as any).students : [],
+            soloProject: updatedProject,
+            soloNodes: updatedNodes,
+          };
+
+          saveWorkspace(auth.token, remotePayload, viewingStudent.remoteOwnerId)
+            .then(() => {
+              setViewingStudent(prev => prev ? { ...prev, remoteSnapshot: remotePayload } : prev);
+            })
+            .catch((error) => {
+              console.error('[5I] Falha ao salvar no workspace do aluno:', error);
+              setStudentWorkspaceError(error?.message || 'Falha ao salvar no canvas do aluno.');
+            });
         }
       }
-    } else if (activeProfile?.role === 'student') {
-      const studentNameNorm = activeProfile.name.trim().toLowerCase();
-      const updatedStudents = students.map(s => {
-        const isMatch = s.classroomId === activeProfile.classroomId && 
-                        s.name.trim().toLowerCase() === studentNameNorm;
-        if (isMatch) {
-          return { ...s, project: updatedProject || undefined, nodes: updatedNodes };
-        }
-        return s;
-      });
-      setStudents(updatedStudents);
-      localStorage.setItem(STORAGE_STUDENTS_KEY, JSON.stringify(updatedStudents));
-    } else {
-      setSoloProject(updatedProject);
-      setSoloNodes(updatedNodes);
-      if (updatedProject) {
-        localStorage.setItem(STORAGE_PROJECT_KEY, JSON.stringify(updatedProject));
-      } else {
-        localStorage.removeItem(STORAGE_PROJECT_KEY);
-      }
-      localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(updatedNodes));
+      return;
     }
+
+    setSoloProject(updatedProject);
+    setSoloNodes(updatedNodes);
+
+    if (updatedProject) localStorage.setItem(STORAGE_PROJECT_KEY, JSON.stringify(updatedProject));
+    else localStorage.removeItem(STORAGE_PROJECT_KEY);
+    localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(updatedNodes));
   };
 
   // Workspace callback event triggers
@@ -531,6 +542,17 @@ export default function App() {
     return <LoginScreen classrooms={classrooms} onLogin={handleLogin} />;
   }
 
+  if (cloudState === 'connecting') {
+    return (
+      <div className="min-h-screen bg-[#FDFDFB] flex items-center justify-center p-6 text-center">
+        <div className="space-y-3">
+          <div className="w-10 h-10 border-2 border-black border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-mono text-neutral-600">Carregando sua mesa...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ADVISOR ROLE VIEW
   if (activeProfile.role === 'advisor') {
     if (viewingStudent) {
@@ -584,6 +606,8 @@ export default function App() {
         onDeleteClassroom={handleDeleteClassroom}
         onDeleteStudent={handleDeleteStudent}
         onLogout={handleLogout}
+        loadingStudentWorkspace={loadingStudentWorkspace}
+        studentWorkspaceError={studentWorkspaceError}
       />
     );
   }
@@ -768,11 +792,6 @@ export default function App() {
 
   // STUDENT ROLE VIEW
   if (activeProfile.role === 'student') {
-    const studentNameNorm = activeProfile.name.trim().toLowerCase();
-    const currentStudent = students.find(s => 
-      s.classroomId === activeProfile.classroomId && 
-      s.name.trim().toLowerCase() === studentNameNorm
-    );
     const activeClassroom = classrooms.find(c => c.id === activeProfile.classroomId);
 
     if (project) {
