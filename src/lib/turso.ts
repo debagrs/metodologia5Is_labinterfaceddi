@@ -9,57 +9,33 @@ export interface StoredTursoSession {
 
 export const isTursoConfigured = true;
 
-export function readAuthenticatedTursoSession(): StoredTursoSession | null {
+export function readStoredTursoSession(): StoredTursoSession | null {
   const authenticated = readAuthSession();
-  if (!authenticated?.ownerId || !authenticated?.token) return null;
-  return {
-    ownerId: authenticated.ownerId,
-    token: authenticated.token,
-  };
-}
+  if (authenticated?.ownerId && authenticated?.token) {
+    return { ownerId: authenticated.ownerId, token: authenticated.token };
+  }
 
-export function readLegacyTursoSession(): StoredTursoSession | null {
   try {
     const raw = localStorage.getItem(LEGACY_TOKEN_KEY);
     const data = raw ? JSON.parse(raw) : null;
-    if (!data?.ownerId || !data?.token) return null;
-
-    const authenticated = readAuthenticatedTursoSession();
-    if (
-      authenticated &&
-      authenticated.ownerId === String(data.ownerId) &&
-      authenticated.token === String(data.token)
-    ) {
-      return null;
-    }
-
-    return {
-      ownerId: String(data.ownerId),
-      token: String(data.token),
-    };
+    return data?.ownerId && data?.token ? data : null;
   } catch {
     return null;
   }
-}
-
-export function readStoredTursoSession(): StoredTursoSession | null {
-  return readAuthenticatedTursoSession() || readLegacyTursoSession();
 }
 
 function storeLegacySession(session: StoredTursoSession) {
   localStorage.setItem(LEGACY_TOKEN_KEY, JSON.stringify(session));
 }
 
-export function clearLegacyTursoSession() {
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
-}
-
 export async function ensureTursoSession(): Promise<StoredTursoSession> {
-  const authenticated = readAuthenticatedTursoSession();
-  if (authenticated) return authenticated;
+  const authenticated = readAuthSession();
+  if (authenticated?.ownerId && authenticated?.token) {
+    return { ownerId: authenticated.ownerId, token: authenticated.token };
+  }
 
-  const legacy = readLegacyTursoSession();
-  if (legacy) return legacy;
+  const stored = readStoredTursoSession();
+  if (stored) return stored;
 
   const response = await fetch('/api/session', { method: 'POST' });
   const data = await response.json().catch(() => ({}));
@@ -67,10 +43,7 @@ export async function ensureTursoSession(): Promise<StoredTursoSession> {
     throw new Error(data?.error || 'Não foi possível criar a sessão.');
   }
 
-  const session = {
-    ownerId: String(data.ownerId),
-    token: String(data.token),
-  };
+  const session = { ownerId: String(data.ownerId), token: String(data.token) };
   storeLegacySession(session);
   return session;
 }
