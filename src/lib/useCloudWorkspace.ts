@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ensureTursoSession, isTursoConfigured, readWorkspace, saveWorkspace } from './turso';
+import {
+  clearLegacyTursoSession,
+  ensureTursoSession,
+  isTursoConfigured,
+  readAuthenticatedTursoSession,
+  readLegacyTursoSession,
+  readWorkspace,
+  saveWorkspace,
+} from './turso';
 import type { Classroom, Project, StudentProfile, ThoughtNode, UserProfile } from '../types';
 
 export interface WorkspaceSnapshot {
@@ -17,6 +25,19 @@ interface Options extends WorkspaceSnapshot {
 
 export type CloudState = 'disabled' | 'connecting' | 'synced' | 'local' | 'error';
 
+function hasProjectContent(snapshot: Partial<WorkspaceSnapshot> | null | undefined) {
+  if (!snapshot) return false;
+  if (snapshot.soloProject) return true;
+  if (Array.isArray(snapshot.soloNodes) && snapshot.soloNodes.length > 0) return true;
+  if (
+    Array.isArray(snapshot.students) &&
+    snapshot.students.some((student) => student?.project || (Array.isArray(student?.nodes) && student.nodes.length > 0))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function useCloudWorkspace(options: Options): CloudState {
   const [state, setState] = useState<CloudState>(isTursoConfigured ? 'connecting' : 'disabled');
   const hydrated = useRef(false);
@@ -28,10 +49,54 @@ export function useCloudWorkspace(options: Options): CloudState {
 
     (async () => {
       try {
-        const session = await ensureTursoSession();
+        const authenticated = readAuthenticatedTursoSession();
+        const activeSession = authenticated || (await ensureTursoSession());
         if (cancelled) return;
-        const payload = await readWorkspace(session.token);
-        if (payload) options.applySnapshot(payload as WorkspaceSnapshot);
+
+        let accountPayload = await readWorkspace(activeSession.token);
+
+        // Migração automática: canvas criado antes do login.
+        // Só acontece quando existe uma conta autenticada e o workspace dela ainda está vazio.
+        if (authenticated && !hasProjectContent(accountPayload)) {
+          const legacy = readLegacyTursoSession();
+          if (legacy) {
+            try {
+              const legacyPayload = await readWorkspace(legacy.token);
+              if (hasProjectContent(legacyPayload)) {
+                const migratedPayload: WorkspaceSnapshot = {
+                  ...(legacyPayload as WorkspaceSnapshot),
+                  activeProfile: options.activeProfile,
+                };
+                await saveWorkspace(authenticated.token, migratedPayload);
+                accountPayload = migratedPayload;
+                clearLegacyTursoSession();
+              }
+            } catch (migrationError) {
+              console.warn('[Turso] Não foi possível migrar a sessão antiga:', migrationError);
+            }
+          }
+        }
+
+        // Se a nuvem da conta está vazia, preserve e envie o conteúdo local atual.
+        if (!hasProjectContent(accountPayload)) {
+          const localPayload: WorkspaceSnapshot = {
+            activeProfile: options.activeProfile,
+            classrooms: options.classrooms,
+            students: options.students,
+            soloProject: options.soloProject,
+            soloNodes: options.soloNodes,
+          };
+
+          if (hasProjectContent(localPayload)) {
+            await saveWorkspace(activeSession.token, localPayload);
+            accountPayload = localPayload;
+          }
+        }
+
+        if (accountPayload) {
+          options.applySnapshot(accountPayload as WorkspaceSnapshot);
+        }
+
         hydrated.current = true;
         setState('synced');
       } catch (error) {
@@ -41,7 +106,9 @@ export function useCloudWorkspace(options: Options): CloudState {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [options.localLoaded]);
 
   useEffect(() => {
@@ -67,7 +134,9 @@ export function useCloudWorkspace(options: Options): CloudState {
       }
     }, 900);
 
-    return () => { if (timer.current) clearTimeout(timer.current); };
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
   }, [
     options.activeProfile,
     options.classrooms,
