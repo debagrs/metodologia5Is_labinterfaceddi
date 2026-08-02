@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, Search, UserPlus, Loader2
 } from 'lucide-react';
 import { Classroom, StudentProfile, Project, UserProfile } from '../types';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
-import { readAuthSession } from '../lib/auth';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -36,6 +35,10 @@ export default function AdvisorDashboard({
   );
   const [newClassName, setNewClassName] = useState('');
   const [newStudentName, setNewStudentName] = useState('');
+  const [accountQuery, setAccountQuery] = useState('');
+  const [accountResults, setAccountResults] = useState<any[]>([]);
+  const [searchingAccounts, setSearchingAccounts] = useState(false);
+  const [addingAccountId, setAddingAccountId] = useState<string | null>(null);
   const [showAddClassForm, setShowAddClassForm] = useState(false);
   const [showAddStudentForm, setShowAddStudentForm] = useState(false);
   const [errorClass, setErrorClass] = useState('');
@@ -47,71 +50,41 @@ export default function AdvisorDashboard({
   const [inviteLoadError, setInviteLoadError] = useState('');
 
   const loadInvitedStudents = async (classroomId: string) => {
-    const auth = readAuthSession();
-    const token = auth?.token || '';
-
-    if (!token) {
-      setInviteLoadError('Sua sessão expirou. Saia e entre novamente.');
-      return;
-    }
+    const raw = localStorage.getItem('5is_auth_session');
+    let token = '';
+    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
+    if (!token) return;
 
     setLoadingInvitedStudents(true);
     setInviteLoadError('');
-
     try {
       const response = await fetch(`/api/invitations?classroomId=${encodeURIComponent(classroomId)}`, {
         headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os alunos convidados.');
 
       const members = Array.isArray(data.members) ? data.members : [];
-
-      const mapped = await Promise.all(members.map(async (member: any): Promise<StudentProfile> => {
-        let snapshot: any = member.snapshot || null;
-
-        try {
-          const workspaceResponse = await fetch(
-            `/api/workspace?ownerId=${encodeURIComponent(String(member.id))}&t=${Date.now()}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-              cache: 'no-store',
-            },
-          );
-          const workspaceData = await workspaceResponse.json().catch(() => ({}));
-          if (workspaceResponse.ok) snapshot = workspaceData?.payload || snapshot;
-        } catch (error) {
-          console.error('[5I] Falha ao carregar workspace do estudante:', member.id, error);
-        }
-
-        const snapshotStudents = Array.isArray(snapshot?.students) ? snapshot.students : [];
+      const mapped: StudentProfile[] = members.map((member: any) => {
+        const snapshot = member.snapshot || {};
+        const snapshotStudents = Array.isArray(snapshot.students) ? snapshot.students : [];
         const normalizedName = String(member.name || '').trim().toLowerCase();
-        const matchingStudent = snapshotStudents.find((student: any) => {
-          const sameClass = student?.classroomId === classroomId;
-          const sameName = String(student?.name || '').trim().toLowerCase() === normalizedName;
-          return sameClass || sameName;
-        });
-
-        const project = matchingStudent?.project || snapshot?.soloProject || undefined;
-        const nodes = Array.isArray(matchingStudent?.nodes)
-          ? matchingStudent.nodes
-          : Array.isArray(snapshot?.soloNodes)
-            ? snapshot.soloNodes
-            : [];
+        const matchingStudent = snapshotStudents.find((student: any) =>
+          student?.classroomId === classroomId &&
+          String(student?.name || '').trim().toLowerCase() === normalizedName
+        );
 
         return {
           id: `remote-${member.id}`,
           remoteOwnerId: String(member.id),
-          remoteSnapshot: snapshot || undefined,
+          remoteSnapshot: snapshot,
           name: String(member.name || 'Estudante'),
           email: String(member.email || ''),
           classroomId,
-          project,
-          nodes,
+          project: matchingStudent?.project || snapshot.soloProject || undefined,
+          nodes: matchingStudent?.nodes || snapshot.soloNodes || [],
         };
-      }));
-
+      });
       setInvitedStudents(mapped);
     } catch (error: any) {
       setInviteLoadError(error?.message || 'Falha ao carregar alunos convidados.');
@@ -128,11 +101,14 @@ export default function AdvisorDashboard({
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
   const activeClassStudents = useMemo(() => {
-    // A turma mostra somente contas reais recuperadas do Turso.
-    // Isso evita misturar cadastros locais antigos ou alunos de outras turmas.
-    return invitedStudents;
-  }, [invitedStudents]);
-
+    const localStudents = students.filter((student) => student.classroomId === selectedClassId);
+    const remoteIds = new Set(invitedStudents.map((student) => student.remoteOwnerId));
+    const remoteNames = new Set(invitedStudents.map((student) => student.name.trim().toLowerCase()));
+    const localsWithoutDuplicate = localStudents.filter((student) =>
+      !remoteIds.has(student.remoteOwnerId) && !remoteNames.has(student.name.trim().toLowerCase())
+    );
+    return [...invitedStudents, ...localsWithoutDuplicate];
+  }, [students, invitedStudents, selectedClassId]);
 
   const handleCreateClassroom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,6 +142,74 @@ export default function AdvisorDashboard({
     setErrorStudent('');
   };
 
+  const searchRegisteredAccounts = async () => {
+    const query = accountQuery.trim();
+    if (query.length < 2) {
+      setErrorStudent('Digite pelo menos 2 letras do nome ou do e-mail.');
+      return;
+    }
+    const raw = localStorage.getItem('5is_auth_session');
+    let token = '';
+    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
+    if (!token) {
+      setErrorStudent('Sua sessão expirou. Entre novamente.');
+      return;
+    }
+    setSearchingAccounts(true);
+    setErrorStudent('');
+    try {
+      const response = await fetch(`/api/invitations?searchUsers=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível buscar as contas.');
+      setAccountResults(Array.isArray(data.users) ? data.users : []);
+      if (!data.users?.length) setErrorStudent('Nenhuma conta encontrada com esse nome ou e-mail.');
+    } catch (error: any) {
+      setAccountResults([]);
+      setErrorStudent(error?.message || 'Falha ao buscar contas.');
+    } finally {
+      setSearchingAccounts(false);
+    }
+  };
+
+  const addRegisteredAccount = async (user: any) => {
+    if (!activeClassroom) return;
+    const raw = localStorage.getItem('5is_auth_session');
+    let token = '';
+    try { token = raw ? JSON.parse(raw)?.token || '' : ''; } catch { token = ''; }
+    if (!token) {
+      setErrorStudent('Sua sessão expirou. Entre novamente.');
+      return;
+    }
+    setAddingAccountId(user.id);
+    setErrorStudent('');
+    try {
+      const response = await fetch('/api/invitations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'addExistingMember',
+          classroom: activeClassroom,
+          userId: user.id,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível incluir o aluno.');
+      await loadInvitedStudents(activeClassroom.id);
+      setAccountResults((current) => current.filter((item) => item.id !== user.id));
+      setAccountQuery('');
+      setErrorStudent(`${user.name} foi incluído(a) na turma.`);
+    } catch (error: any) {
+      setErrorStudent(error?.message || 'Falha ao incluir o aluno.');
+    } finally {
+      setAddingAccountId(null);
+    }
+  };
+
   // Set first class as selected if nothing is selected yet
   if (!selectedClassId && classrooms.length > 0) {
     setSelectedClassId(classrooms[0].id);
@@ -184,8 +228,8 @@ export default function AdvisorDashboard({
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#FDFDFB] font-sans px-3 py-4 sm:p-8 select-none overflow-x-hidden" style={{ WebkitTextSizeAdjust: '100%' }}>
-      <div className="w-full max-w-6xl mx-auto space-y-5 sm:space-y-6">
+    <div className="min-h-screen bg-[#FDFDFB] font-sans p-4 sm:p-8 select-none">
+      <div className="max-w-6xl mx-auto space-y-6">
         
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#E0E0DE] pb-6 gap-4">
@@ -389,37 +433,68 @@ export default function AdvisorDashboard({
                   </div>
                 </div>
 
-                {/* ADD STUDENT FORM */}
+                {/* ADD REGISTERED STUDENT FORM */}
                 {showAddStudentForm && (
-                  <form onSubmit={handleAddStudentSubmit} className="p-4 bg-[#F5F5F3] rounded-xl border border-[#E0E0DE] space-y-3">
+                  <div className="p-4 bg-[#F5F5F3] rounded-xl border border-[#E0E0DE] space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase tracking-wide block">Incluir Aluno na Turma</span>
+                      <span className="text-[10px] font-mono font-bold text-neutral-500 uppercase tracking-wide block">Adicionar conta já cadastrada</span>
                       <button
                         type="button"
-                        onClick={() => setShowAddStudentForm(false)}
+                        onClick={() => { setShowAddStudentForm(false); setAccountResults([]); setErrorStudent(''); }}
                         className="text-[10px] text-neutral-400 hover:text-black font-mono cursor-pointer"
                       >
                         Fechar
                       </button>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        placeholder="Nome completo do aluno"
-                        value={newStudentName}
-                        onChange={(e) => setNewStudentName(e.target.value)}
-                        className="flex-1 bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-lg p-2 text-xs outline-none"
-                        autoFocus
-                      />
+                      <div className="relative flex-1">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                        <input
+                          type="search"
+                          placeholder="Nome ou e-mail já cadastrado"
+                          value={accountQuery}
+                          onChange={(e) => setAccountQuery(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchRegisteredAccounts(); } }}
+                          className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-lg py-2 pl-9 pr-3 text-base sm:text-xs outline-none"
+                          autoFocus
+                        />
+                      </div>
                       <button
-                        type="submit"
-                        className="px-4 py-2 bg-black text-white rounded-lg text-xs font-mono font-bold uppercase cursor-pointer hover:bg-neutral-800"
+                        type="button"
+                        onClick={searchRegisteredAccounts}
+                        disabled={searchingAccounts}
+                        className="px-4 py-2 bg-black text-white rounded-lg text-xs font-mono font-bold uppercase cursor-pointer hover:bg-neutral-800 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        Registrar
+                        {searchingAccounts ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                        Buscar
                       </button>
                     </div>
-                    {errorStudent && <p className="text-xs text-red-600 font-semibold">{errorStudent}</p>}
-                  </form>
+                    {accountResults.length > 0 && (
+                      <div className="space-y-2">
+                        {accountResults.map((user) => {
+                          const alreadyInClass = invitedStudents.some((student) => student.remoteOwnerId === user.id);
+                          return (
+                            <div key={user.id} className="bg-white border border-[#E0E0DE] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <strong className="text-sm block truncate">{user.name}</strong>
+                                <span className="text-[11px] font-mono text-neutral-500 block break-all">{user.email}</span>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={alreadyInClass || addingAccountId === user.id}
+                                onClick={() => addRegisteredAccount(user)}
+                                className="px-3 py-2 rounded-lg bg-black text-white text-xs font-mono font-bold uppercase flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                              >
+                                {addingAccountId === user.id ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                                {alreadyInClass ? 'Já está na turma' : 'Adicionar'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {errorStudent && <p className={`text-xs font-semibold ${errorStudent.includes('incluído') ? 'text-emerald-700' : 'text-red-600'}`}>{errorStudent}</p>}
+                  </div>
                 )}
 
                 {inviteLoadError && (
@@ -496,7 +571,7 @@ export default function AdvisorDashboard({
                     <div className="text-center py-12 border-2 border-dashed border-[#E0E0DE] rounded-2xl">
                       <Users size={28} className="mx-auto text-neutral-300 mb-2" />
                       <p className="text-xs text-neutral-400 font-light max-w-sm mx-auto">
-                        Nenhuma conta conectada apareceu nesta turma. Clique em “Atualizar”. A lista deve mostrar exatamente as contas que aceitaram convites desta turma.
+                        Nenhuma conta conectada apareceu nesta turma. Clique em “Atualizar”. Se a conta entrou por convite antes desta correção, o sistema fará o vínculo automaticamente.
                       </p>
                     </div>
                   )}
