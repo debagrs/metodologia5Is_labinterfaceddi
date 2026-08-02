@@ -30,14 +30,8 @@ export function readAuthSession(): AuthSession | null {
 export function saveAuthSession(session: AuthSession): void {
   localStorage.setItem(AUTH_KEY, JSON.stringify(session));
 
-  // Mantém compatibilidade com as rotas de workspace já existentes.
-  localStorage.setItem(
-    LEGACY_SESSION_KEY,
-    JSON.stringify({
-      ownerId: session.ownerId,
-      token: session.token,
-    }),
-  );
+  // Não sobrescreva a sessão anônima antiga aqui.
+  // Ela pode conter um canvas criado antes do login e será migrada automaticamente.
 }
 
 export function clearAuthSession(): void {
