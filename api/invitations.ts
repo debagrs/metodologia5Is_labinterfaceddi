@@ -255,6 +255,10 @@ export default async function handler(req: any, res: any) {
       const userId = String(req.body?.userId || '');
       const project = req.body?.project ?? null;
       const nodes = Array.isArray(req.body?.nodes) ? req.body.nodes : [];
+      const requestedProjectWorkspaces = Array.isArray(req.body?.projectWorkspaces)
+        ? req.body.projectWorkspaces
+        : null;
+      const requestedActiveProjectId = String(req.body?.activeProjectId || project?.id || '').trim() || null;
       if (!classroomId || !userId) {
         return res.status(400).json({ error: 'Aluno ou turma não informado.' });
       }
@@ -301,9 +305,24 @@ export default async function handler(req: any, res: any) {
         });
       }
 
+      const currentProjectWorkspaces = Array.isArray(snapshot.projectWorkspaces)
+        ? snapshot.projectWorkspaces
+        : [];
+      const nextProjectWorkspaces = requestedProjectWorkspaces || (project
+        ? currentProjectWorkspaces.some((item: any) => item?.project?.id === project.id)
+          ? currentProjectWorkspaces.map((item: any) =>
+              item?.project?.id === project.id
+                ? { project, nodes, updatedAt: new Date().toISOString() }
+                : item,
+            )
+          : [...currentProjectWorkspaces, { project, nodes, updatedAt: new Date().toISOString() }]
+        : currentProjectWorkspaces);
+
       const nextSnapshot = {
         ...snapshot,
         students: nextStudents,
+        projectWorkspaces: nextProjectWorkspaces,
+        activeProjectId: requestedActiveProjectId,
         soloProject: project,
         soloNodes: nodes,
       };
