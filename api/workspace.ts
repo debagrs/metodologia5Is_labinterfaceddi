@@ -87,6 +87,26 @@ function validateSessionToken(rawHeader: string | undefined) {
   return crypto.timingSafeEqual(actualBuffer, expectedBuffer) ? ownerId : null;
 }
 
+
+async function canAccessStudentWorkspace(advisorId: string, studentId: string) {
+  const [permission] = await pipeline([{
+    sql: `SELECT 1
+      FROM shared_classrooms c
+      LEFT JOIN classroom_members m ON m.classroom_id = c.id AND m.user_id = ?
+      LEFT JOIN users u ON u.id = ?
+      LEFT JOIN classroom_invitations i ON i.classroom_id = c.id AND i.accepted_by = ?
+      WHERE c.advisor_id = ?
+        AND (
+          m.user_id IS NOT NULL
+          OR (u.classroom_id = c.id AND u.role = 'student')
+          OR i.accepted_by IS NOT NULL
+        )
+      LIMIT 1`,
+    args: [arg(studentId), arg(studentId), arg(studentId), arg(advisorId)],
+  }]);
+  return Boolean(permission?.rows?.length);
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
@@ -102,48 +122,12 @@ export default async function handler(req: any, res: any) {
       const requestedOwnerId = String(req.query?.ownerId || ownerId).trim();
 
       if (requestedOwnerId !== ownerId) {
-        const [permission] = await pipeline([{
-          sql: `SELECT 1
-            FROM shared_classrooms c
-            JOIN classroom_members m ON m.classroom_id = c.id
-            LEFT JOIN users u ON u.id = m.user_id
-            WHERE c.advisor_id = ?
-              AND m.user_id = ?
-              AND (u.role = 'student' OR u.role IS NULL)
-            LIMIT 1`,
-          args: [arg(ownerId), arg(requestedOwnerId)],
-        }]);
-
-        if (!permission?.rows?.length) {
-          const [fallbackPermission] = await pipeline([{
-            sql: `SELECT 1
-              FROM shared_classrooms c
-              JOIN users u ON u.classroom_id = c.id
-              WHERE c.advisor_id = ?
-                AND u.id = ?
-                AND u.role = 'student'
-              LIMIT 1`,
-            args: [arg(ownerId), arg(requestedOwnerId)],
-          }]);
-
-          if (!fallbackPermission?.rows?.length) {
-            const [invitePermission] = await pipeline([{
-              sql: `SELECT 1
-                FROM classroom_invitations i
-                JOIN shared_classrooms c ON c.id = i.classroom_id
-                WHERE c.advisor_id = ?
-                  AND i.accepted_by = ?
-                LIMIT 1`,
-              args: [arg(ownerId), arg(requestedOwnerId)],
-            }]);
-
-            if (!invitePermission?.rows?.length) {
-              return res.status(403).json({
-                error: 'Você não tem permissão para visualizar este workspace.',
-                stage: 'permission',
-              });
-            }
-          }
+        const allowed = await canAccessStudentWorkspace(ownerId, requestedOwnerId);
+        if (!allowed) {
+          return res.status(403).json({
+            error: 'Você não tem permissão para visualizar este workspace.',
+            stage: 'permission',
+          });
         }
       }
 
@@ -171,6 +155,18 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'PUT') {
+      const requestedOwnerId = String(req.query?.ownerId || ownerId).trim();
+
+      if (requestedOwnerId !== ownerId) {
+        const allowed = await canAccessStudentWorkspace(ownerId, requestedOwnerId);
+        if (!allowed) {
+          return res.status(403).json({
+            error: 'Você não tem permissão para editar este workspace.',
+            stage: 'permission',
+          });
+        }
+      }
+
       const serialized = JSON.stringify(req.body?.payload ?? {});
       if (Buffer.byteLength(serialized, 'utf8') > 1_500_000) {
         return res.status(413).json({ error: 'O workspace ultrapassou o limite de 1,5 MB.' });
@@ -182,9 +178,9 @@ export default async function handler(req: any, res: any) {
               ON CONFLICT(owner_id) DO UPDATE SET
                 payload = excluded.payload,
                 updated_at = datetime('now')`,
-        args: [arg(ownerId), arg(serialized)],
+        args: [arg(requestedOwnerId), arg(serialized)],
       }]);
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, ownerId: requestedOwnerId });
     }
 
     res.setHeader('Allow', 'GET, PUT');
