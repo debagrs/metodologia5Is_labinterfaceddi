@@ -2,9 +2,10 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
-  HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check
+  HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile } from '../types';
+import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 
 export interface InfiniteCanvasHandle {
@@ -19,6 +20,8 @@ interface InfiniteCanvasProps {
   onAddCustomThought: (x: number, y: number) => void;
   onUpdateNodeContent: (id: string, text: string, completed?: boolean) => void;
   onDeleteNode: (id: string) => void;
+  onUpdateNode: (node: ThoughtNode) => void;
+  currentUser: UserProfile;
 }
 
 const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(function InfiniteCanvas({
@@ -28,7 +31,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   onUpdateNodeCoords,
   onAddCustomThought,
   onUpdateNodeContent,
-  onDeleteNode
+  onDeleteNode,
+  onUpdateNode,
+  currentUser
 }, ref) {
   const [panOffset, setPanOffset] = useState({ x: 50, y: 50 });
   const [zoom, setZoom] = useState(0.9);
@@ -36,6 +41,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
+  const [collaborationNodeId, setCollaborationNodeId] = useState<string | null>(null);
 
   useImperativeHandle(ref, () => ({
     getCenteredCardPosition: (cardWidth = 360, cardHeight = 460) => {
@@ -312,18 +318,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     <span className="text-[9px] font-mono opacity-50">
                       X: {Math.round(node.x)} Y: {Math.round(node.y)}
                     </span>
-                    {!isCore && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteNode(node.id);
-                        }}
-                        className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer"
-                        title="Remover card"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
+                    <button onClick={(e)=>{e.stopPropagation();setCollaborationNodeId(node.id)}} className="opacity-60 hover:opacity-100 transition-colors cursor-pointer flex items-center gap-1" title="Comentários e arquivos"><MessageCircle size={12}/><span className="text-[9px]">{node.comments?.length||0}</span><Paperclip size={11}/><span className="text-[9px]">{node.attachments?.length||0}</span></button>
+                    {!isCore && (<button onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}} className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer" title="Remover card"><Trash2 size={12}/></button>)}
                   </div>
                 </div>
 
@@ -542,6 +538,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       </div>
 
+      {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode}/> : null; })()}
     </div>
   );
 });
