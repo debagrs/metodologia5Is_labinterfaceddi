@@ -73,6 +73,7 @@ export function useCloudWorkspace(options: Options): CloudState {
   });
   const lastSavedSerialized = useRef<string | null>(null);
   const hydrationStarted = useRef(false);
+  const applySnapshotRef = useRef(options.applySnapshot);
   const saveInFlight = useRef(false);
   const pendingSave = useRef(false);
 
@@ -107,6 +108,10 @@ export function useCloudWorkspace(options: Options): CloudState {
   }, [currentSnapshot]);
 
   useEffect(() => {
+    applySnapshotRef.current = options.applySnapshot;
+  }, [options.applySnapshot]);
+
+  useEffect(() => {
     if (
       !isTursoConfigured ||
       !options.localLoaded ||
@@ -133,23 +138,36 @@ export function useCloudWorkspace(options: Options): CloudState {
           const normalizedRemote = normalizeSnapshot(
             remotePayload as WorkspaceSnapshot,
           );
+          const normalizedLocal = normalizeSnapshot(latestSnapshot.current);
 
-          lastSavedSerialized.current =
-            serializeSnapshot(normalizedRemote);
+          const hasProjects = (snapshot: WorkspaceSnapshot) =>
+            snapshot.projectWorkspaces.length > 0 ||
+            Boolean(snapshot.soloProject) ||
+            snapshot.students.some((student) => Boolean(student.project));
 
-          options.applySnapshot(normalizedRemote);
+          lastSavedSerialized.current = serializeSnapshot(normalizedRemote);
 
-          setHydrationStage('settling');
-          window.requestAnimationFrame(() => {
-            if (!cancelled) {
-              setHydrationStage('ready');
-              setState('synced');
-            }
-          });
+          // Protege trabalhos que já existiam no navegador antes da correção da nuvem.
+          // Quando o Turso contém apenas um snapshot vazio e o navegador possui projetos,
+          // preservamos o conteúdo local e o enviamos ao servidor logo após a hidratação.
+          if (hasProjects(normalizedLocal) && !hasProjects(normalizedRemote)) {
+            setHydrationStage('ready');
+            setState('local');
+          } else {
+            applySnapshotRef.current(normalizedRemote);
+
+            setHydrationStage('settling');
+            window.requestAnimationFrame(() => {
+              if (!cancelled) {
+                setHydrationStage('ready');
+                setState('synced');
+              }
+            });
+          }
         } else {
           lastSavedSerialized.current = null;
           setHydrationStage('ready');
-          setState('synced');
+          setState('local');
         }
       } catch (error) {
         console.error('[Turso] Falha ao carregar:', error);
@@ -163,7 +181,7 @@ export function useCloudWorkspace(options: Options): CloudState {
     return () => {
       cancelled = true;
     };
-  }, [options.localLoaded, options.applySnapshot]);
+  }, [options.localLoaded]);
 
   const persistLatest = async () => {
     if (saveInFlight.current) {
