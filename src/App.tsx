@@ -459,30 +459,42 @@ export default function App() {
         : null,
       );
 
-      // Quando o estudante entrou por convite, salva no MESMO workspace da conta dele.
+      // A professora grava diretamente no MESMO workspace remoto da conta do aluno.
+      // Assim comentários, novos cards, anexos e alterações aparecem para os dois perfis.
       if (viewingStudent.remoteOwnerId) {
         const auth = readAuthSession();
         if (auth?.token) {
-          fetch('/api/invitations', {
+          const nextRemoteSnapshot: WorkspaceSnapshot = {
+            activeProfile: (viewingStudent.remoteSnapshot?.activeProfile as UserProfile | null) || null,
+            classrooms: Array.isArray(viewingStudent.remoteSnapshot?.classrooms)
+              ? viewingStudent.remoteSnapshot.classrooms as Classroom[]
+              : [],
+            students: Array.isArray(viewingStudent.remoteSnapshot?.students)
+              ? viewingStudent.remoteSnapshot.students as StudentProfile[]
+              : [],
+            soloProject: updatedProject,
+            soloNodes: updatedNodes,
+            projectWorkspaces: updatedViewingProjects,
+            activeProjectId: updatedProject.id,
+          };
+
+          fetch(`/api/workspace?ownerId=${encodeURIComponent(viewingStudent.remoteOwnerId)}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${auth.token}`,
             },
-            body: JSON.stringify({
-              action: 'saveMemberWorkspace',
-              classroomId: viewingStudent.classroomId,
-              userId: viewingStudent.remoteOwnerId,
-              project: updatedProject,
-              nodes: updatedNodes,
-              projectWorkspaces: updatedViewingProjects,
-              activeProjectId: updatedProject.id,
-            }),
+            body: JSON.stringify({ payload: nextRemoteSnapshot }),
           }).then(async (response) => {
             if (!response.ok) {
               const data = await response.json().catch(() => ({}));
               console.error('[5I] Falha ao salvar no workspace do aluno:', data?.error || response.status);
+              return;
             }
+            setViewingStudent((previous) => previous
+              ? { ...previous, remoteSnapshot: nextRemoteSnapshot as unknown as Record<string, unknown> }
+              : null,
+            );
           }).catch((error) => {
             console.error('[5I] Falha de rede ao salvar no workspace do aluno:', error);
           });
