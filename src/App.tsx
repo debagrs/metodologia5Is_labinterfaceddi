@@ -166,7 +166,7 @@ export default function App() {
      * Um workspace remoto vazio deve continuar vazio.
      * Não injeta turmas e alunos demonstrativos dentro de uma conta real.
      */
-    setActiveProfile(snapshot.activeProfile || readAuthSession()?.user || null);
+    setActiveProfile(readAuthSession()?.user || snapshot.activeProfile || null);
     setClassrooms(Array.isArray(snapshot.classrooms) ? snapshot.classrooms : []);
     setStudents(Array.isArray(snapshot.students) ? snapshot.students : []);
     const migratedProjects: ProjectWorkspace[] = Array.isArray(snapshot.projectWorkspaces) && snapshot.projectWorkspaces.length
@@ -258,8 +258,19 @@ export default function App() {
 
   // Handle Login and create Student Profile if it doesn't exist
   const handleLogin = (profile: UserProfile) => {
+    /*
+     * Troca de conta: não reutiliza o projeto que estava aberto por outro
+     * usuário neste navegador. O useCloudWorkspace carregará a mesa da
+     * conta autenticada pelo ID real do usuário.
+     */
     setActiveProfile(profile);
+    setProjectWorkspaces([]);
+    setActiveProjectId(null);
+    setSoloProject(null);
+    setSoloNodes([]);
+    setShowStudentProjectForm(false);
     localStorage.setItem(STORAGE_PROFILE_KEY, JSON.stringify(profile));
+    localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
 
     if (profile.invitedClassroom) {
       const invitedClass = profile.invitedClassroom;
@@ -295,11 +306,15 @@ export default function App() {
   const handleLogout = () => {
     setActiveProfile(null);
     setViewingStudent(null);
+    setViewingStudentProjects([]);
+    setViewingStudentActiveProjectId(null);
+    setProjectWorkspaces([]);
     setSoloProject(null);
     setSoloNodes([]);
     setActiveProjectId(null);
     setShowStudentProjectForm(false);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
+    localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
     clearAuthSession();
   };
 
@@ -944,6 +959,22 @@ export default function App() {
   // STUDENT ROLE VIEW
   if (activeProfile.role === 'student') {
     const activeClassroom = classrooms.find(c => c.id === activeProfile.classroomId);
+
+    /*
+     * Evita mostrar formulário vazio ou projetos de outra sessão enquanto
+     * o workspace desta conta ainda está sendo carregado do Turso.
+     */
+    if (cloudState === 'connecting') {
+      return (
+        <div className="min-h-[100dvh] bg-[#FDFDFB] flex items-center justify-center p-6">
+          <div className="text-center">
+            <BrandMark compact priority className="w-[58px] h-[50px] mx-auto mb-5 opacity-70" />
+            <h1 className="text-xl font-bold">Carregando seus projetos...</h1>
+            <p className="text-sm text-neutral-500 mt-2">Buscando suas mesas salvas no Turso.</p>
+          </div>
+        </div>
+      );
+    }
 
     if (project && activeProjectId) {
       return (
