@@ -36,21 +36,29 @@ export type CloudState =
   | 'local'
   | 'error';
 
-type HydrationStage = 'waiting' | 'loading' | 'settling' | 'ready';
-
-function normalizeSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
+function normalizeSnapshot(
+  snapshot: Partial<WorkspaceSnapshot> | null | undefined,
+): WorkspaceSnapshot {
   return {
-    activeProfile: snapshot.activeProfile ?? null,
-    classrooms: Array.isArray(snapshot.classrooms) ? snapshot.classrooms : [],
-    students: Array.isArray(snapshot.students) ? snapshot.students : [],
-    soloProject: snapshot.soloProject ?? null,
-    soloNodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
-    projectWorkspaces: Array.isArray(snapshot.projectWorkspaces) ? snapshot.projectWorkspaces : [],
-    activeProjectId: snapshot.activeProjectId ?? null,
+    activeProfile: snapshot?.activeProfile ?? null,
+    classrooms: Array.isArray(snapshot?.classrooms)
+      ? snapshot!.classrooms!
+      : [],
+    students: Array.isArray(snapshot?.students)
+      ? snapshot!.students!
+      : [],
+    soloProject: snapshot?.soloProject ?? null,
+    soloNodes: Array.isArray(snapshot?.soloNodes)
+      ? snapshot!.soloNodes!
+      : [],
+    projectWorkspaces: Array.isArray(snapshot?.projectWorkspaces)
+      ? snapshot!.projectWorkspaces!
+      : [],
+    activeProjectId: snapshot?.activeProjectId ?? null,
   };
 }
 
-function serializeSnapshot(snapshot: WorkspaceSnapshot): string {
+function serializeSnapshot(snapshot: Partial<WorkspaceSnapshot>) {
   return JSON.stringify(normalizeSnapshot(snapshot));
 }
 
@@ -58,35 +66,31 @@ export function useCloudWorkspace(options: Options): CloudState {
   const [state, setState] = useState<CloudState>(
     isTursoConfigured ? 'connecting' : 'disabled',
   );
-  const [hydrationStage, setHydrationStage] =
-    useState<HydrationStage>('waiting');
+  const [hydratedOwnerId, setHydratedOwnerId] = useState<string | null>(null);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestSnapshot = useRef<WorkspaceSnapshot>({
-    activeProfile: options.activeProfile,
-    classrooms: options.classrooms,
-    students: options.students,
-    soloProject: options.soloProject,
-    soloNodes: options.soloNodes,
-    projectWorkspaces: options.projectWorkspaces,
-    activeProjectId: options.activeProjectId,
-  });
-  const lastSavedSerialized = useRef<string | null>(null);
-  const hydrationStarted = useRef(false);
   const applySnapshotRef = useRef(options.applySnapshot);
-  const saveInFlight = useRef(false);
-  const pendingSave = useRef(false);
+  const latestSnapshotRef = useRef<WorkspaceSnapshot>(
+    normalizeSnapshot(options),
+  );
+  const lastSavedSerializedRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestGenerationRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveAgainRef = useRef(false);
 
-  const currentSnapshot = useMemo<WorkspaceSnapshot>(
-    () => ({
-      activeProfile: options.activeProfile,
-      classrooms: options.classrooms,
-      students: options.students,
-      soloProject: options.soloProject,
-      soloNodes: options.soloNodes,
-      projectWorkspaces: options.projectWorkspaces,
-      activeProjectId: options.activeProjectId,
-    }),
+  const accountId = options.activeProfile?.id || null;
+
+  const currentSnapshot = useMemo(
+    () =>
+      normalizeSnapshot({
+        activeProfile: options.activeProfile,
+        classrooms: options.classrooms,
+        students: options.students,
+        soloProject: options.soloProject,
+        soloNodes: options.soloNodes,
+        projectWorkspaces: options.projectWorkspaces,
+        activeProjectId: options.activeProjectId,
+      }),
     [
       options.activeProfile,
       options.classrooms,
@@ -104,179 +108,175 @@ export function useCloudWorkspace(options: Options): CloudState {
   );
 
   useEffect(() => {
-    latestSnapshot.current = currentSnapshot;
-  }, [currentSnapshot]);
-
-  useEffect(() => {
     applySnapshotRef.current = options.applySnapshot;
   }, [options.applySnapshot]);
 
   useEffect(() => {
-    if (
-      !isTursoConfigured ||
-      !options.localLoaded ||
-      hydrationStarted.current
-    ) {
+    latestSnapshotRef.current = currentSnapshot;
+  }, [currentSnapshot]);
+
+  /*
+   * Recarrega sempre que a conta autenticada muda.
+   * Antes, a hidratação acontecia uma única vez por aba; assim uma conta
+   * nova herdava o estado da conta anterior e parecia não ter projetos.
+   */
+  useEffect(() => {
+    if (!isTursoConfigured || !options.localLoaded || !accountId) {
+      if (!accountId && options.localLoaded) {
+        setHydratedOwnerId(null);
+        setState('synced');
+      }
       return;
     }
 
-    hydrationStarted.current = true;
-    setHydrationStage('loading');
+    const generation = ++requestGenerationRef.current;
+    setHydratedOwnerId(null);
     setState('connecting');
-
-    let cancelled = false;
+    lastSavedSerializedRef.current = null;
 
     (async () => {
       try {
         const session = await ensureTursoSession();
-        if (cancelled) return;
+        if (generation !== requestGenerationRef.current) return;
 
         const remotePayload = await readWorkspace(session.token);
-        if (cancelled) return;
+        if (generation !== requestGenerationRef.current) return;
 
-        if (remotePayload) {
-          const normalizedRemote = normalizeSnapshot(
-            remotePayload as WorkspaceSnapshot,
-          );
-          const normalizedLocal = normalizeSnapshot(latestSnapshot.current);
+        const normalizedRemote = normalizeSnapshot(
+          remotePayload as Partial<WorkspaceSnapshot> | null,
+        );
 
-          const hasProjects = (snapshot: WorkspaceSnapshot) =>
-            snapshot.projectWorkspaces.length > 0 ||
-            Boolean(snapshot.soloProject) ||
-            snapshot.students.some((student) => Boolean(student.project));
-
-          lastSavedSerialized.current = serializeSnapshot(normalizedRemote);
-
-          // Protege trabalhos que já existiam no navegador antes da correção da nuvem.
-          // Quando o Turso contém apenas um snapshot vazio e o navegador possui projetos,
-          // preservamos o conteúdo local e o enviamos ao servidor logo após a hidratação.
-          if (hasProjects(normalizedLocal) && !hasProjects(normalizedRemote)) {
-            setHydrationStage('ready');
-            setState('local');
-          } else {
-            applySnapshotRef.current(normalizedRemote);
-
-            setHydrationStage('settling');
-            window.requestAnimationFrame(() => {
-              if (!cancelled) {
-                setHydrationStage('ready');
-                setState('synced');
-              }
-            });
-          }
-        } else {
-          lastSavedSerialized.current = null;
-          setHydrationStage('ready');
-          setState('local');
+        /*
+         * Compatibilidade com o formato antigo de apenas um projeto.
+         */
+        if (
+          normalizedRemote.projectWorkspaces.length === 0 &&
+          normalizedRemote.soloProject
+        ) {
+          normalizedRemote.projectWorkspaces = [
+            {
+              project: normalizedRemote.soloProject,
+              nodes: normalizedRemote.soloNodes,
+              updatedAt:
+                normalizedRemote.soloProject.createdAt ||
+                new Date().toISOString(),
+            },
+          ];
         }
+
+        /*
+         * Sempre entra pelo dashboard. activeProjectId é navegação local,
+         * não precisa reabrir automaticamente o último canvas.
+         */
+        normalizedRemote.activeProjectId = null;
+
+        lastSavedSerializedRef.current =
+          serializeSnapshot(normalizedRemote);
+        applySnapshotRef.current(normalizedRemote);
+        setHydratedOwnerId(accountId);
+        setState('synced');
       } catch (error) {
-        console.error('[Turso] Falha ao carregar:', error);
-        if (!cancelled) {
-          setHydrationStage('ready');
+        console.error('[Turso] Falha ao carregar workspace:', error);
+        if (generation === requestGenerationRef.current) {
+          setHydratedOwnerId(accountId);
           setState('error');
         }
       }
     })();
 
     return () => {
-      cancelled = true;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
     };
-  }, [options.localLoaded]);
+  }, [accountId, options.localLoaded]);
 
   const persistLatest = async () => {
-    if (saveInFlight.current) {
-      pendingSave.current = true;
+    if (!accountId || hydratedOwnerId !== accountId) return;
+
+    if (saveInFlightRef.current) {
+      saveAgainRef.current = true;
       return;
     }
 
-    const snapshot = normalizeSnapshot(latestSnapshot.current);
+    const snapshot = normalizeSnapshot(latestSnapshotRef.current);
     const serialized = serializeSnapshot(snapshot);
 
-    if (serialized === lastSavedSerialized.current) {
+    if (serialized === lastSavedSerializedRef.current) {
       setState('synced');
       return;
     }
 
-    saveInFlight.current = true;
-    pendingSave.current = false;
+    saveInFlightRef.current = true;
+    saveAgainRef.current = false;
 
     try {
       const session = await ensureTursoSession();
       await saveWorkspace(session.token, snapshot);
-      lastSavedSerialized.current = serialized;
+      lastSavedSerializedRef.current = serialized;
       setState('synced');
     } catch (error) {
-      console.error('[Turso] Falha ao salvar:', error);
+      console.error('[Turso] Falha ao salvar workspace:', error);
       setState('error');
     } finally {
-      saveInFlight.current = false;
-
-      if (pendingSave.current) {
-        pendingSave.current = false;
+      saveInFlightRef.current = false;
+      if (saveAgainRef.current) {
+        saveAgainRef.current = false;
         void persistLatest();
       }
     }
   };
 
+  /*
+   * Salva apenas depois que o workspace da MESMA conta terminou de carregar.
+   */
   useEffect(() => {
     if (
       !isTursoConfigured ||
-      !options.localLoaded ||
-      hydrationStage !== 'ready'
+      !accountId ||
+      hydratedOwnerId !== accountId
     ) {
       return;
     }
 
-    if (currentSerialized === lastSavedSerialized.current) {
-      setState('synced');
+    if (currentSerialized === lastSavedSerializedRef.current) {
       return;
     }
 
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
     }
 
     setState('local');
-
-    saveTimer.current = setTimeout(() => {
+    saveTimerRef.current = setTimeout(() => {
       void persistLatest();
-    }, 700);
+    }, 500);
 
     return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
       }
     };
-  }, [
-    currentSerialized,
-    hydrationStage,
-    options.localLoaded,
-  ]);
+  }, [accountId, hydratedOwnerId, currentSerialized]);
 
   useEffect(() => {
-    if (!isTursoConfigured) return;
-
     const flush = () => {
       if (
-        hydrationStage === 'ready' &&
-        serializeSnapshot(latestSnapshot.current) !==
-          lastSavedSerialized.current
+        accountId &&
+        hydratedOwnerId === accountId &&
+        serializeSnapshot(latestSnapshotRef.current) !==
+          lastSavedSerializedRef.current
       ) {
         void persistLatest();
       }
     };
 
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        flush();
-      }
+      if (document.visibilityState === 'hidden') flush();
     };
 
     window.addEventListener('pagehide', flush);
-    document.addEventListener(
-      'visibilitychange',
-      onVisibilityChange,
-    );
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       window.removeEventListener('pagehide', flush);
@@ -285,7 +285,7 @@ export function useCloudWorkspace(options: Options): CloudState {
         onVisibilityChange,
       );
     };
-  }, [hydrationStage]);
+  }, [accountId, hydratedOwnerId]);
 
   return state;
 }
