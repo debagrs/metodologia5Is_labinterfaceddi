@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   ExternalLink,
   Image,
@@ -22,6 +21,7 @@ interface Props {
   user: UserProfile;
   onClose: () => void;
   onChange: (node: ThoughtNode) => void;
+  allowAttachments?: boolean;
 }
 
 async function readApiResponse(response: Response) {
@@ -45,6 +45,7 @@ export default function NodeCollaborationPanel({
   user,
   onClose,
   onChange,
+  allowAttachments = true,
 }: Props) {
   const [text, setText] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -156,7 +157,7 @@ export default function NodeCollaborationPanel({
     });
   }
 
-  return createPortal(
+  return (
     <div
       className="fixed inset-0 z-[100] flex justify-end bg-black/30"
       onClick={onClose}
@@ -191,41 +192,29 @@ export default function NodeCollaborationPanel({
               Imagens e vídeos
             </h3>
 
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,video/*"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-
-                if (file) {
-                  void upload(file);
-                }
-              }}
-            />
-
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-4 text-xs font-bold disabled:cursor-wait disabled:opacity-50"
-            >
-              {uploading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <>
-                  <Image size={16} />
-                  <Video size={16} />
-                </>
-              )}
-              {uploading ? "Enviando..." : "Adicionar imagem ou vídeo"}
-            </button>
-
-            <p className="mt-2 text-[10px] leading-relaxed text-neutral-400">
-              Imagens e vídeos de até 4 MB. O arquivo será armazenado no Vercel
-              Blob.
-            </p>
+            {allowAttachments && (<>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void upload(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-4 text-xs font-bold disabled:cursor-wait disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="animate-spin" size={16} /> : <><Image size={16} /><Video size={16} /></>}
+                {uploading ? "Enviando..." : "Adicionar imagem ou vídeo"}
+              </button>
+              <p className="mt-2 text-[10px] leading-relaxed text-neutral-400">Imagens e vídeos de até 4 MB. O arquivo será armazenado no Vercel Blob.</p>
+            </>)}
+            {!allowAttachments && <p className="rounded-xl bg-neutral-100 p-3 text-xs text-neutral-500">Neste projeto você pode comentar, mas somente quem tem permissão de edição pode acrescentar imagens ou vídeos.</p>}
 
             {error && (
               <p
@@ -267,7 +256,7 @@ export default function NodeCollaborationPanel({
                       <span className="truncate">{attachment.name}</span>
                     </a>
 
-                    {attachment.authorId === user.id && (
+                    {allowAttachments && attachment.authorId === user.id && (
                       <button
                         type="button"
                         onClick={() => removeAttachment(attachment.id)}
@@ -357,7 +346,6 @@ export default function NodeCollaborationPanel({
           </div>
         </footer>
       </aside>
-    </div>,
-    document.body,
+    </div>
   );
 }
