@@ -4,7 +4,7 @@ import {
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 
@@ -23,6 +23,7 @@ interface InfiniteCanvasProps {
   onDeleteNode: (id: string) => void;
   onUpdateNode: (node: ThoughtNode) => void;
   currentUser: UserProfile;
+  collaborationPermission?: CollaborationPermission | null;
 }
 
 const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(function InfiniteCanvas({
@@ -34,7 +35,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   onUpdateNodeContent,
   onDeleteNode,
   onUpdateNode,
-  currentUser
+  currentUser,
+  collaborationPermission = null
 }, ref) {
   const [panOffset, setPanOffset] = useState({ x: 50, y: 50 });
   const [zoom, setZoom] = useState(0.9);
@@ -355,23 +357,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     <span className="text-[9px] font-mono opacity-50">
                       X: {Math.round(node.x)} Y: {Math.round(node.y)}
                     </span>
-                    <button
-                      type="button"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setCollaborationNodeId(node.id);
-                      }}
-                      className="flex min-h-8 items-center gap-1.5 rounded-lg px-2 opacity-70 transition-colors hover:bg-black/5 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black cursor-pointer"
-                      title="Abrir comentários, imagens e vídeos"
-                      aria-label={`Abrir comentários e arquivos do card ${node.title || 'Bloco de notas'}`}
-                    >
-                      <MessageCircle size={14}/>
-                      <span className="text-[10px]">{node.comments?.length || 0}</span>
-                      <Paperclip size={13}/>
-                      <span className="text-[10px]">{node.attachments?.length || 0}</span>
-                    </button>
+                    <button onClick={(e)=>{e.stopPropagation();setCollaborationNodeId(node.id)}} className="opacity-60 hover:opacity-100 transition-colors cursor-pointer flex items-center gap-1" title="Comentários e arquivos"><MessageCircle size={12}/><span className="text-[9px]">{node.comments?.length||0}</span><Paperclip size={11}/><span className="text-[9px]">{node.attachments?.length||0}</span></button>
                     {!isCore && (<button onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}} className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer" title="Remover card"><Trash2 size={12}/></button>)}
                   </div>
                 </div>
@@ -591,7 +577,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       </div>
 
-      {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode}/> : null; })()}
+      {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
     </div>
   );
 });
