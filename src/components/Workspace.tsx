@@ -3,14 +3,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users
 } from 'lucide-react';
-import { Project, Phase, ThoughtNode, Mediator, UserProfile } from '../types';
+import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import MediatorSticker from './MediatorSticker';
 import BrandMark from './BrandMark';
 import AllCommentsPanel from './AllCommentsPanel';
 import AgentChatPanel from './AgentChatPanel';
+import ProjectCollaboratorsPanel from './ProjectCollaboratorsPanel';
 import { ensureTursoSession } from '../lib/turso';
 
 interface WorkspaceProps {
@@ -27,6 +28,8 @@ interface WorkspaceProps {
   onClearAll: () => void;
   currentUser?: UserProfile | null;
   studentName?: string;
+  collaborationPermission?: CollaborationPermission | null;
+  canManageCollaborators?: boolean;
 }
 
 const MEDIATORS: Mediator[] = [
@@ -153,7 +156,9 @@ export default function Workspace({
   onExit,
   onClearAll,
   currentUser,
-  studentName
+  studentName,
+  collaborationPermission = null,
+  canManageCollaborators = false
 }: WorkspaceProps) {
   const [selectedMediatorId, setSelectedMediatorId] = useState<string>('agent-idea');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -162,6 +167,7 @@ export default function Workspace({
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
+  const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState<boolean>(false);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
@@ -288,6 +294,12 @@ export default function Workspace({
     <div id="project-workspace" className="h-screen flex flex-col bg-brand-beige font-sans select-none overflow-hidden">
       
       {/* Role Banner notifications */}
+      {collaborationPermission && (
+        <div className="bg-emerald-950 text-white text-xs py-2 px-4 flex items-center justify-between font-mono gap-2 shrink-0 z-30 shadow-sm">
+          <span className="flex items-center gap-1.5 truncate"><Users size={13}/><span className="truncate">Projeto compartilhado — <strong>{collaborationPermission === 'edit' ? 'pode editar e comentar' : collaborationPermission === 'comment' ? 'pode comentar' : 'somente visualização'}</strong></span></span>
+          <span className="text-[9px] uppercase tracking-wider bg-white/15 px-2 py-1 rounded-full hidden sm:inline">Colaboração</span>
+        </div>
+      )}
       {currentUser && currentUser.role === 'advisor' && (
         <div className="bg-neutral-900 text-white text-xs py-2 px-4 flex items-center justify-between font-mono gap-2 shrink-0 z-30 shadow-sm border-b border-black">
           <span className="flex items-center gap-1.5 truncate">
@@ -355,6 +367,16 @@ export default function Workspace({
 
         {/* Current status telemetry & Mobile Panel toggles */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {canManageCollaborators && (
+            <button
+              onClick={() => setIsCollaboratorsOpen(true)}
+              className="p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Convidar colaboradores"
+            >
+              <Users size={15} />
+              <span className="hidden md:inline text-[10px] font-mono font-bold uppercase tracking-wider">Colaboradores</span>
+            </button>
+          )}
           <button
             onClick={() => setIsCommentsOpen(true)}
             className="relative p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
@@ -414,6 +436,10 @@ export default function Workspace({
           </span>
         </div>
       </header>
+
+      {isCollaboratorsOpen && canManageCollaborators && (
+        <ProjectCollaboratorsPanel project={project} onClose={() => setIsCollaboratorsOpen(false)} />
+      )}
 
       {isCommentsOpen && (
         <AllCommentsPanel
@@ -590,6 +616,7 @@ export default function Workspace({
           onDeleteNode={onDeleteNode}
           onUpdateNode={onUpdateNode}
           currentUser={currentUser!}
+          collaborationPermission={collaborationPermission}
         />
 
         {/* Right Sidebar: Intelligent Mediators Panel */}
