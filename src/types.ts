@@ -17,6 +17,37 @@ export interface ProjectWorkspace {
   updatedAt: string;
 }
 
+export type CollaborationPermission = 'view' | 'comment' | 'edit';
+
+export type CollaboratorLabel = 'colega' | 'comunidade' | 'cliente' | 'especialista' | 'outro';
+
+export interface ProjectCollaborator {
+  id: string;
+  ownerId: string;
+  projectId: string;
+  collaboratorId?: string;
+  collaboratorEmail: string;
+  collaboratorName?: string;
+  permission: CollaborationPermission;
+  label: CollaboratorLabel;
+  status: 'pending' | 'accepted';
+  createdAt: string;
+}
+
+export interface SharedProjectSummary {
+  collaborationId: string;
+  ownerId: string;
+  ownerName: string;
+  projectId: string;
+  projectName: string;
+  projectProblem: string;
+  activePhase: Phase;
+  permission: CollaborationPermission;
+  label: CollaboratorLabel;
+  updatedAt: string;
+  nodeCount: number;
+}
+
 export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight';
 
 export interface NodeComment {
