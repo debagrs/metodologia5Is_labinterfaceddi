@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ExternalLink,
   Image,
@@ -54,6 +55,15 @@ export default function NodeCollaborationPanel({
 
   const comments = node.comments || [];
   const attachments = node.attachments || [];
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   function addComment() {
     const cleanText = text.trim();
@@ -157,10 +167,13 @@ export default function NodeCollaborationPanel({
     });
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex justify-end bg-black/30"
       onClick={onClose}
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
     >
       <aside
         className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
@@ -346,6 +359,7 @@ export default function NodeCollaborationPanel({
           </div>
         </footer>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
