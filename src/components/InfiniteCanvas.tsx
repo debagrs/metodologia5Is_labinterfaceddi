@@ -419,12 +419,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                       {/* Provocations */}
                       {node.provocations && node.provocations.length > 0 && (
                         <div className="flex flex-col gap-1.5 p-3 bg-[#F9F9F8] rounded-xl border border-[#E0E0DE]">
-                          <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-wider flex items-center gap-1">
+                          <span className="text-[11px] font-mono text-neutral-500 uppercase tracking-wider flex items-center gap-1">
                             <Compass size={10} /> Direcionadores de Reflexão:
                           </span>
                           <ul className="space-y-1">
                             {node.provocations.map((p, idx) => (
-                              <li key={idx} className="text-xs text-neutral-700 flex items-start gap-1.5">
+                              <li key={idx} className="text-sm text-neutral-700 flex items-start gap-1.5">
                                 <span className="text-black font-bold mt-0.5">•</span>
                                 <span className="font-light">{p}</span>
                               </li>
@@ -435,7 +435,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                       {/* Scientific Context */}
                       {node.scientificContext && (
-                        <div className="text-[10px] text-neutral-700 bg-[#F5F5F3] border border-[#E0E0DE] p-2.5 rounded-xl flex items-start gap-1.5 font-light">
+                        <div className="text-[12px] text-neutral-700 bg-[#F5F5F3] border border-[#E0E0DE] p-2.5 rounded-xl flex items-start gap-1.5 font-light">
                           <BookOpen size={12} className="shrink-0 text-neutral-500 mt-0.5" />
                           <span>
                             <strong>Enquadramento:</strong> {node.scientificContext}
@@ -530,7 +530,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       <div id="canvas-actions-panel" className="absolute bottom-6 left-6 z-20 flex flex-col gap-3 canvas-control">
         
         {/* Double-click hint */}
-        <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[10px] font-mono text-neutral-500 flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
+        <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
           <HelpCircle size={12} className="text-black shrink-0" />
           <span className="truncate">Dica: Clique duplo para criar nota ou use o botão abaixo</span>
         </div>
