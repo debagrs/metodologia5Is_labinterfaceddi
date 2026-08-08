@@ -355,7 +355,23 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     <span className="text-[9px] font-mono opacity-50">
                       X: {Math.round(node.x)} Y: {Math.round(node.y)}
                     </span>
-                    <button onClick={(e)=>{e.stopPropagation();setCollaborationNodeId(node.id)}} className="opacity-60 hover:opacity-100 transition-colors cursor-pointer flex items-center gap-1" title="Comentários e arquivos"><MessageCircle size={12}/><span className="text-[9px]">{node.comments?.length||0}</span><Paperclip size={11}/><span className="text-[9px]">{node.attachments?.length||0}</span></button>
+                    <button
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCollaborationNodeId(node.id);
+                      }}
+                      className="flex min-h-8 items-center gap-1.5 rounded-lg px-2 opacity-70 transition-colors hover:bg-black/5 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black cursor-pointer"
+                      title="Abrir comentários, imagens e vídeos"
+                      aria-label={`Abrir comentários e arquivos do card ${node.title || 'Bloco de notas'}`}
+                    >
+                      <MessageCircle size={14}/>
+                      <span className="text-[10px]">{node.comments?.length || 0}</span>
+                      <Paperclip size={13}/>
+                      <span className="text-[10px]">{node.attachments?.length || 0}</span>
+                    </button>
                     {!isCore && (<button onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}} className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer" title="Remover card"><Trash2 size={12}/></button>)}
                   </div>
                 </div>
