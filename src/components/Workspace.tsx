@@ -343,7 +343,7 @@ export default function Workspace({
             title="Voltar ao início"
           >
             <ArrowLeft size={15} />
-            <span className="text-[10px] font-mono font-bold tracking-wider uppercase hidden sm:inline">SAIR</span>
+            <span className="text-[12px] font-mono font-bold tracking-wider uppercase hidden sm:inline">SAIR</span>
           </button>
           
           <div className="h-4 w-[1px] bg-[#E0E0DE]" />
@@ -352,14 +352,14 @@ export default function Workspace({
             <BrandMark compact priority className="w-[38px] h-[33px] flex-shrink-0" />
             <div className="h-4 w-[1px] bg-[#E0E0DE] hidden sm:block" />
             <div className="flex flex-col text-left">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-black/40 hidden sm:block">Laboratório de Inteligência Projetual</span>
-              <span className="text-xs font-semibold text-neutral-900 leading-tight truncate max-w-[120px] sm:max-w-[200px]">{project.name}</span>
+              <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 hidden sm:block">Laboratório de Inteligência Projetual</span>
+              <span className="text-sm font-semibold text-neutral-900 leading-tight truncate max-w-[120px] sm:max-w-[200px]">{project.name}</span>
             </div>
           </div>
         </div>
 
         {/* Mid bar sustainability badge */}
-        <div id="workspace-sustainability-indicator" className="hidden lg:flex items-center gap-2 bg-[#F5F5F3] border border-[#E0E0DE] px-3 py-1 rounded-full text-[10px] font-mono text-[#70706E]">
+        <div id="workspace-sustainability-indicator" className="hidden lg:flex items-center gap-2 bg-[#F5F5F3] border border-[#E0E0DE] px-3 py-1 rounded-full text-[12px] font-mono text-[#70706E]">
           <Globe size={11} className="text-neutral-500" />
           <span className="font-semibold uppercase tracking-wide opacity-60">Regido por:</span>
           <span className="truncate max-w-xs font-medium">{project.ods}</span>
@@ -374,7 +374,7 @@ export default function Workspace({
               title="Convidar colaboradores"
             >
               <Users size={15} />
-              <span className="hidden md:inline text-[10px] font-mono font-bold uppercase tracking-wider">Colaboradores</span>
+              <span className="hidden md:inline text-[12px] font-mono font-bold uppercase tracking-wider">Colaboradores</span>
             </button>
           )}
           <button
@@ -383,7 +383,7 @@ export default function Workspace({
             title="Ver todos os comentários"
           >
             <MessageCircle size={15} />
-            <span className="hidden sm:inline text-[9px] font-mono font-bold uppercase">Comentários</span>
+            <span className="hidden sm:inline text-[11px] font-mono font-bold uppercase">Comentários</span>
             {totalComments > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">{totalComments}</span>}
           </button>
           <button
@@ -395,7 +395,7 @@ export default function Workspace({
             title="Apagar todo o conteúdo do canvas"
           >
             <Trash2 size={15} />
-            <span className="hidden xl:inline text-[9px] font-mono font-bold uppercase">Limpar canvas</span>
+            <span className="hidden xl:inline text-[11px] font-mono font-bold uppercase">Limpar canvas</span>
           </button>
           <div className="flex items-center gap-1.5 lg:hidden">
             <button
@@ -431,7 +431,7 @@ export default function Workspace({
             </button>
           </div>
 
-          <span className="text-[9px] font-mono text-[#70706E] bg-[#F5F5F3] border border-[#E0E0DE] rounded-full px-3 py-1 font-semibold uppercase tracking-wider hidden md:block">
+          <span className="text-[11px] font-mono text-[#70706E] bg-[#F5F5F3] border border-[#E0E0DE] rounded-full px-3 py-1 font-semibold uppercase tracking-wider hidden md:block">
             Draft: {project.projectType}
           </span>
         </div>
@@ -513,11 +513,11 @@ export default function Workspace({
           
           {/* Header section */}
           <div className="p-5 border-b border-[#F0F0EE]">
-            <span className="text-[9px] font-mono font-bold tracking-widest text-[#70706E] uppercase block mb-1">
+            <span className="text-[11px] font-mono font-bold tracking-widest text-[#70706E] uppercase block mb-1">
               METODOLOGIA INTEGRADA
             </span>
-            <h3 className="text-sm font-semibold text-[#1A1A1A]">Metodologia 5I’s</h3>
-            <p className="text-[11px] text-[#70706E] mt-1 font-light leading-relaxed">
+            <h3 className="text-base font-semibold text-[#1A1A1A]">Metodologia 5I’s</h3>
+            <p className="text-[13px] text-[#70706E] mt-1 font-light leading-relaxed">
               O projeto se move como um ecossistema. Selecione um eixo para focar o canvas e focar o debate.
             </p>
           </div>
@@ -556,20 +556,20 @@ export default function Workspace({
                   {/* Content block */}
                   <div className="flex-1 flex flex-col">
                     <div className="flex items-center justify-between">
-                      <span className={`text-[12px] tracking-tight uppercase font-bold text-[#1A1A1A]`}>
+                      <span className={`text-[14px] tracking-tight uppercase font-bold text-[#1A1A1A]`}>
                         {meta.phase}
                       </span>
                       {/* Progress Badge */}
-                      <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-black/50 bg-[#F5F5F3] border border-[#E0E0DE] px-1.5 py-0.5 rounded-full">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black/50 bg-[#F5F5F3] border border-[#E0E0DE] px-1.5 py-0.5 rounded-full">
                         {completedNodesOfPhase}/{totalNodesOfPhase}
                       </span>
                     </div>
-                    <span className="text-[10px] text-black/40 font-medium leading-tight">
+                    <span className="text-[12px] text-black/40 font-medium leading-tight">
                       {meta.description}
                     </span>
                     
                     {/* Scientific context */}
-                    <span className="text-[9px] font-mono text-[#70706E] tracking-tighter mt-1 italic block truncate max-w-[170px]">
+                    <span className="text-[11px] font-mono text-[#70706E] tracking-tighter mt-1 italic block truncate max-w-[170px]">
                       {meta.scientificContext}
                     </span>
                   </div>
@@ -581,13 +581,13 @@ export default function Workspace({
           {/* Core metadata footer summary with Poetic Quote Box */}
           <div className="p-5 border-t border-[#F0F0EE] bg-white space-y-4">
             <div className="p-4 rounded-2xl bg-[#F5F5F3] border border-[#E0E0DE]">
-              <p className="text-[10px] leading-relaxed text-[#70706E] italic">
+              <p className="text-[12px] leading-relaxed text-[#70706E] italic">
                 "A forma segue o pensamento, mas o projeto segue a vida."
               </p>
             </div>
             
             <div>
-              <div className="flex items-center justify-between text-[9px] font-mono text-neutral-400 font-bold uppercase tracking-wider">
+              <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 font-bold uppercase tracking-wider">
                 <span>Estado Ecossistema:</span>
                 <span className="text-neutral-700 font-bold flex items-center gap-1">
                   {Math.round((nodes.filter(n => n.isCompleted).length / Math.max(nodes.filter(n => n.type === 'question').length, 1)) * 100)}%
