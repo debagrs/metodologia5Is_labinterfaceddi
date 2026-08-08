@@ -5,7 +5,7 @@ import Workspace from './components/Workspace';
 import LoginScreen from './components/LoginScreen';
 import AdvisorDashboard from './components/AdvisorDashboard';
 import StudentProjectsDashboard from './components/StudentProjectsDashboard';
-import { Project, ProjectWorkspace, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile } from './types';
+import { Project, ProjectWorkspace, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile, SharedProjectSummary, CollaborationPermission } from './types';
 import { Users, Sparkles, LogOut, ArrowLeft, GraduationCap, Globe, Building } from 'lucide-react';
 import { useCloudWorkspace, WorkspaceSnapshot } from './lib/useCloudWorkspace';
 import { readAuthSession, clearAuthSession } from './lib/auth';
@@ -161,6 +161,18 @@ export default function App() {
   const [showStudentProjectForm, setShowStudentProjectForm] = useState(false);
   const [localLoaded, setLocalLoaded] = useState(false);
 
+  // Projetos em que esta pessoa foi convidada para colaborar.
+  const [sharedProjects, setSharedProjects] = useState<SharedProjectSummary[]>([]);
+  const [activeSharedProject, setActiveSharedProject] = useState<{
+    ownerId: string;
+    ownerName: string;
+    projectId: string;
+    permission: CollaborationPermission;
+    project: Project;
+    nodes: ThoughtNode[];
+  } | null>(null);
+  const [sharedProjectsLoading, setSharedProjectsLoading] = useState(false);
+
   const applyCloudSnapshot = (snapshot: WorkspaceSnapshot) => {
     /*
      * Um workspace remoto vazio deve continuar vazio.
@@ -256,6 +268,26 @@ export default function App() {
     setLocalLoaded(true);
   }, []);
 
+  const loadSharedProjects = async () => {
+    const auth = readAuthSession();
+    if (!auth?.token || !activeProfile) { setSharedProjects([]); return; }
+    setSharedProjectsLoading(true);
+    try {
+      const response = await fetch('/api/project-collaborators?action=mine', { headers: { Authorization: `Bearer ${auth.token}` } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os projetos compartilhados.');
+      setSharedProjects(Array.isArray(data.projects) ? data.projects : []);
+    } catch (error) {
+      console.error('[5I] Projetos compartilhados:', error);
+      setSharedProjects([]);
+    } finally { setSharedProjectsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeProfile) void loadSharedProjects();
+    else setSharedProjects([]);
+  }, [activeProfile?.id]);
+
   // Handle Login and create Student Profile if it doesn't exist
   const handleLogin = (profile: UserProfile) => {
     /*
@@ -313,6 +345,8 @@ export default function App() {
     setSoloNodes([]);
     setActiveProjectId(null);
     setShowStudentProjectForm(false);
+    setSharedProjects([]);
+    setActiveSharedProject(null);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
     localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
     clearAuthSession();
@@ -415,6 +449,10 @@ export default function App() {
 
   // Helper to retrieve the current active project & nodes
   const getActiveData = (): { project: Project | null; nodes: ThoughtNode[] } => {
+    if (activeSharedProject) {
+      return { project: activeSharedProject.project, nodes: activeSharedProject.nodes };
+    }
+
     if (viewingStudent) {
       const activeWorkspace = viewingStudentProjects.find(
         (item) => item.project.id === viewingStudentActiveProjectId,
@@ -443,6 +481,30 @@ export default function App() {
 
   // Helper to persist edits back to their respective sources
   const saveActiveProjectAndNodes = (updatedProject: Project | null, updatedNodes: ThoughtNode[]) => {
+    if (activeSharedProject) {
+      if (!updatedProject || activeSharedProject.permission === 'view') return;
+      const next = { ...activeSharedProject, project: updatedProject, nodes: updatedNodes };
+      setActiveSharedProject(next);
+      const auth = readAuthSession();
+      if (auth?.token) {
+        const sharedSnapshot: WorkspaceSnapshot = {
+          activeProfile: null, classrooms: [], students: [], soloProject: updatedProject, soloNodes: updatedNodes,
+          projectWorkspaces: [{ project: updatedProject, nodes: updatedNodes, updatedAt: new Date().toISOString() }],
+          activeProjectId: updatedProject.id,
+        };
+        fetch(`/api/workspace?ownerId=${encodeURIComponent(activeSharedProject.ownerId)}&projectId=${encodeURIComponent(activeSharedProject.projectId)}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+          body: JSON.stringify({ payload: sharedSnapshot }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            console.error('[5I] Falha ao salvar colaboração:', data?.error || response.status);
+          }
+        }).catch((error) => console.error('[5I] Falha de rede na colaboração:', error));
+      }
+      return;
+    }
+
     if (viewingStudent) {
       if (!updatedProject) return;
       const now = new Date().toISOString();
@@ -656,6 +718,11 @@ export default function App() {
   };
 
   const handleExit = () => {
+    if (activeSharedProject) {
+      setActiveSharedProject(null);
+      void loadSharedProjects();
+      return;
+    }
     if (viewingStudent) {
       if (viewingStudentActiveProjectId) {
         setViewingStudentActiveProjectId(null);
@@ -700,6 +767,31 @@ export default function App() {
     setViewingStudent(null);
     setViewingStudentProjects([]);
     setViewingStudentActiveProjectId(null);
+  };
+
+  const handleOpenSharedProject = async (shared: SharedProjectSummary) => {
+    const auth = readAuthSession();
+    if (!auth?.token) return;
+    try {
+      const response = await fetch(`/api/workspace?ownerId=${encodeURIComponent(shared.ownerId)}&projectId=${encodeURIComponent(shared.projectId)}`, {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível abrir o projeto compartilhado.');
+      const snapshot = data?.payload || {};
+      const ws = Array.isArray(snapshot.projectWorkspaces)
+        ? snapshot.projectWorkspaces.find((item: ProjectWorkspace) => item?.project?.id === shared.projectId)
+        : null;
+      const projectToOpen = ws?.project || snapshot.soloProject;
+      if (!projectToOpen) throw new Error('O projeto compartilhado não foi encontrado.');
+      setActiveSharedProject({
+        ownerId: shared.ownerId, ownerName: shared.ownerName, projectId: shared.projectId,
+        permission: (data?.permission || shared.permission) as CollaborationPermission,
+        project: projectToOpen, nodes: ws?.nodes || snapshot.soloNodes || [],
+      });
+    } catch (error: any) {
+      alert(error?.message || 'Não foi possível abrir o projeto compartilhado.');
+    }
   };
 
   const handleDeleteStudentProject = (projectId: string) => {
@@ -976,6 +1068,31 @@ export default function App() {
       );
     }
 
+    if (activeSharedProject && project) {
+      const canEditShared = activeSharedProject.permission === 'edit';
+      const noOp: any = () => {};
+      return (
+        <div className="min-h-screen bg-brand-beige">
+          <Workspace
+            project={project}
+            nodes={nodes}
+            onUpdateNodeCoords={canEditShared ? handleUpdateNodeCoords : noOp}
+            onAddCustomThought={canEditShared ? handleAddCustomThought : noOp}
+            onUpdateNodeContent={canEditShared ? handleUpdateNodeContent : noOp}
+            onDeleteNode={canEditShared ? handleDeleteNode : noOp}
+            onUpdateNode={activeSharedProject.permission === 'view' ? noOp : handleUpdateNode}
+            onAddNode={canEditShared ? handleAddNode : noOp}
+            onUpdatePhase={canEditShared ? handleUpdatePhase : noOp}
+            onExit={handleExit}
+            onClearAll={canEditShared ? handleClearAllContent : noOp}
+            currentUser={activeProfile}
+            studentName={`Projeto de ${activeSharedProject.ownerName}`}
+            collaborationPermission={activeSharedProject.permission}
+          />
+        </div>
+      );
+    }
+
     if (project && activeProjectId) {
       return (
         <div className="min-h-screen bg-brand-beige">
@@ -993,6 +1110,7 @@ export default function App() {
             onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={activeClassroom?.name || 'Sua Turma'}
+            canManageCollaborators={true}
           />
         </div>
       );
@@ -1022,6 +1140,10 @@ export default function App() {
         onCreate={() => setShowStudentProjectForm(true)}
         onDelete={handleDeleteStudentProject}
         onLogout={handleLogout}
+        sharedProjects={sharedProjects}
+        sharedProjectsLoading={sharedProjectsLoading}
+        onOpenShared={handleOpenSharedProject}
+        onRefreshShared={loadSharedProjects}
       />
     );
   }
