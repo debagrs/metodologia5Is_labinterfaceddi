@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ExternalLink,
   Image,
@@ -155,7 +156,7 @@ export default function NodeCollaborationPanel({
     });
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex justify-end bg-black/30"
       onClick={onClose}
@@ -356,6 +357,7 @@ export default function NodeCollaborationPanel({
           </div>
         </footer>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
