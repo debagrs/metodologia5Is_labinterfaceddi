@@ -1,6 +1,6 @@
-import { ArrowLeft, FolderOpen, Plus, Trash2, CalendarDays, Layers3 } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Plus, Trash2, CalendarDays, Layers3, Users, RefreshCw } from 'lucide-react';
 import BrandMark from './BrandMark';
-import type { ProjectWorkspace, UserProfile } from '../types';
+import type { ProjectWorkspace, UserProfile, SharedProjectSummary } from '../types';
 
 interface Props {
   user: UserProfile;
@@ -15,6 +15,10 @@ interface Props {
   title?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  sharedProjects?: SharedProjectSummary[];
+  sharedProjectsLoading?: boolean;
+  onOpenShared?: (project: SharedProjectSummary) => void;
+  onRefreshShared?: () => void;
 }
 
 function formatDate(value: string) {
@@ -40,6 +44,10 @@ export default function StudentProjectsDashboard({
   title,
   emptyTitle = 'Você ainda não possui projetos',
   emptyDescription = 'Crie sua primeira mesa para começar a percorrer Ideação, Inambulação, Instauração, Inspeção e Implementação.',
+  sharedProjects = [],
+  sharedProjectsLoading = false,
+  onOpenShared,
+  onRefreshShared,
 }: Props) {
   const ordered = [...projects].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -118,6 +126,35 @@ export default function StudentProjectsDashboard({
               </article>
             ))}
           </div>
+        )}
+
+        {!readOnly && onOpenShared && (
+          <section className="mt-10 pt-8 border-t border-[#E8E8E5]">
+            <div className="flex items-start sm:items-center justify-between gap-3 mb-5">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Colaboração</span>
+                <h2 className="text-2xl font-bold mt-1 flex items-center gap-2"><Users size={22}/> Compartilhados comigo</h2>
+                <p className="text-sm text-neutral-500 mt-1">Projetos de outras pessoas em que você pode visualizar, comentar ou editar.</p>
+              </div>
+              {onRefreshShared && <button onClick={onRefreshShared} className="p-2.5 rounded-xl border border-[#DDD] bg-white cursor-pointer" title="Atualizar compartilhados"><RefreshCw size={16} className={sharedProjectsLoading ? 'animate-spin' : ''}/></button>}
+            </div>
+            {sharedProjectsLoading && sharedProjects.length === 0 ? (
+              <div className="border border-dashed border-[#DDD] rounded-2xl p-6 text-sm text-neutral-500 text-center">Carregando projetos compartilhados...</div>
+            ) : sharedProjects.length === 0 ? (
+              <div className="border border-dashed border-[#DDD] rounded-2xl p-6 text-sm text-neutral-500 text-center">Quando alguém convidar você, o projeto aparecerá aqui automaticamente.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {sharedProjects.map((shared) => (
+                  <article key={shared.collaborationId} className="bg-white border border-[#DFDFDC] rounded-2xl p-5 shadow-sm flex flex-col min-h-[270px]">
+                    <div className="flex items-start justify-between gap-3"><div className="w-11 h-11 rounded-xl bg-emerald-950 text-white flex items-center justify-center"><Users size={21}/></div><span className="text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800">{shared.permission === 'edit' ? 'Pode editar' : shared.permission === 'comment' ? 'Pode comentar' : 'Visualizar'}</span></div>
+                    <div className="mt-5 flex-1"><span className="text-[10px] font-mono uppercase text-neutral-400">de {shared.ownerName}</span><h3 className="text-xl font-bold leading-tight mt-2 line-clamp-2">{shared.projectName}</h3><p className="text-sm text-neutral-500 mt-2 line-clamp-3">{shared.projectProblem}</p></div>
+                    <div className="flex items-center justify-between gap-3 pt-4 mt-4 border-t border-[#EEE] text-xs text-neutral-500"><span className="flex items-center gap-1.5"><Layers3 size={14}/> {shared.nodeCount} cards</span><span>{shared.activePhase}</span></div>
+                    <button onClick={() => onOpenShared(shared)} className="mt-4 w-full py-3 rounded-xl bg-emerald-950 text-white font-mono text-xs font-bold uppercase tracking-wider cursor-pointer">Abrir colaboração</button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </main>
     </div>
