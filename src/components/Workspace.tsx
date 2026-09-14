@@ -163,8 +163,9 @@ export default function Workspace({
   const [selectedMediatorId, setSelectedMediatorId] = useState<string>('agent-idea');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [genError, setGenError] = useState<string>('');
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(false);
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
+  const desktopPanelsInitiallyOpen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState<boolean>(false);
@@ -291,7 +292,7 @@ export default function Workspace({
   };
 
   return (
-    <div id="project-workspace" className="h-screen flex flex-col bg-brand-beige font-sans select-none overflow-hidden">
+    <div id="project-workspace" className="h-[100dvh] flex flex-col bg-brand-beige font-sans select-none overflow-hidden">
       
       {/* Role Banner notifications */}
       {collaborationPermission && (
@@ -335,8 +336,8 @@ export default function Workspace({
       )}
 
       {/* Top Bar Navigation & Status */}
-      <header id="workspace-top-bar" className="h-16 bg-[#FDFDFB]/80 backdrop-blur-md border-b border-[#F0F0EE] px-4 sm:px-8 flex items-center justify-between z-30">
-        <div className="flex items-center gap-3 sm:gap-4">
+      <header id="workspace-top-bar" className="min-h-16 bg-[#FDFDFB]/90 backdrop-blur-md border-b border-[#F0F0EE] px-2 sm:px-5 py-2 flex items-center justify-between gap-2 z-30 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
           <button 
             onClick={onExit}
             className="p-2 rounded-xl hover:bg-black/5 text-neutral-500 hover:text-black transition-colors cursor-pointer flex items-center gap-1.5"
@@ -353,7 +354,7 @@ export default function Workspace({
             <div className="h-4 w-[1px] bg-[#E0E0DE] hidden sm:block" />
             <div className="flex flex-col text-left">
               <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 hidden sm:block">Laboratório de Inteligência Projetual</span>
-              <span className="text-sm font-semibold text-neutral-900 leading-tight truncate max-w-[120px] sm:max-w-[200px]">{project.name}</span>
+              <span className="text-sm font-semibold text-neutral-900 leading-tight truncate max-w-[88px] sm:max-w-[200px]">{project.name}</span>
             </div>
           </div>
         </div>
@@ -362,7 +363,7 @@ export default function Workspace({
         <div id="workspace-sustainability-indicator" className="hidden lg:flex items-center gap-2 bg-[#F5F5F3] border border-[#E0E0DE] px-3 py-1 rounded-full text-[12px] font-mono text-[#70706E]">
           <Globe size={11} className="text-neutral-500" />
           <span className="font-semibold uppercase tracking-wide opacity-60">Regido por:</span>
-          <span className="truncate max-w-xs font-medium">{project.ods}</span>
+          <span className="truncate max-w-xs font-medium">{project.ods || 'A definir'}</span>
         </div>
 
         {/* Current status telemetry & Mobile Panel toggles */}
@@ -397,7 +398,7 @@ export default function Workspace({
             <Trash2 size={15} />
             <span className="hidden xl:inline text-[11px] font-mono font-bold uppercase">Limpar canvas</span>
           </button>
-          <div className="flex items-center gap-1.5 lg:hidden">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
                 setIsLeftSidebarOpen(!isLeftSidebarOpen);
@@ -411,7 +412,7 @@ export default function Workspace({
               title="Metodologia 5I’s"
             >
               <Compass size={14} />
-              <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden sm:inline">Metodologia</span>
+              <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden xl:inline">Fases</span>
             </button>
             
             <button
@@ -427,7 +428,7 @@ export default function Workspace({
               title="Agentes 5I’s"
             >
               <Sparkles size={14} />
-              <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden sm:inline">Mediadores</span>
+              <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden xl:inline">Agentes</span>
             </button>
           </div>
 
@@ -498,14 +499,14 @@ export default function Workspace({
         {/* Left Sidebar: Metodologia 5I’s organism tracker */}
         <aside 
           id="left-sidebar-methodology" 
-          className={`fixed lg:relative top-16 lg:top-0 left-0 h-[calc(100vh-4rem)] lg:h-full w-72 max-w-[85vw] bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
-            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          className={`fixed lg:relative top-16 lg:top-0 left-0 h-[calc(100dvh-4rem)] lg:h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'
           }`}
         >
           {/* Mobile close button inside Left Sidebar header */}
           <button 
             onClick={() => setIsLeftSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
             title="Fechar menu"
           >
             <X size={15} />
@@ -622,14 +623,14 @@ export default function Workspace({
         {/* Right Sidebar: Intelligent Mediators Panel */}
         <aside 
           id="right-sidebar-mediators" 
-          className={`fixed lg:relative top-16 lg:top-0 right-0 h-[calc(100vh-4rem)] lg:h-full w-[330px] max-w-[85vw] bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
-            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          className={`fixed lg:relative top-16 lg:top-0 right-0 h-[calc(100dvh-4rem)] lg:h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'
           }`}
         >
           {/* Mobile close button inside Right Sidebar header */}
           <button 
             onClick={() => setIsRightSidebarOpen(false)}
-            className="lg:hidden p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
             title="Fechar menu"
           >
             <X size={15} />
