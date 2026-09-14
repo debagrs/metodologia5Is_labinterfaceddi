@@ -9,14 +9,23 @@ interface FirstExperienceProps {
 }
 
 const ODS_LIST = [
+  { id: 'ods-1', label: 'ODS 1 - Erradicação da Pobreza' },
   { id: 'ods-2', label: 'ODS 2 - Fome Zero e Agricultura Sustentável', color: 'border-amber-500 text-amber-800 bg-amber-50/50' },
   { id: 'ods-3', label: 'ODS 3 - Saúde e Bem-Estar', color: 'border-emerald-500 text-emerald-800 bg-emerald-50/50' },
   { id: 'ods-4', label: 'ODS 4 - Educação de Qualidade', color: 'border-blue-500 text-blue-800 bg-blue-50/50' },
   { id: 'ods-5', label: 'ODS 5 - Igualdade de Gênero', color: 'border-orange-500 text-orange-800 bg-orange-50/50' },
+  { id: 'ods-6', label: 'ODS 6 - Água Potável e Saneamento' },
+  { id: 'ods-7', label: 'ODS 7 - Energia Limpa e Acessível' },
+  { id: 'ods-8', label: 'ODS 8 - Trabalho Decente e Crescimento Econômico' },
+  { id: 'ods-9', label: 'ODS 9 - Indústria, Inovação e Infraestrutura' },
   { id: 'ods-10', label: 'ODS 10 - Redução das Desigualdades', color: 'border-rose-500 text-rose-800 bg-rose-50/50' },
   { id: 'ods-11', label: 'ODS 11 - Cidades e Comunidades Sustentáveis', color: 'border-yellow-600 text-yellow-900 bg-yellow-50/50' },
   { id: 'ods-12', label: 'ODS 12 - Consumo e Produção Responsáveis', color: 'border-teal-500 text-teal-800 bg-teal-50/50' },
   { id: 'ods-13', label: 'ODS 13 - Ação Contra a Mudança Global do Clima', color: 'border-green-600 text-green-900 bg-green-50/50' },
+  { id: 'ods-14', label: 'ODS 14 - Vida na Água' },
+  { id: 'ods-15', label: 'ODS 15 - Vida Terrestre' },
+  { id: 'ods-16', label: 'ODS 16 - Paz, Justiça e Instituições Eficazes' },
+  { id: 'ods-17', label: 'ODS 17 - Parcerias e Meios de Implementação' },
 ];
 
 const PROJECT_TYPES = [
@@ -33,7 +42,7 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
   const [name, setName] = useState('');
   const [problem, setProblem] = useState('');
   const [community, setCommunity] = useState('');
-  const [ods, setOds] = useState('');
+  const [selectedOds, setSelectedOds] = useState<string[]>([]);
   const [projectType, setProjectType] = useState('');
   const [customProjectType, setCustomProjectType] = useState('');
 
@@ -41,8 +50,8 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !problem.trim() || !community.trim() || !ods || !projectType) {
-      setError('Por favor, preencha todos os campos do questionário projetual.');
+    if (!name.trim()) {
+      setError('Informe ao menos um nome para identificar o projeto. Os demais campos são opcionais e podem ser desenvolvidos depois.');
       return;
     }
     setError('');
@@ -51,16 +60,16 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
       name: name.trim(),
       problem: problem.trim(),
       community: community.trim(),
-      ods: ods,
-      projectType: projectType === 'Outro (Especificar)' ? customProjectType : projectType,
+      ods: selectedOds.join(' | '),
+      projectType: projectType === 'Outro (Especificar)' ? customProjectType.trim() : projectType,
     });
   };
 
   return (
-    <div id="first-experience-container" className="min-h-screen bg-brand-beige flex flex-col md:flex-row font-sans overflow-hidden">
+    <div id="first-experience-container" className="min-h-[100dvh] bg-brand-beige flex flex-col md:flex-row font-sans overflow-x-hidden">
       
       {/* Left side: Premium Methodology Laboratory Context */}
-      <div id="left-sidebar" className="md:w-[42%] bg-brand-charcoal text-white p-8 md:p-16 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden">
+      <div id="left-sidebar" className="md:w-[42%] md:min-h-[100dvh] bg-brand-charcoal text-white p-6 sm:p-8 md:p-12 xl:p-16 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden">
         
         {/* Abstract organism glow in left side background */}
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-brand-accent/15 blur-3xl animate-pulse pointer-events-none" />
@@ -176,16 +185,16 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
       </div>
 
       {/* Right side: Elegant Display Questionnaire Form */}
-      <div id="onboarding-form-section" className="md:w-[58%] px-6 py-12 md:p-20 flex flex-col justify-center overflow-y-auto">
+      <div id="onboarding-form-section" className="md:w-[58%] px-4 sm:px-6 py-10 md:px-10 xl:px-20 md:py-12 flex flex-col justify-center md:h-[100dvh] overflow-y-auto">
         
         <div className="max-w-xl mx-auto w-full">
           
           {/* Main Question Accentuated */}
-          <div className="mb-12 text-center">
+          <div className="mb-8 md:mb-12 text-center">
             <span className="text-[10px] font-bold font-mono tracking-widest text-[#70706E] uppercase block mb-4">
               LABORATÓRIO DE INTELIGÊNCIA PROJETUAL
             </span>
-            <h2 className="text-4xl font-light italic tracking-tight text-[#1A1A1A] mb-4">
+            <h2 className="text-3xl sm:text-4xl font-light italic tracking-tight text-[#1A1A1A] mb-4">
               O que você deseja transformar?
             </h2>
             <div className="h-0.5 w-12 bg-black mx-auto"></div>
@@ -221,7 +230,6 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
                 value={problem}
                 onChange={(e) => setProblem(e.target.value)}
                 className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-xl p-3 text-sm text-brand-charcoal placeholder:text-gray-400 font-sans outline-none transition-all duration-200 resize-none"
-                required
               />
             </div>
 
@@ -237,39 +245,36 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
                 value={community}
                 onChange={(e) => setCommunity(e.target.value)}
                 className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-xl p-3 text-sm text-brand-charcoal placeholder:text-gray-400 font-sans outline-none transition-all duration-200"
-                required
               />
             </div>
 
             {/* ODS Select field (Prefilled visual badges + select behavior) */}
             <div className="flex flex-col gap-2.5">
               <label className="text-xs font-mono font-bold text-brand-charcoal/40 uppercase tracking-wider flex items-center gap-2">
-                <Globe size={14} className="text-black" /> Qual ODS da ONU rege este projeto?
+                <Globe size={14} className="text-black" /> Objetivos de Desenvolvimento Sustentável relacionados
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1 border border-[#E0E0DE] rounded-xl p-2 bg-[#F9F9F8]">
+              <p className="text-xs text-neutral-500">Selecione nenhum, um ou vários ODS. Você poderá aprofundar essa relação durante o projeto.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1 border border-[#E0E0DE] rounded-xl p-2 bg-[#F9F9F8]" role="group" aria-label="Seleção opcional dos 17 ODS da ONU">
                 {ODS_LIST.map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setOds(item.label)}
+                    onClick={() => setSelectedOds((current) => current.includes(item.label) ? current.filter((value) => value !== item.label) : [...current, item.label])}
+                    aria-pressed={selectedOds.includes(item.label)}
                     className={`text-left p-2.5 rounded-lg text-xs font-medium border transition-all duration-150 flex items-center justify-between ${
-                      ods === item.label 
+                      selectedOds.includes(item.label)
                         ? 'border-black bg-black text-white shadow-sm' 
                         : 'border-[#E0E0DE] bg-white text-gray-700 hover:border-[#1A1A1A]'
                     }`}
                   >
                     <span>{item.label}</span>
-                    {ods === item.label && (
+                    {selectedOds.includes(item.label) && (
                       <span className="w-1.5 h-1.5 rounded-full bg-white" />
                     )}
                   </button>
                 ))}
               </div>
-              <input 
-                type="hidden" 
-                value={ods} 
-                required 
-              />
+              {selectedOds.length > 0 && <span className="text-xs font-medium text-neutral-700">{selectedOds.length} ODS selecionado{selectedOds.length > 1 ? 's' : ''}</span>}
             </div>
 
             {/* Project Type Field (Drop-down + specified text field) */}
@@ -288,7 +293,6 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
                     }
                   }}
                   className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-xl p-3 text-sm text-brand-charcoal font-sans outline-none transition-all duration-200"
-                  required
                 >
                   <option value="" disabled>Selecione uma tipologia...</option>
                   {PROJECT_TYPES.map((type) => (
@@ -309,7 +313,6 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
                     value={customProjectType}
                     onChange={(e) => setCustomProjectType(e.target.value)}
                     className="w-full bg-white border border-[#E0E0DE] focus:border-black focus:ring-1 focus:ring-black rounded-xl p-3 text-sm text-brand-charcoal placeholder:text-gray-400 font-sans outline-none transition-all duration-200"
-                    required
                   />
                 </div>
               )}
