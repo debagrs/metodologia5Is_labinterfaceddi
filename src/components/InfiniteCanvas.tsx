@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+
 import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
@@ -370,23 +370,23 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     <div className="flex flex-col gap-3">
                       <div>
                         <h3 className="text-xl font-bold tracking-tight text-neutral-900">{project.name}</h3>
-                        <span className="text-xs text-neutral-500 font-mono block mt-1">{project.projectType}</span>
+                        <span className="text-xs text-neutral-500 font-mono block mt-1">{project.projectType || 'Tipologia a definir'}</span>
                       </div>
                       
                       <div className="grid grid-cols-1 gap-3.5 pt-3 border-t border-[#E0E0DE]">
                         <div>
                           <span className="text-[10px] font-mono font-semibold text-neutral-400 uppercase tracking-wider block">Problema a Transformar</span>
-                          <p className="text-xs text-neutral-800 mt-1 leading-relaxed font-light">{project.problem}</p>
+                          <p className="text-xs text-neutral-800 mt-1 leading-relaxed font-light">{project.problem || 'A desenvolver durante a Ideação.'}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
                             <span className="text-[10px] font-mono font-semibold text-neutral-400 uppercase tracking-wider block">Comunidade Afetada</span>
-                            <span className="text-xs text-neutral-800 font-medium block mt-0.5">{project.community}</span>
+                            <span className="text-xs text-neutral-800 font-medium block mt-0.5">{project.community || 'A mapear'}</span>
                           </div>
                           <div>
                             <span className="text-[10px] font-mono font-semibold text-neutral-400 uppercase tracking-wider block">ODS Diretora</span>
-                            <span className="text-[11px] text-black font-semibold block mt-0.5 truncate" title={project.ods}>
-                              {project.ods.split(' - ')[0]}
+                            <span className="text-[11px] text-black font-semibold block mt-0.5 line-clamp-2" title={project.ods || 'A definir'}>
+                              {project.ods || 'A definir'}
                             </span>
                           </div>
                         </div>
@@ -527,10 +527,10 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       </div>
 
       {/* Floating Canvas Controls (Zoom / Recenter / Spawn guide) */}
-      <div id="canvas-actions-panel" className="absolute bottom-6 left-6 z-20 flex flex-col gap-3 canvas-control">
+      <div id="canvas-actions-panel" className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-20 flex flex-col gap-2 sm:gap-3 canvas-control max-w-[calc(100vw-2rem)]">
         
         {/* Double-click hint */}
-        <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
+        <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 hidden sm:flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
           <HelpCircle size={12} className="text-black shrink-0" />
           <span className="truncate">Dica: Clique duplo para criar nota ou use o botão abaixo</span>
         </div>
@@ -562,10 +562,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
           <button 
             onClick={() => {
-              if (containerRef.current) {
-                const rect = containerRef.current.getBoundingClientRect();
-                onAddCustomThought(rect.width / 2 - panOffset.x, rect.height / 2 - panOffset.y);
-              }
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              onAddCustomThought(
+                Math.max(0, (rect.width / 2 - panOffset.x) / zoom - 180),
+                Math.max(0, (rect.height / 2 - panOffset.y) / zoom - 100)
+              );
             }} 
             className="px-3 h-8 rounded-lg bg-black text-white hover:bg-neutral-800 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
             title="Criar bloco de notas"
