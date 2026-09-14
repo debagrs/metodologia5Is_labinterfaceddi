@@ -1,4 +1,4 @@
-
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
