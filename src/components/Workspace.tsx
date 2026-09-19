@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
@@ -38,6 +38,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-idea',
     name: 'Idea',
     role: 'Ideação, repertório e conexões',
+    phase: 'Ideação',
     description: 'Abre possibilidades sem transformar o problema em solução pronta.',
     bio: 'Agente de Ideação da Metodologia 5I’s. Organiza repertórios, mapas mentais, hipóteses, perguntas e relações latentes. Trabalha com Gasparetto, Santaella, Manovich e Flusser para ampliar imaginação sem apagar autoria, contexto ou diferença.',
     iconName: 'Sparkles',
@@ -48,6 +49,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-passeio',
     name: 'Passeio',
     role: 'Inambulação, campo e escuta',
+    phase: 'Inambulação',
     description: 'Faz o projeto caminhar no território, nas pessoas e nas interfaces existentes.',
     bio: 'Agente de Inambulação. Convoca observação, escuta, cartografia, benchmarking crítico, pesquisa participante e contato com o ecossistema real. Dialoga com Latour, Costanza-Chock e métodos de pesquisa em design.',
     iconName: 'Compass',
@@ -55,9 +57,21 @@ const MEDIATORS: Mediator[] = [
     greeting: 'O que muda quando saímos da tela e caminhamos com quem vive o problema?'
   },
   {
+    id: 'agent-cosmos',
+    name: 'Cosmos',
+    role: 'Inambulação, cosmotécnica e repertórios hi-low',
+    phase: 'Inambulação',
+    description: 'Expande o repertório tecnológico da velha técnica às tecnologias emergentes, sempre em relação ao contexto.',
+    bio: 'Agente de Inambulação orientado por Gilbert Simondon e Yuk Hui. Investiga individuação técnica, concretização, tecnodiversidade e cosmotécnica. Propõe possibilidades disruptivas em chave hi-low: pode cruzar técnicas vernaculares, analógicas, reaproveitadas, low-tech, infraestrutura contemporânea, fabricação digital e tecnologias emergentes, perguntando sempre que relação entre técnica, cultura, ambiente e valores cada escolha produz.',
+    iconName: 'Orbit',
+    themeColor: 'indigo',
+    greeting: 'Que tecnologia faz sentido neste mundo específico — e que outras técnicas, antigas ou emergentes, revelam uma cosmotécnica diferente para o projeto?'
+  },
+  {
     id: 'agent-instaura',
     name: 'Instaura',
     role: 'Instauração, forma e prototipação',
+    phase: 'Instauração',
     description: 'Transforma pesquisa em arquitetura, fluxos, rabiscoframes e experiências testáveis.',
     bio: 'Agente de Instauração. Ajuda a materializar relações em arquitetura da informação, jornadas, wireframes, protótipos, linguagem visual e sistemas de componentes. Usa Norman, Preece, Rogers e Sharp, Gestalt, Heller e semiótica sem cair no figmarismo.',
     iconName: 'Layout',
@@ -68,6 +82,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-inspetor',
     name: 'Inspetor',
     role: 'Inspeção, usabilidade e evidências',
+    phase: 'Inspeção',
     description: 'Procura fricções, erros, exclusões e diferenças entre intenção e uso real.',
     bio: 'Agente de Inspeção contínua. Cruza heurísticas de Nielsen, princípios de Norman, ergonomia cognitiva, acessibilidade, testes e evidências comportamentais. Não aprova por gosto: pede critérios, participantes e registros observáveis.',
     iconName: 'ShieldCheck',
@@ -77,9 +92,10 @@ const MEDIATORS: Mediator[] = [
   {
     id: 'agent-rede',
     name: 'Rede',
-    role: 'Relações sociotécnicas e ecossistemas',
+    role: 'Implementação, relações sociotécnicas e ecossistemas',
+    phase: 'Implementação',
     description: 'Mapeia atores humanos, não humanos, plataformas, infraestruturas e dependências.',
-    bio: 'Agente sociotécnico inspirado em Latour, Simondon e Haraway. Ajuda a ver o projeto como rede híbrida: pessoas, códigos, instituições, dados, animais, ambientes, dispositivos e disputas de poder.',
+    bio: 'Agente de Implementação sociotécnica inspirado em Latour, Simondon e Haraway. Ajuda a ver o projeto como rede híbrida: pessoas, códigos, instituições, dados, animais, ambientes, dispositivos e disputas de poder.',
     iconName: 'Activity',
     themeColor: 'sky',
     greeting: 'Quem e o que sustenta esta solução — e quem fica invisível quando a rede é simplificada?'
@@ -88,6 +104,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-ativista',
     name: 'Ativista',
     role: 'Bioética, justiça de design e participação',
+    phase: 'Transversal',
     description: 'Tensiona poder, exclusão, sustentabilidade e consequências humanas e não humanas.',
     bio: 'Agente de bioética e design justice. Trabalha com Potter, Haraway, Costanza-Chock, Zuboff e educação humanitária. Questiona dark patterns, colonialidade, extração de dados, impacto ambiental e participação real.',
     iconName: 'Heart',
@@ -98,6 +115,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-responsa',
     name: 'Responsa',
     role: 'Acessibilidade, privacidade e responsabilidade',
+    phase: 'Transversal',
     description: 'Transforma valores em salvaguardas, requisitos e critérios verificáveis.',
     bio: 'Agente transversal de responsabilidade projetual. Relaciona WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência algorítmica e sustentabilidade computacional.',
     iconName: 'UserCheck',
@@ -108,6 +126,7 @@ const MEDIATORS: Mediator[] = [
     id: 'agent-implementa',
     name: 'Implementa',
     role: 'Implementação, documentação e continuidade',
+    phase: 'Implementação',
     description: 'Leva o pensamento ao código sem perder decisões, contexto e critérios.',
     bio: 'Agente de Implementação da Metodologia 5I’s. Organiza design systems, tokens, componentes, critérios de aceite, testes, documentação, handoff, publicação e manutenção. Trata o MVP como experimento vivo, não como encerramento.',
     iconName: 'Code2',
@@ -171,6 +190,11 @@ export default function Workspace({
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState<boolean>(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+  const speechRecognitionRef = useRef<any>(null);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
@@ -188,6 +212,7 @@ export default function Workspace({
       case 'ShieldCheck': return <ShieldCheck size={size} className={className} />;
       case 'Code2': return <Code2 size={size} className={className} />;
       case 'Sparkles': return <Sparkles size={size} className={className} />;
+      case 'Orbit': return <Orbit size={size} className={className} />;
       default: return <Compass size={size} className={className} />;
     }
   };
@@ -202,6 +227,68 @@ export default function Workspace({
       case 'sky': return 'text-sky-600 bg-sky-50 border-sky-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
+  };
+
+  const stopVoiceRecognition = () => {
+    try { speechRecognitionRef.current?.stop?.(); } catch { /* recognition may already be stopped */ }
+    setIsListening(false);
+  };
+
+  const startVoiceRecognition = () => {
+    setVoiceError('');
+    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      setVoiceError('Este navegador não oferece transcrição de voz nativa. No Android, use o Chrome atualizado.');
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognitionCtor();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.onresult = (event: any) => {
+        let finalText = '';
+        let interimText = '';
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const text = event.results[index][0]?.transcript || '';
+          if (event.results[index].isFinal) finalText += `${text} `;
+          else interimText += text;
+        }
+        if (finalText) setVoiceTranscript((previous) => `${previous}${previous && !previous.endsWith(' ') ? ' ' : ''}${finalText}`.trimStart());
+        if (interimText) recognition.__interim = interimText;
+      };
+      recognition.onerror = (event: any) => {
+        setVoiceError(event?.error === 'not-allowed' ? 'Permita o uso do microfone no navegador para transcrever.' : `Não foi possível transcrever (${event?.error || 'erro de voz'}).`);
+        setIsListening(false);
+      };
+      recognition.onend = () => setIsListening(false);
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setIsListening(true);
+    } catch (error: any) {
+      setVoiceError(error?.message || 'Não foi possível iniciar o microfone.');
+      setIsListening(false);
+    }
+  };
+
+  const addVoiceNoteToCanvas = () => {
+    const text = voiceTranscript.trim();
+    if (!text) return;
+    const position = canvasRef.current?.getCenteredCardPosition(340, 260) || { x: 1000, y: 1000 };
+    onAddNode({
+      type: 'user-thought',
+      title: 'Nota por voz',
+      content: text,
+      phase: project.activePhase,
+      x: position.x,
+      y: position.y,
+      connections: [],
+      isCompleted: false,
+      scientificContext: 'Transcrição de voz registrada diretamente no canvas.'
+    });
+    setVoiceTranscript('');
+    setIsVoiceOpen(false);
+    stopVoiceRecognition();
   };
 
   const handleTriggerMediator = async () => {
@@ -454,6 +541,38 @@ export default function Workspace({
           }}
         />
       )}
+      {isVoiceOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/35 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { stopVoiceRecognition(); setIsVoiceOpen(false); }}>
+          <section className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl bg-white border border-black/10 shadow-2xl p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <span className={`h-12 w-12 rounded-full border-2 border-black flex items-center justify-center shrink-0 ${isListening ? 'bg-red-100 animate-pulse' : 'bg-[#E9F7F2]'}`}><Mic size={21} /></span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-mono uppercase tracking-widest text-neutral-500">Agente de registro</div>
+                <h3 className="font-bold text-base">Voz → nova nota</h3>
+                <p className="text-[11px] text-neutral-600 mt-1">Fale livremente. A transcrição pode ser revisada antes de virar um bloco no canvas.</p>
+              </div>
+              <button type="button" className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center" onClick={() => { stopVoiceRecognition(); setIsVoiceOpen(false); }}><X size={18} /></button>
+            </div>
+            <textarea
+              value={voiceTranscript}
+              onChange={(event) => setVoiceTranscript(event.target.value)}
+              rows={7}
+              placeholder="Sua fala aparecerá aqui…"
+              className="w-full resize-none rounded-2xl border-2 border-black px-4 py-3 text-sm leading-relaxed outline-none focus:ring-2 focus:ring-black/10"
+            />
+            {voiceError && <p className="mt-2 text-[10px] font-mono text-red-700 bg-red-50 border border-red-200 rounded-xl p-2">{voiceError}</p>}
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <button type="button" onClick={isListening ? stopVoiceRecognition : startVoiceRecognition} className={`h-12 rounded-full border-2 border-black flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider ${isListening ? 'bg-red-50 text-red-700' : 'bg-white text-black'}`}>
+                {isListening ? <><StopSquare size={16} /> Parar</> : <><Mic size={16} /> Gravar</>}
+              </button>
+              <button type="button" disabled={!voiceTranscript.trim()} onClick={addVoiceNoteToCanvas} className="h-12 rounded-full bg-black text-white disabled:opacity-30 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider">
+                <Sparkles size={15} /> Criar nota
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {isAgentChatOpen && (
         <AgentChatPanel
           project={project}
@@ -681,6 +800,29 @@ export default function Workspace({
                     </button>
                   );
                 })}
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <a
+                  href="https://chatgpt.com/g/g-ij5S5dmha-robo-da-metodologia-5i-s-de-design-de-interfaces"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-h-[76px] rounded-2xl border border-[#F0F0EE] bg-[#FDFDFB] hover:border-black px-2 py-2.5 flex flex-col items-center justify-center gap-1 text-center"
+                  title="Abrir o Robô da Metodologia 5I’s em nova aba"
+                >
+                  <span className="h-9 w-9 rounded-full border-2 border-black bg-white flex items-center justify-center"><Bot size={18} /></span>
+                  <span className="text-[9px] font-mono font-bold">ROBÔ 5I’s</span>
+                  <span className="text-[8px] text-neutral-500 flex items-center gap-1">passo a passo <ExternalLink size={9} /></span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => { setIsVoiceOpen(true); setVoiceError(''); }}
+                  className="min-h-[76px] rounded-2xl border border-[#F0F0EE] bg-[#FDFDFB] hover:border-black px-2 py-2.5 flex flex-col items-center justify-center gap-1 text-center"
+                  title="Falar e criar uma nota transcrita no canvas"
+                >
+                  <span className="h-9 w-9 rounded-full border-2 border-black bg-[#E9F7F2] flex items-center justify-center"><Mic size={18} /></span>
+                  <span className="text-[9px] font-mono font-bold">VOZ → NOTA</span>
+                  <span className="text-[8px] text-neutral-500">transcrever no canvas</span>
+                </button>
               </div>
             </div>
 
