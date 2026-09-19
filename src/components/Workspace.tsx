@@ -1719,80 +1719,206 @@ export default function Workspace({
   const handleForgeProject = async () => {
     setIsForging(true);
     setForgeError('');
-    setForgeStatus(forgeMode === 'prompt' ? 'Lendo o projeto e estruturando o superprompt…' : 'Lendo o projeto e arquitetando a implementação…');
+    setForgeStatus(forgeMode === 'prompt' ? 'Lendo o projeto e estruturando o superprompt…' : 'Etapa 1/3 — lendo o projeto e desenhando a arquitetura…');
+
+    const clip = (value: unknown, limit: number) => {
+      const text = String(value ?? '').trim();
+      return text.length > limit ? `${text.slice(0, limit)}\n[… conteúdo abreviado …]` : text;
+    };
+    const safeReferenceUrl = (value: unknown, label = 'arquivo') => {
+      const url = String(value ?? '').trim();
+      if (!url) return '';
+      if (/^data:/i.test(url) || /^blob:/i.test(url)) return `[${label} incorporado ao projeto — binário omitido da geração]`;
+      return clip(url, 1200);
+    };
+
     try {
-      const conversations = collectProjectConversations(project.id);
+      const conversations = collectProjectConversations(project.id).map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.slice(-20).map((message) => ({
+          ...message,
+          text: clip(message.text, 1800),
+        })),
+      }));
       const nodeById = new Map(nodes.map((node) => [node.id, node]));
       const session = await ensureTursoSession().catch(() => null);
-      const response = await fetch('/api/mediators/think', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {})
-        },
-        body: JSON.stringify({
-          mode: forgeMode === 'prompt' ? 'implementation-prompt' : 'implementation-package',
-          project: {
-            name: project.name,
-            projectType: project.projectType,
-            problem: project.problem,
-            community: project.community,
-            ods: project.ods
-          },
-          mediator: {
-            id: activeMediator.id,
-            name: activeMediator.name,
-            role: activeMediator.role,
-            bio: activeMediator.bio
-          },
-          phase: 'Implementação',
-          existingThoughts: nodes.map((node) => ({
-            id: node.id,
-            type: node.type,
-            title: node.title,
-            content: node.content,
-            phase: node.phase,
-            scientificContext: node.scientificContext || '',
-            provocations: node.provocations || [],
-            connections: (node.connections || []).map((id) => nodeById.get(id)?.title || id),
-            imageUrl: node.imageUrl || '',
-            imageName: node.imageName || '',
-            drawingName: node.drawingName || '',
-            drawing: node.drawing || undefined,
-            interactiveName: node.interactiveName || '',
-            interactive: node.interactive ? {
-              engine: node.interactive.engine,
-              title: node.interactive.title,
-              prompt: node.interactive.prompt,
-              code: node.interactive.code,
-            } : undefined,
-            attachments: (node.attachments || []).map((attachment) => ({
-              name: attachment.name,
-              type: attachment.type,
-              url: attachment.url,
-            }))
-          })),
-          conversations
-        })
-      });
 
-      const raw = await response.text();
-      let data: any = {};
-      try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`A Forja devolveu uma resposta inválida (HTTP ${response.status}).`); }
-      if (!response.ok) throw new Error(data.error || `A Forja não conseguiu concluir a tarefa (HTTP ${response.status}).`);
+      const basePayload = {
+        project: {
+          name: project.name,
+          projectType: project.projectType,
+          problem: project.problem,
+          community: project.community,
+          ods: project.ods
+        },
+        mediator: {
+          id: activeMediator.id,
+          name: activeMediator.name,
+          role: activeMediator.role,
+          bio: activeMediator.bio
+        },
+        phase: 'Implementação',
+        existingThoughts: nodes.map((node) => ({
+          id: node.id,
+          type: node.type,
+          title: clip(node.title, 300),
+          content: clip(node.content, 3500),
+          phase: node.phase,
+          scientificContext: clip(node.scientificContext || '', 1200),
+          provocations: (node.provocations || []).slice(0, 6).map((item) => clip(item, 500)),
+          connections: (node.connections || []).slice(0, 24).map((id) => nodeById.get(id)?.title || id),
+          imageUrl: safeReferenceUrl(node.imageUrl, node.imageName || 'imagem'),
+          imageName: node.imageName || '',
+          drawingName: node.drawingName || '',
+          // O vetor completo do desenho pode ter milhares de pontos. Para a Forja basta
+          // saber que ele existe; o binário/vetor não deve atravessar a função serverless.
+          hasDrawing: Boolean(node.drawing),
+          interactiveName: node.interactiveName || '',
+          interactive: node.interactive ? {
+            engine: node.interactive.engine,
+            title: clip(node.interactive.title, 220),
+            prompt: clip(node.interactive.prompt, 1200),
+            code: clip(node.interactive.code, 5000),
+          } : undefined,
+          attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
+            name: clip(attachment.name, 260),
+            type: clip(attachment.type, 120),
+            url: safeReferenceUrl(attachment.url, attachment.name || 'anexo'),
+          }))
+        })),
+        conversations
+      };
+
+      const requestForge = async (payload: Record<string, unknown>, retries = 1): Promise<any> => {
+        let lastError: Error | null = null;
+        for (let attempt = 0; attempt <= retries; attempt += 1) {
+          try {
+            const response = await fetch('/api/mediators/think', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {})
+              },
+              body: JSON.stringify(payload)
+            });
+
+            const raw = await response.text();
+            let data: any = null;
+            try { data = raw ? JSON.parse(raw) : {}; } catch { data = null; }
+
+            if (response.ok) {
+              if (!data || typeof data !== 'object') throw new Error('A Forja devolveu uma resposta vazia.');
+              return data;
+            }
+
+            const providerMessage = data?.error
+              || (response.status === 504
+                ? 'A etapa excedeu o tempo da Vercel.'
+                : `A Forja não conseguiu concluir esta etapa (HTTP ${response.status}).`);
+            lastError = new Error(providerMessage);
+
+            if (attempt < retries && response.status >= 500) {
+              setForgeStatus((current) => `${current.replace(/\s*—\s*tentando novamente…$/i, '')} — tentando novamente…`);
+              await new Promise((resolve) => window.setTimeout(resolve, 900));
+              continue;
+            }
+            throw lastError;
+          } catch (error: any) {
+            lastError = error instanceof Error ? error : new Error(String(error || 'Falha de rede.'));
+            if (attempt < retries && !/GEMINI_API_KEY|limite diário|quota/i.test(lastError.message)) {
+              await new Promise((resolve) => window.setTimeout(resolve, 900));
+              continue;
+            }
+            throw lastError;
+          }
+        }
+        throw lastError || new Error('A Forja não conseguiu concluir a tarefa.');
+      };
 
       if (forgeMode === 'prompt') {
+        const data = await requestForge({ ...basePayload, mode: 'implementation-prompt' }, 1);
         if (!data.promptEngineering) throw new Error('A Forja não devolveu o superprompt.');
         const markdown = `# Engenharia de Prompt — ${project.name}\n\n## Arquitetura sugerida\n${data.architectureSummary || 'A arquitetura está descrita no prompt abaixo.'}\n\n## Stack\n${Array.isArray(data.stack) ? data.stack.map((item: string) => `- ${item}`).join('\n') : ''}\n\n## Hipóteses a validar\n${Array.isArray(data.assumptions) && data.assumptions.length ? data.assumptions.map((item: string) => `- ${item}`).join('\n') : '- Nenhuma hipótese adicional declarada.'}\n\n## Critérios de aceite\n${Array.isArray(data.acceptanceCriteria) ? data.acceptanceCriteria.map((item: string) => `- ${item}`).join('\n') : ''}\n\n---\n\n## SUPERPROMPT\n\n${data.promptEngineering}\n`;
         downloadText(`${safeProjectSlug(project.name)}-engenharia-de-prompt.md`, markdown);
         setForgeStatus('Engenharia de prompt gerada e baixada.');
-      } else {
-        const pack = data.package;
-        if (!pack?.files?.length) throw new Error('A Forja não devolveu arquivos de implementação.');
-        setForgeStatus('Montando ZIP para GitHub + Supabase + Vercel…');
-        downloadForgeZip(pack.projectName || project.name, pack.files, pack.assumptions || [], pack.postGenerationChecks || []);
-        setForgeStatus('ZIP gerado. Revise e execute o passo a passo incluído.');
+        return;
       }
+
+      const planResponse = await requestForge({ ...basePayload, mode: 'implementation-plan' }, 1);
+      const plan = planResponse?.plan;
+      if (!plan?.files?.length) throw new Error('A Forja não conseguiu montar o plano técnico do projeto.');
+
+      const plannedFiles = (plan.files as Array<{ path: string; purpose?: string }>)
+        .filter((file) => file?.path)
+        .map((file) => ({ path: String(file.path), purpose: String(file.purpose || '') }));
+      if (!plannedFiles.length) throw new Error('O plano técnico não contém arquivos para gerar.');
+
+      const batchSize = 3;
+      const batches: Array<Array<{ path: string; purpose?: string }>> = [];
+      for (let index = 0; index < plannedFiles.length; index += batchSize) {
+        batches.push(plannedFiles.slice(index, index + batchSize));
+      }
+
+      const generated = new Map<string, ForgeFile>();
+      setForgeStatus(`Etapa 2/3 — gerando ${plannedFiles.length} arquivos em ${batches.length} lotes curtos…`);
+
+      for (let index = 0; index < batches.length; index += 1) {
+        const batch = batches[index];
+        setForgeStatus(`Etapa 2/3 — lote ${index + 1}/${batches.length}: ${batch.map((item) => item.path).join(', ')}`);
+        const batchResponse = await requestForge({
+          mode: 'implementation-files',
+          project: basePayload.project,
+          mediator: basePayload.mediator,
+          phase: 'Implementação',
+          implementationPlan: plan,
+          requestedFiles: batch,
+        }, 1);
+        const files = Array.isArray(batchResponse?.files) ? batchResponse.files : [];
+        for (const file of files) {
+          if (file?.path && typeof file.content === 'string') {
+            generated.set(String(file.path), { path: String(file.path), content: file.content });
+          }
+        }
+      }
+
+      // Uma recuperação pequena resolve casos em que o modelo omitiu um arquivo de um lote
+      // sem refazer toda a implementação.
+      let missing = plannedFiles.filter((file) => !generated.has(file.path));
+      if (missing.length) {
+        const recoveryBatches: typeof batches = [];
+        for (let index = 0; index < missing.length; index += 2) recoveryBatches.push(missing.slice(index, index + 2));
+        for (let index = 0; index < recoveryBatches.length; index += 1) {
+          const batch = recoveryBatches[index];
+          setForgeStatus(`Recuperando arquivo${batch.length > 1 ? 's' : ''} faltante${batch.length > 1 ? 's' : ''}: ${batch.map((item) => item.path).join(', ')}`);
+          const batchResponse = await requestForge({
+            mode: 'implementation-files',
+            project: basePayload.project,
+            mediator: basePayload.mediator,
+            phase: 'Implementação',
+            implementationPlan: plan,
+            requestedFiles: batch,
+          }, 1);
+          const files = Array.isArray(batchResponse?.files) ? batchResponse.files : [];
+          for (const file of files) {
+            if (file?.path && typeof file.content === 'string') generated.set(String(file.path), { path: String(file.path), content: file.content });
+          }
+        }
+      }
+
+      missing = plannedFiles.filter((file) => !generated.has(file.path));
+      if (missing.length) {
+        throw new Error(`A Forja não conseguiu gerar ${missing.length} arquivo(s): ${missing.map((item) => item.path).join(', ')}. Tente novamente; os lotes agora são independentes e menores.`);
+      }
+
+      const files = [...generated.values()];
+      files.push({
+        path: 'FORJA_IMPLEMENTATION_PLAN.json',
+        content: JSON.stringify(plan, null, 2),
+      });
+
+      setForgeStatus('Etapa 3/3 — montando ZIP para GitHub + Supabase + Vercel…');
+      downloadForgeZip(plan.projectName || project.name, files, plan.assumptions || [], plan.postGenerationChecks || []);
+      setForgeStatus(`ZIP gerado com ${generated.size} arquivos de implementação. Revise e siga README_5IS_DEPLOY.md.`);
     } catch (error: any) {
       console.error(error);
       setForgeError(error?.message || 'Não foi possível gerar a implementação.');
