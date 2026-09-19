@@ -3,12 +3,13 @@ import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
-  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import DrawingStudio, { DrawingPreview } from './DrawingStudio';
+import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -75,6 +76,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   } | null>(null);
   const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
   const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
+  const [interactiveEditorNodeId, setInteractiveEditorNodeId] = useState<string | null>(null);
+  const [newInteractive, setNewInteractive] = useState<InteractiveDocument | null>(null);
+  const [activeInteractiveNodeId, setActiveInteractiveNodeId] = useState<string | null>(null);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +91,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
     if (node.type === 'drawing-sheet') {
       return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 200 : 255) };
+    }
+    if (node.type === 'interactive-lab') {
+      return { width: node.width || (compactCanvas ? 320 : 440), height: node.height || (compactCanvas ? 240 : 320) };
     }
     if (node.type === 'core') {
       return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
@@ -234,7 +241,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet';
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab';
     const minWidth = isVisualNode ? 100 : 240;
     const minHeight = isVisualNode ? 80 : 150;
     const maxWidth = isVisualNode ? 1400 : 820;
@@ -807,6 +814,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isUserThought = node.type === 'user-thought';
             const isCanvasImage = node.type === 'canvas-image';
             const isDrawingSheet = node.type === 'drawing-sheet';
+            const isInteractiveLab = node.type === 'interactive-lab';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
             const phasePalette = PHASE_NOTE_PALETTE[node.phase];
@@ -901,6 +909,132 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                   {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
                     <>
+                      <div
+                        className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'x', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] left-1/2 z-30 h-4 w-11 -translate-x-1/2 rounded-full border border-black/20 bg-white shadow cursor-ns-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'y', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] right-[-7px] z-30 h-6 w-6 rounded-full border border-black/30 bg-white shadow cursor-nwse-resize flex items-center justify-center"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'both', true)}
+                        title="Redimensionar proporcionalmente"
+                      >
+                        <MoveDiagonal2 size={9} />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              );
+            }
+
+            if (isInteractiveLab) {
+              const interactiveDocument = node.interactive || blankInteractiveDocument('p5');
+              const isLive = activeInteractiveNodeId === node.id;
+              return (
+                <motion.div
+                  key={node.id}
+                  data-node-id={node.id}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`absolute thought-card pointer-events-auto rounded-xl bg-white shadow-lg select-none overflow-visible ${
+                    isDragDropTarget ? 'ring-4 ring-blue-500/70' : isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
+                  }`}
+                  style={{
+                    left: node.x,
+                    top: node.y,
+                    width: dimensions.width,
+                    height: dimensions.height,
+                    touchAction: isLive ? 'auto' : 'none',
+                  }}
+                  onPointerDown={(event) => { if (!isLive) handleNodePointerDown(event, node.id); }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isConnectionTarget) {
+                      toggleConnection(node.id);
+                      return;
+                    }
+                    if (!isLive) {
+                      setSelectedNodeId(node.id);
+                      setSelectedConnection(null);
+                    }
+                  }}
+                >
+                  <div className="absolute inset-0 rounded-xl overflow-hidden bg-[#F8F7F3]">
+                    <InteractivePreview document={interactiveDocument} className="w-full h-full" interactive={isLive} />
+                  </div>
+
+                  <div className="absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/90 px-2 py-1 shadow-sm pointer-events-none">
+                    <Code2 size={11} />
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-wide">{interactiveDocument.engine === 'three' ? 'THREE.JS' : 'P5.JS'}</span>
+                  </div>
+
+                  {isConnectionTarget && (
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); toggleConnection(node.id); }}
+                      className="absolute inset-0 z-30 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair"
+                      aria-label={`Conectar com ${node.interactiveName || 'interação'}`}
+                    />
+                  )}
+
+                  {(isSelected || isConnectionSource || isLive) && canEditCanvas && !isConnectionTarget && (
+                    <div className="absolute -top-11 right-0 z-40 flex items-center gap-1 rounded-xl border border-[#E0E0DE] bg-white/95 p-1 shadow-lg canvas-control">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActiveInteractiveNodeId(isLive ? null : node.id);
+                          setSelectedNodeId(node.id);
+                        }}
+                        className={`h-8 px-2 rounded-lg flex items-center gap-1 text-[9px] font-mono font-bold cursor-pointer ${isLive ? 'bg-black text-white' : 'hover:bg-black/5 text-neutral-700'}`}
+                        title={isLive ? 'Sair do modo de interação' : 'Interagir em tempo real'}
+                      >
+                        {isLive ? <Pause size={13} /> : <Play size={13} />}
+                        {isLive ? 'SAIR' : 'INTERAGIR'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setActiveInteractiveNodeId(null); setInteractiveEditorNodeId(node.id); }}
+                        className="h-8 px-2 rounded-lg hover:bg-black/5 text-[9px] font-mono font-bold flex items-center gap-1 cursor-pointer"
+                        title="Editar prompt e código"
+                      >
+                        <Code2 size={13} /> EDITAR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setConnectingFromId(isConnectionSource ? null : node.id); }}
+                        className={`h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer ${isConnectionSource ? 'bg-black text-white' : 'hover:bg-black/5 text-neutral-700'}`}
+                        title="Criar conexão a partir desta interação"
+                      >
+                        {isConnectionSource ? <X size={14} /> : <Link2 size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setActiveInteractiveNodeId(null); onDeleteNode(node.id); }}
+                        className="h-8 w-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 cursor-pointer"
+                        title="Remover interação do canvas"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && !isLive && (
+                    <>
+                      <button
+                        type="button"
+                        className="absolute -left-4 top-1/2 z-40 h-8 w-8 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg flex items-center justify-center touch-none cursor-crosshair canvas-control"
+                        onPointerDown={(event) => beginConnectionDrag(event, 'new', node.id)}
+                        title="Arraste para criar uma seta"
+                        aria-label="Arrastar nova conexão"
+                      >
+                        <Link2 size={13} />
+                      </button>
                       <div
                         className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
                         onPointerDown={(event) => handleResizePointerDown(event, node, 'x', true)}
@@ -1458,6 +1592,15 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 <Pencil size={14} />
                 <span className="hidden sm:inline">DESENHO</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setNewInteractive(blankInteractiveDocument('p5'))}
+                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                title="Criar uma camada interativa com p5.js ou Three.js por prompt"
+              >
+                <Code2 size={14} />
+                <span className="hidden sm:inline">INTERAÇÃO</span>
+              </button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -1536,6 +1679,61 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               aspectRatio: drawing.width / drawing.height,
             })}
             onClose={() => setDrawingEditorNodeId(null)}
+          />
+        );
+      })()}
+
+      {newInteractive && (
+        <InteractiveStudio
+          key="new-interactive"
+          document={newInteractive}
+          project={project}
+          nodes={nodes}
+          title="Nova camada interativa"
+          canEdit={canEditCanvas}
+          onSave={(interactive) => {
+            const startWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 320 : 440;
+            const startHeight = typeof window !== 'undefined' && window.innerWidth < 640 ? 240 : 320;
+            const position = getCenteredPosition(startWidth, startHeight);
+            onAddNode({
+              type: 'interactive-lab',
+              title: interactive.title || 'Interação',
+              interactiveName: interactive.title || `Interação ${nodes.filter((item) => item.type === 'interactive-lab').length + 1}`,
+              content: interactive.prompt || '',
+              phase: activePhase,
+              x: position.x,
+              y: position.y,
+              width: startWidth,
+              height: startHeight,
+              aspectRatio: startWidth / startHeight,
+              interactive,
+              connections: [],
+            });
+            setNewInteractive(null);
+          }}
+          onClose={() => setNewInteractive(null)}
+        />
+      )}
+
+      {interactiveEditorNodeId && (() => {
+        const interactiveNode = nodes.find((item) => item.id === interactiveEditorNodeId && item.type === 'interactive-lab');
+        if (!interactiveNode) return null;
+        return (
+          <InteractiveStudio
+            key={interactiveNode.id}
+            document={interactiveNode.interactive || blankInteractiveDocument('p5')}
+            project={project}
+            nodes={nodes}
+            title={interactiveNode.interactiveName || interactiveNode.title || 'Camada interativa'}
+            canEdit={canEditCanvas}
+            onSave={(interactive) => onUpdateNode({
+              ...interactiveNode,
+              title: interactive.title || interactiveNode.title,
+              interactiveName: interactive.title || interactiveNode.interactiveName,
+              content: interactive.prompt || interactiveNode.content,
+              interactive,
+            })}
+            onClose={() => setInteractiveEditorNodeId(null)}
           />
         );
       })()}
