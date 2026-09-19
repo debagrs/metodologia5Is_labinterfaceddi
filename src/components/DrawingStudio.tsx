@@ -38,6 +38,13 @@ interface DrawingStudioProps {
 
 const PALETTE = ['#111111', '#6B7280', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899', '#FFFFFF'];
 
+const FALLBACK_FONTS = [
+  'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Nunito', 'Raleway',
+  'Merriweather', 'Playfair Display', 'Source Sans 3', 'Source Serif 4', 'IBM Plex Sans',
+  'IBM Plex Mono', 'Space Grotesk', 'DM Sans', 'DM Serif Display', 'Work Sans', 'Ubuntu',
+  'Oswald', 'Bebas Neue', 'Libre Baskerville', 'Crimson Text', 'Fira Sans', 'Fira Mono'
+];
+
 const SHAPE_TOOLS: { tool: DrawingTool; label: string }[] = [
   { tool: 'line', label: 'Linha' },
   { tool: 'arrow', label: 'Seta' },
@@ -238,7 +245,7 @@ const renderDrawingElement = (element: DrawingElement, selected = false) => {
       const size = element.fontSize || 32;
       const lines = (element.text || '').split('\n');
       return (
-        <text x={x} y={y} fill={stroke} fontSize={size} fontFamily="Arial, Helvetica, sans-serif" opacity={opacity} style={selectionStyle}>
+        <text x={x} y={y} fill={stroke} fontSize={size} fontFamily={element.fontFamily || 'Inter'} opacity={opacity} style={selectionStyle}>
           {lines.map((line, index) => (
             <tspan key={`${element.id}-line-${index}`} x={x} dy={index === 0 ? 0 : size * 1.2}>{line || ' '}</tspan>
           ))}
@@ -318,7 +325,7 @@ const elementToSvgString = (element: DrawingElement) => {
       const size = element.fontSize || 32;
       const lines = (element.text || '').split('\n');
       const tspans = lines.map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : size * 1.2}">${escapeXml(line || ' ')}</tspan>`).join('');
-      return `<text x="${x}" y="${y}" fill="${escapeXml(stroke)}" font-size="${size}" font-family="Arial, Helvetica, sans-serif" opacity="${opacity}">${tspans}</text>`;
+      return `<text x="${x}" y="${y}" fill="${escapeXml(stroke)}" font-size="${size}" font-family="${escapeXml(element.fontFamily || 'Inter')}" opacity="${opacity}">${tspans}</text>`;
     }
     default: return '';
   }
@@ -410,6 +417,9 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const [useFill, setUseFill] = useState(false);
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [fontSize, setFontSize] = useState(44);
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONTS);
+  const [fontSearch, setFontSearch] = useState('');
   const [draft, setDraft] = useState<DrawingElement | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -419,6 +429,34 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const paperRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
   const current = history[historyIndex];
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('https://fonts.google.com/metadata/fonts')
+      .then((response) => response.text())
+      .then((raw) => {
+        const cleaned = raw.replace(/^\)\]\}'\s*/, '');
+        const payload = JSON.parse(cleaned);
+        const families = (payload.familyMetadataList || [])
+          .map((item: any) => String(item.family || '').trim())
+          .filter(Boolean)
+          .sort((a: string, b: string) => a.localeCompare(b));
+        if (!cancelled && families.length) setFontFamilies(families);
+      })
+      .catch(() => { /* fallback list remains available */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!fontFamily) return;
+    const id = `google-font-${fontFamily.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily).replace(/%20/g, '+')}:wght@300;400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+  }, [fontFamily]);
 
   useEffect(() => {
     if (textEditor) {
@@ -459,6 +497,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
       y: textEditor.y,
       text: textEditor.value.trimEnd(),
       fontSize,
+      fontFamily,
     };
     return { ...current, elements: [...current.elements, element] };
   };
@@ -607,6 +646,10 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     setDraft(null);
     setTextEditor(null);
     if (nextTool !== 'select') setSelectedElementId(null);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      if (nextTool === 'brush' || nextTool === 'text' || isShapeTool(nextTool)) setMobilePanel('style');
+      else setMobilePanel(null);
+    }
   };
 
   const activeShape = SHAPE_TOOLS.find((item) => item.tool === tool);
@@ -664,6 +707,9 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
             <label className="text-[10px] font-mono flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} /> PREENCHER</label>
             <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor de preenchimento" />
             <span className="text-[10px] font-mono text-neutral-500">Texto</span>
+            <select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} className="h-8 max-w-[180px] rounded-lg border border-black/10 bg-white px-2 text-[10px]" style={{ fontFamily }}>
+              {fontFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
+            </select>
             <input type="range" min="12" max="140" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-24" />
             <span className="text-[10px] font-mono w-8">{fontSize}px</span>
           </div>
@@ -726,13 +772,15 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
                 }
               }}
               placeholder="Digite aqui…"
-              className="absolute z-20 min-w-[160px] max-w-[min(70vw,420px)] min-h-[54px] rounded-lg border-2 border-black bg-white/95 px-2 py-1.5 shadow-xl outline-none resize both"
+              className="absolute z-20 min-w-[120px] max-w-[min(78vw,520px)] min-h-[48px] border-0 bg-transparent p-0 outline-none resize-none overflow-hidden"
               style={{
                 left: textEditor.left,
                 top: textEditor.top,
                 color: strokeColor,
-                fontSize: `${Math.max(16, Math.min(36, fontSize * 0.55))}px`,
-                lineHeight: 1.2,
+                fontSize: `${Math.max(16, Math.min(42, fontSize * 0.62))}px`,
+                fontFamily,
+                lineHeight: 1.15,
+                caretColor: strokeColor,
                 transform: 'translateY(-0.15em)',
                 touchAction: 'manipulation',
               }}
@@ -762,7 +810,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
               <button
                 key={item.tool}
                 type="button"
-                onClick={() => { chooseTool(item.tool); setMobilePanel(null); }}
+                onClick={() => chooseTool(item.tool)}
                 className={`min-h-16 rounded-xl border px-2 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-mono ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10'}`}
               >
                 {shapeIcon(item.tool)}
@@ -817,12 +865,30 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
           </div>
 
           {tool === 'text' && (
-            <div className="mb-2">
+            <div className="mb-3 pt-3 border-t border-black/10">
+              <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Tipografia · Google Fonts</div>
+              <input
+                value={fontSearch}
+                onChange={(event) => setFontSearch(event.target.value)}
+                placeholder="Buscar tipografia…"
+                className="w-full h-11 rounded-xl border border-black/15 px-3 text-sm outline-none mb-2"
+              />
+              <select
+                value={fontFamily}
+                onChange={(event) => setFontFamily(event.target.value)}
+                className="w-full h-12 rounded-xl border border-black/15 bg-white px-3 text-sm mb-3"
+                style={{ fontFamily }}
+              >
+                {fontFamilies.filter((family) => family.toLowerCase().includes(fontSearch.toLowerCase())).map((family) => (
+                  <option key={family} value={family}>{family}</option>
+                ))}
+              </select>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-mono uppercase text-neutral-500">Tamanho do texto</span>
                 <span className="text-xs font-mono font-bold">{fontSize}px</span>
               </div>
-              <input type="range" min="12" max="140" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
+              <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
+              <button type="button" onClick={() => setMobilePanel(null)} className="mt-2 w-full h-11 rounded-xl bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider">Escrever na folha</button>
             </div>
           )}
 
@@ -833,10 +899,17 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
                 <input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} className="h-5 w-5" />
               </label>
               {useFill && (
-                <div className="grid grid-cols-6 gap-2 mt-2">
-                  {PALETTE.map((color) => (
-                    <button key={`fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-10 rounded-xl border ${fillColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
-                  ))}
+                <div className="mt-2">
+                  <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do preenchimento</div>
+                  <div className="grid grid-cols-6 gap-2">
+                    {PALETTE.map((color) => (
+                      <button key={`fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-10 rounded-xl border ${fillColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
+                    ))}
+                    <label className="h-10 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden relative">
+                      + COR
+                      <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                    </label>
+                  </div>
                 </div>
               )}
             </div>
@@ -881,8 +954,8 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
       <div className="md:hidden absolute left-0 right-0 bottom-0 z-[120] border-t border-black/10 bg-white/95 backdrop-blur-xl px-2 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }} onPointerDown={(event) => event.stopPropagation()}>
         <div className="grid grid-cols-5 gap-1 max-w-[560px] mx-auto">
           <MobileToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setMobilePanel(null); }} label="Selecionar"><ArrowLeftRight size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'brush'} onClick={() => { chooseTool('brush'); setMobilePanel(null); }} label="Pincel"><Pencil size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'text'} onClick={() => { chooseTool('text'); setMobilePanel(null); }} label="Texto"><Type size={18} /></MobileToolButton>
+          <MobileToolButton active={tool === 'brush'} onClick={() => chooseTool('brush')} label="Pincel"><Pencil size={18} /></MobileToolButton>
+          <MobileToolButton active={tool === 'text'} onClick={() => chooseTool('text')} label="Texto"><Type size={18} /></MobileToolButton>
           <MobileToolButton active={isShapeTool(tool)} onClick={() => setMobilePanel(mobilePanel === 'shapes' ? null : 'shapes')} label={activeShape ? activeShape.label.split(' ')[0] : 'Formas'}>{activeShape ? shapeIcon(activeShape.tool) : <Square size={18} />}</MobileToolButton>
           <MobileToolButton active={mobilePanel === 'style'} onClick={() => setMobilePanel(mobilePanel === 'style' ? null : 'style')} label="Estilo">
             <span className="h-5 w-5 rounded-full border border-black/20" style={{ backgroundColor: strokeColor }} />
