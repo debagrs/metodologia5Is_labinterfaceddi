@@ -11,6 +11,8 @@ export interface MediatorRequestBody {
   existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
   engine?: 'p5' | 'three' | string;
   prompt?: string;
+  implementationPlan?: any;
+  requestedFiles?: Array<{ path: string; purpose?: string }>;
 }
 
 export interface MediatorInsight {
@@ -145,20 +147,48 @@ Redija um artigo científico de relato de projeto usando todo o material pertine
   return { system, user };
 }
 
-function fullProjectContext(body: MediatorRequestBody) {
+function clipProjectText(value: unknown, limit = 1600) {
+  const text = String(value ?? '').trim();
+  return text.length > limit ? `${text.slice(0, limit)}\n[… conteúdo abreviado para geração técnica …]` : text;
+}
+
+function compactProjectContext(body: MediatorRequestBody) {
   const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
   const conversations = Array.isArray(body.conversations) ? body.conversations : [];
-  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS COMPLETOS DO CANVAS\n${JSON.stringify(records, null, 2)}\n\nCONVERSAS DOS AGENTES\n${JSON.stringify(conversations, null, 2)}`;
+  const compactRecords = records.slice(0, 140).map((item: any) => ({
+    id: item.id, type: item.type, phase: item.phase,
+    title: clipProjectText(item.title, 220),
+    content: clipProjectText(item.content, 1800),
+    scientificContext: clipProjectText(item.scientificContext, 700),
+    provocations: Array.isArray(item.provocations) ? item.provocations.slice(0, 5).map((value: unknown) => clipProjectText(value, 320)) : [],
+    connections: Array.isArray(item.connections) ? item.connections.slice(0, 20) : [],
+    imageName: item.imageName || '', imageUrl: clipProjectText(item.imageUrl, 700),
+    drawingName: item.drawingName || '',
+    interactiveName: item.interactiveName || '',
+    interactive: item.interactive ? { engine: item.interactive.engine, title: clipProjectText(item.interactive.title, 180), prompt: clipProjectText(item.interactive.prompt, 900), code: clipProjectText(item.interactive.code, 2600) } : undefined,
+    attachments: Array.isArray(item.attachments) ? item.attachments.slice(0, 12).map((attachment: any) => ({ name: clipProjectText(attachment?.name, 220), type: clipProjectText(attachment?.type, 120), url: clipProjectText(attachment?.url, 700) })) : [],
+  }));
+  const compactConversations = conversations.slice(0, 20).map((conversation: any) => ({
+    mediatorId: conversation.mediatorId, mediatorName: conversation.mediatorName,
+    messages: Array.isArray(conversation.messages) ? conversation.messages.slice(-16).map((message: any) => ({ role: message.role, text: clipProjectText(message.text, 900) })) : [],
+  }));
+  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS DO CANVAS — CONTEXTO TÉCNICO COMPACTADO\n${JSON.stringify(compactRecords, null, 2)}\n\nCONVERSAS DOS AGENTES — TRECHOS MAIS RECENTES\n${JSON.stringify(compactConversations, null, 2)}`;
 }
 
 function buildImplementationPromptMessages(body: MediatorRequestBody) {
   const system = `Você é Forja, agente de Implementação da Metodologia 5I’s. Converta a documentação real do projeto em ENGENHARIA DE PROMPT para uma IA de desenvolvimento. Preserve requisitos, público, contexto, decisões visuais, funcionalidades, acessibilidade e referências. Não invente conteúdo ausente: marque hipóteses. Solicite React + Vite + TypeScript, Supabase quando houver persistência/autenticação/storage, Vercel, .env.example, RLS, mobile-first, acessibilidade, estados de erro/loading e documentação. Retorne somente JSON válido: {"promptEngineering":"...","architectureSummary":"...","stack":["..."],"assumptions":["..."],"acceptanceCriteria":["..."]}.`;
-  return { system, user: `${fullProjectContext(body)}\n\nCrie um superprompt técnico autocontido que permita reconstruir o projeto sem acesso ao canvas original.` };
+  return { system, user: `${compactProjectContext(body)}\n\nCrie um superprompt técnico autocontido que permita reconstruir o projeto sem acesso ao canvas original.` };
 }
 
-function buildImplementationPackageMessages(body: MediatorRequestBody) {
-  const system = `Você é Forja, agente full stack de Implementação da Metodologia 5I’s. Gere um pacote funcional em React + Vite + TypeScript, Supabase quando pertinente e Vercel. Leia todos os registros antes de codificar. Não exponha service role ou segredos no cliente; use VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY, RLS e .env.example. Preserve conteúdo, identidade, responsividade e acessibilidade. Não invente features sem marcar como hipótese. Retorne somente JSON válido: {"package":{"projectName":"slug","summary":"...","files":[{"path":"package.json","content":"..."}],"assumptions":["..."],"postGenerationChecks":["..."]}}. Inclua de 8 a 24 arquivos e sempre package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md, .env.example e, quando houver persistência, src/lib/supabase.ts e supabase/schema.sql.`;
-  return { system, user: `${fullProjectContext(body)}\n\nGere agora a implementação completa e pequena o suficiente para ser executável.` };
+function buildImplementationPlanMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, arquiteta de implementação da Metodologia 5I’s. Nesta etapa NÃO gere o código completo. Leia a documentação compactada do projeto e produza um PLANO DE IMPLEMENTAÇÃO detalhado para que os arquivos sejam gerados em lotes curtos e coerentes. Preserve requisitos, público, conteúdo, decisões visuais, acessibilidade e referências. Não invente funcionalidades; marque inferências em assumptions. Stack padrão React + Vite + TypeScript, Supabase somente quando necessário e Vercel. Liste entre 8 e 20 arquivos e descreva em purpose seus exports/imports/contratos. Sempre inclua package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Retorne SOMENTE JSON: {"plan":{"projectName":"...","summary":"...","architectureSummary":"...","implementationBrief":"...","stack":["..."],"routes":[{"path":"/","purpose":"..."}],"dataModel":[{"name":"...","purpose":"...","fields":["..."]}],"designSystem":{"direction":"...","tokens":["..."],"responsive":"...","accessibility":"..."},"files":[{"path":"src/App.tsx","purpose":"..."}],"assumptions":["..."],"postGenerationChecks":["..."]}}.`;
+  return { system, user: `${compactProjectContext(body)}\n\nCrie o plano técnico. Não escreva ainda o conteúdo integral dos arquivos.` };
+}
+
+function buildImplementationFilesMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, agente full stack da Metodologia 5I’s. Gere SOMENTE os arquivos solicitados neste lote, seguindo estritamente o plano. Código funcional, React + Vite + TypeScript, Supabase somente se previsto, mobile-first, acessível e sem segredos no cliente. Não crie imports para arquivos fora do plano. Não use TODO nas funções principais. .env.example sem valores reais. Retorne SOMENTE JSON: {"files":[{"path":"caminho/exato","content":"conteúdo integral"}]}.`;
+  const user = `PLANO TÉCNICO\n${JSON.stringify(body.implementationPlan || {}, null, 2)}\n\nARQUIVOS DESTE LOTE\n${JSON.stringify(body.requestedFiles || [], null, 2)}\n\nGere exatamente esses arquivos.`;
+  return { system, user };
 }
 
 function buildInteractiveCodeMessages(body: MediatorRequestBody) {
@@ -192,17 +222,27 @@ function cleanImplementationPromptJson(text: string) {
   };
 }
 
-function cleanImplementationPackageJson(text: string) {
-  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para o pacote.');
-  const pack = data.package;
-  if (!pack || !Array.isArray(pack.files) || pack.files.length < 3) throw new Error('O pacote de implementação veio incompleto.');
-  return {
-    projectName: String(pack.projectName || 'projeto-5is'),
-    summary: String(pack.summary || ''),
-    files: pack.files.filter((file: any) => file?.path && typeof file.content === 'string').slice(0, 30).map((file: any) => ({ path: String(file.path), content: String(file.content) })),
-    assumptions: Array.isArray(pack.assumptions) ? pack.assumptions.map(String) : [],
-    postGenerationChecks: Array.isArray(pack.postGenerationChecks) ? pack.postGenerationChecks.map(String) : [],
-  };
+function cleanImplementationPlanJson(text: string) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para o plano técnico.');
+  const plan = data.plan;
+  if (!plan || !Array.isArray(plan.files) || plan.files.length < 5) throw new Error('O plano técnico da Forja veio incompleto.');
+  const plannedFiles = plan.files.filter((file: any) => file?.path).slice(0, 22).map((file: any) => ({ path: String(file.path), purpose: String(file.purpose || '') }));
+  const requiredFiles = [
+    ['package.json', 'Dependências e scripts dev/build/preview do projeto Vite.'], ['index.html', 'Documento HTML de entrada do Vite.'],
+    ['src/main.tsx', 'Bootstrap React e importação dos estilos globais.'], ['src/App.tsx', 'Composição principal da aplicação.'],
+    ['src/index.css', 'Estilos globais, responsividade e acessibilidade.'], ['README.md', 'Documentação do projeto.'], ['.env.example', 'Variáveis públicas necessárias, sem valores reais.']
+  ];
+  const seen = new Set(plannedFiles.map((file: any) => file.path));
+  for (const [path, purpose] of requiredFiles) if (!seen.has(path)) plannedFiles.push({ path, purpose });
+  return { projectName: String(plan.projectName || 'projeto-5is'), summary: String(plan.summary || ''), architectureSummary: String(plan.architectureSummary || ''), implementationBrief: String(plan.implementationBrief || ''), stack: Array.isArray(plan.stack) ? plan.stack.map(String) : [], routes: Array.isArray(plan.routes) ? plan.routes.slice(0, 30) : [], dataModel: Array.isArray(plan.dataModel) ? plan.dataModel.slice(0, 30) : [], designSystem: plan.designSystem && typeof plan.designSystem === 'object' ? plan.designSystem : {}, files: plannedFiles.slice(0, 24), assumptions: Array.isArray(plan.assumptions) ? plan.assumptions.map(String) : [], postGenerationChecks: Array.isArray(plan.postGenerationChecks) ? plan.postGenerationChecks.map(String) : [] };
+}
+
+function cleanImplementationFilesJson(text: string, requestedFiles: Array<{ path: string; purpose?: string }> = []) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para este lote.');
+  const requested = new Set(requestedFiles.map((file) => String(file.path)));
+  const files = Array.isArray(data.files) ? data.files.filter((file: any) => file?.path && typeof file.content === 'string' && requested.has(String(file.path))).map((file: any) => ({ path: String(file.path), content: String(file.content) })) : [];
+  if (!files.length) throw new Error('A Forja não devolveu os arquivos solicitados neste lote.');
+  return files;
 }
 
 function cleanInteractiveJson(text: string) {
@@ -459,10 +499,17 @@ export async function generateMediatorInsight(body: MediatorRequestBody): Promis
     return { ...cleanImplementationPromptJson(result.text), provider: result.provider, model: result.model };
   }
 
-  if (body.mode === 'implementation-package') {
-    const { system, user } = buildImplementationPackageMessages(body);
-    const result = await callGeminiStructured(system, user, 18000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 75000), 0.15);
-    return { package: cleanImplementationPackageJson(result.text), provider: result.provider, model: result.model };
+  if (body.mode === 'implementation-plan') {
+    const { system, user } = buildImplementationPlanMessages(body);
+    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_IMPLEMENTATION_PLAN_TIMEOUT_MS || 32000), 0.15);
+    return { plan: cleanImplementationPlanJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-files') {
+    if (!body.implementationPlan || !Array.isArray(body.requestedFiles) || !body.requestedFiles.length) throw new Error('Plano técnico ou lote de arquivos ausente.');
+    const { system, user } = buildImplementationFilesMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_BATCH_TIMEOUT_MS || 38000), 0.12);
+    return { files: cleanImplementationFilesJson(result.text, body.requestedFiles), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'interactive-code') {
