@@ -26,7 +26,8 @@ const REFERENCES: Record<string, string> = {
   visual: 'Gestalt; semiótica; Josef Albers; Eva Heller; Itten; Müller-Brockmann; tipografia; hierarquia e ritmo visual.',
   documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
   heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
-  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.'
+  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
+  cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.'
 };
 
 function referenceFor(role: string): string {
@@ -37,6 +38,7 @@ function referenceFor(role: string): string {
   if (value.includes('visual')) return REFERENCES.visual;
   if (value.includes('document')) return REFERENCES.documentacao;
   if (value.includes('heur')) return REFERENCES.heuristicas;
+  if (value.includes('cosmot') || value.includes('tecnolog') || value.includes('hi-low') || value.includes('hi low')) return REFERENCES.cosmotecnica;
   if (value.includes('implement')) return REFERENCES.implementacao;
   return REFERENCES.ux;
 }
