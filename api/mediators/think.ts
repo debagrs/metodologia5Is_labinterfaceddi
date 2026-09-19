@@ -351,7 +351,7 @@ REGRAS
 - Não invente funcionalidades; qualquer inferência necessária deve ir para assumptions.
 - Stack padrão: React + Vite + TypeScript; Supabase somente quando houver necessidade de persistência, autenticação, storage ou backend; deploy Vercel.
 - O plano deve explicitar rotas/telas, modelo de dados, componentes, identidade visual, comportamento responsivo, acessibilidade e contratos entre arquivos.
-- Liste entre 8 e 20 arquivos de texto. Sempre inclua package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Quando houver Supabase, inclua src/lib/supabase.ts e supabase/schema.sql.
+- Liste entre 8 e 20 arquivos de texto. Sempre inclua package.json, tsconfig.json, tsconfig.node.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Quando houver Supabase, inclua src/lib/supabase.ts e supabase/schema.sql.
 - Descreva em purpose o que cada arquivo deve exportar, importar e fazer, para que lotes independentes permaneçam compatíveis.
 - Retorne SOMENTE JSON válido, sem markdown externo.
 
@@ -388,7 +388,7 @@ REGRAS
 - Use VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY e RLS quando previsto.
 - Não crie imports para arquivos que não estejam listados no plano.
 - Não use TODO nas funções principais.
-- package.json precisa de scripts dev/build/preview válidos.
+- package.json precisa de scripts dev/build/preview válidos. Para Vite, use obrigatoriamente build = "vite build"; coloque a checagem TypeScript separada em typecheck = "tsc --noEmit". NÃO use "tsc && vite build" como script de build.
 - .env.example nunca contém valores reais.
 - Para supabase/schema.sql, gere SQL idempotente quando possível, habilite RLS e políticas coerentes com o plano.
 - Preserve conteúdo e linguagem do projeto descritos em implementationBrief.
@@ -465,7 +465,9 @@ function cleanImplementationPlanJson(text) {
     .slice(0, 22)
     .map((file) => ({ path: String(file.path), purpose: String(file.purpose || '') }));
   const requiredFiles = [
-    ['package.json', 'Dependências e scripts dev/build/preview do projeto Vite.'],
+    ['package.json', 'Dependências e scripts dev/build/preview do projeto Vite; build deve ser vite build e typecheck deve ser tsc --noEmit.'],
+    ['tsconfig.json', 'Configuração TypeScript do código React em src.'],
+    ['tsconfig.node.json', 'Configuração TypeScript para arquivos de configuração do Vite.'],
     ['index.html', 'Documento HTML de entrada do Vite.'],
     ['src/main.tsx', 'Bootstrap React e importação dos estilos globais.'],
     ['src/App.tsx', 'Composição principal da aplicação, rotas/telas e fluxo central.'],
