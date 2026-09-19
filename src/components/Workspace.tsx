@@ -6,6 +6,7 @@ import {
   Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
+import { PHASE_TECHNIQUES, type MethodologyTechnique } from '../data/methodologyTechniques';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import { drawingToSvgString } from './DrawingStudio';
 import MediatorSticker from './MediatorSticker';
@@ -476,11 +477,47 @@ export default function Workspace({
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
+  const [expandedTechniquesPhase, setExpandedTechniquesPhase] = useState<Phase | null>(null);
   const speechRecognitionRef = useRef<any>(null);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
   const totalComments = nodes.reduce((sum, node) => sum + (node.comments?.length || 0), 0);
+  const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
+
+  const addTechniqueNote = (phase: Phase, technique: MethodologyTechnique) => {
+    if (!canEditCanvas) return;
+
+    if (project.activePhase !== phase) onUpdatePhase(phase);
+
+    const coreNode = nodes.find((node) => node.type === 'core');
+    const position = canvasRef.current?.getCenteredCardPosition(360, 260) || {
+      x: (coreNode?.x ?? 1000) + 420,
+      y: coreNode?.y ?? 1000
+    };
+
+    const noteTitle = technique.code
+      ? `${technique.code} ${technique.name}`
+      : technique.parent
+        ? `${technique.parent} · ${technique.name}`
+        : technique.name;
+
+    onAddNode({
+      type: 'user-thought',
+      title: noteTitle,
+      content: technique.description,
+      phase,
+      x: position.x,
+      y: position.y,
+      connections: coreNode ? [coreNode.id] : [],
+      isCompleted: false,
+      scientificContext: `Técnica da Metodologia 5I’s · fase ${phase}.`
+    });
+
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsLeftSidebarOpen(false);
+    }
+  };
 
   // Helper to resolve icon React node
   const getMediatorIcon = (iconName: string, size = 16, className = "") => {
@@ -1001,7 +1038,7 @@ export default function Workspace({
             </span>
             <h3 className="text-base font-semibold text-[#1A1A1A]">Metodologia 5I’s</h3>
             <p className="text-[13px] text-[#70706E] mt-1 font-light leading-relaxed">
-              O projeto se move como um ecossistema. Selecione um eixo para focar o canvas e focar o debate.
+              Selecione uma fase para abrir suas técnicas. Ao escolher uma técnica, uma nota explicativa é criada automaticamente no canvas.
             </p>
           </div>
 
@@ -1010,53 +1047,141 @@ export default function Workspace({
             {/* The Organic Connection Line */}
             <div className="absolute left-[38px] top-10 bottom-10 w-[1px] bg-gradient-to-b from-black via-[#E0E0DE] to-[#F0F0EE]" />
 
-            {PHASES_METADATA.map((meta, idx) => {
+            {PHASES_METADATA.map((meta) => {
               const isActive = project.activePhase === meta.phase;
+              const isExpanded = expandedTechniquesPhase === meta.phase;
+              const techniques = PHASE_TECHNIQUES[meta.phase] || [];
               const completedNodesOfPhase = nodes.filter(n => n.phase === meta.phase && n.isCompleted).length;
               const totalNodesOfPhase = nodes.filter(n => n.phase === meta.phase).length;
-              
-              return (
-                <button
-                  key={meta.phase}
-                  onClick={() => onUpdatePhase(meta.phase)}
-                  className={`w-full text-left flex items-start gap-4 transition-all duration-200 relative group cursor-pointer outline-none ${
-                    isActive ? 'opacity-100' : 'opacity-40 hover:opacity-100'
-                  }`}
-                >
-                  {/* Circle Indicator on the Organic Line */}
-                  <div className="relative z-10 flex-shrink-0 mt-1">
-                    {isActive ? (
-                      <div className="w-7 h-7 rounded-full bg-black flex items-center justify-center border-4 border-white shadow-md transition-all scale-110">
-                        <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                      </div>
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-[#E0E0DE] flex items-center justify-center border-4 border-white transition-all">
-                        <div className="w-1.5 h-1.5 bg-[#80807E] rounded-full" />
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Content block */}
-                  <div className="flex-1 flex flex-col">
-                    <div className="flex items-center justify-between">
-                      <span className={`text-[14px] tracking-tight uppercase font-bold text-[#1A1A1A]`}>
-                        {meta.phase}
+              return (
+                <div key={meta.phase} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdatePhase(meta.phase);
+                      setExpandedTechniquesPhase((current) => current === meta.phase ? null : meta.phase);
+                    }}
+                    className={`w-full text-left flex items-start gap-4 transition-all duration-200 relative group cursor-pointer outline-none ${
+                      isActive || isExpanded ? 'opacity-100' : 'opacity-40 hover:opacity-100'
+                    }`}
+                    aria-expanded={isExpanded}
+                    aria-controls={`techniques-${meta.phase}`}
+                  >
+                    <div className="relative z-10 flex-shrink-0 mt-1">
+                      {isActive ? (
+                        <div className="w-7 h-7 rounded-full bg-black flex items-center justify-center border-4 border-white shadow-md transition-all scale-110">
+                          <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-[#E0E0DE] flex items-center justify-center border-4 border-white transition-all">
+                          <div className="w-1.5 h-1.5 bg-[#80807E] rounded-full" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[14px] tracking-tight uppercase font-bold text-[#1A1A1A]">
+                          {meta.phase}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black/50 bg-[#F5F5F3] border border-[#E0E0DE] px-1.5 py-0.5 rounded-full">
+                            {completedNodesOfPhase}/{totalNodesOfPhase}
+                          </span>
+                          <ChevronRight
+                            size={15}
+                            className={`text-black/45 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-[12px] text-black/40 font-medium leading-tight">
+                        {meta.description}
                       </span>
-                      {/* Progress Badge */}
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-black/50 bg-[#F5F5F3] border border-[#E0E0DE] px-1.5 py-0.5 rounded-full">
-                        {completedNodesOfPhase}/{totalNodesOfPhase}
+                      <span className="text-[11px] font-mono text-[#70706E] tracking-tighter mt-1 italic block truncate max-w-[170px]">
+                        {meta.scientificContext}
                       </span>
                     </div>
-                    <span className="text-[12px] text-black/40 font-medium leading-tight">
-                      {meta.description}
-                    </span>
-                    
-                    {/* Scientific context */}
-                    <span className="text-[11px] font-mono text-[#70706E] tracking-tighter mt-1 italic block truncate max-w-[170px]">
-                      {meta.scientificContext}
-                    </span>
-                  </div>
-                </button>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        id={`techniques-${meta.phase}`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="overflow-hidden ml-11 mt-3"
+                      >
+                        <div className="rounded-2xl border border-[#E0E0DE] bg-[#FAFAF8] p-2.5 shadow-sm">
+                          <div className="px-1.5 pb-2 mb-1 border-b border-black/5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-black/55">
+                                Técnicas
+                              </span>
+                              <span className="text-[9px] font-mono text-black/35">
+                                {techniques.length}
+                              </span>
+                            </div>
+                            <p className="text-[10px] leading-snug text-black/45 mt-1">
+                              Toque em uma técnica para criar automaticamente uma nota no centro visível do canvas.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5 pt-1">
+                            {techniques.map((technique) => (
+                              <button
+                                key={technique.id}
+                                type="button"
+                                disabled={!canEditCanvas}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  addTechniqueNote(meta.phase, technique);
+                                }}
+                                className={`w-full text-left rounded-xl border border-transparent px-2.5 py-2 transition-all group/tech ${
+                                  canEditCanvas
+                                    ? 'hover:bg-white hover:border-black/10 hover:shadow-sm active:scale-[0.99]'
+                                    : 'opacity-40 cursor-not-allowed'
+                                } ${technique.depth >= 2 ? 'ml-1 w-[calc(100%-0.25rem)]' : ''}`}
+                                title={canEditCanvas ? `Criar nota: ${technique.name}` : 'Este projeto está em modo somente leitura.'}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className={`mt-0.5 shrink-0 font-mono text-[9px] font-bold ${
+                                    technique.code ? 'text-black/60' : 'text-black/30'
+                                  }`}>
+                                    {technique.code || '↳'}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="text-[11px] leading-tight font-semibold text-[#1A1A1A]">
+                                        {technique.name}
+                                      </span>
+                                      <span className="shrink-0 w-5 h-5 rounded-full border border-black/10 bg-white text-black/50 flex items-center justify-center text-[13px] leading-none group-hover/tech:bg-black group-hover/tech:text-white group-hover/tech:border-black transition-colors">
+                                        +
+                                      </span>
+                                    </div>
+                                    <span
+                                      className="block text-[10px] leading-[1.35] text-black/45 mt-1"
+                                      style={{
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        overflow: 'hidden'
+                                      }}
+                                    >
+                                      {technique.description}
+                                    </span>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               );
             })}
           </div>
