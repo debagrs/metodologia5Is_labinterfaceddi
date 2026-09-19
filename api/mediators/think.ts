@@ -405,11 +405,34 @@ function buildInteractiveCodeMessages(body) {
   const engineRules = engine === 'three'
     ? `O código será executado dentro de <script type="module"> após a linha: import * as THREE from 'three.module.js'. Portanto NÃO escreva imports, HTML ou tags <script>. Use a variável THREE já disponível. Crie renderer, scene, camera, animação e resize. O canvas deve preencher window.innerWidth/window.innerHeight e responder a mouse e touch quando pertinente.`
     : `O código será executado depois de carregar p5.js em modo global. Portanto NÃO escreva HTML, imports ou tags <script>. Declare setup(), draw() e, quando pertinente, mouse/touch handlers e windowResized(). Use createCanvas(windowWidth, windowHeight) e resizeCanvas.`;
-  const system = `Você é Forja em modo laboratório de interação. Gere um pequeno experimento visual executável e performático para ser salvo como camada do canvas da Metodologia 5I’s.\n${engineRules}\n- Responda a desktop e mobile/touch.\n- Evite bibliotecas extras, rede, áudio automático e assets externos não fornecidos.\n- Limite loops/partículas para manter desempenho em celular.\n- Não acesse cookies, localStorage, parent window ou APIs privadas.\n- Preserve a intenção estética e conceitual do prompt.\nRetorne SOMENTE JSON válido: {"interactive":{"title":"nome curto","engine":"${engine}","code":"JavaScript puro"}}.`;
+  const system = `Você é Forja em modo laboratório de interação. Gere um pequeno experimento visual executável e performático para ser salvo como camada do canvas da Metodologia 5I’s.
+${engineRules}
+- Responda a desktop e mobile/touch.
+- Evite bibliotecas extras, rede, áudio automático e assets externos não fornecidos.
+- Limite loops/partículas para manter desempenho em celular.
+- Não acesse cookies, localStorage, parent window ou APIs privadas.
+- Preserve a intenção estética e conceitual do prompt.
+
+IMPORTANTE: NÃO devolva JSON. JavaScript dentro de JSON é frágil por causa de aspas e quebras de linha. Responda exatamente neste protocolo textual:
+TITLE: nome curto da interação
+ENGINE: ${engine}
+<<<CODE>>>
+JavaScript puro aqui
+<<<END_CODE>>>
+
+Não escreva explicações fora desse protocolo. Não use cercas Markdown se puder evitá-las.`;
   const context = Array.isArray(body.existingThoughts)
     ? body.existingThoughts.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n')
     : '';
-  const user = `PROJETO: ${body.project?.name || ''}\nPROBLEMA: ${body.project?.problem || ''}\nCONTEXTO DO CANVAS:\n${context}\n\nPROMPT DA INTERAÇÃO:\n${String(body.prompt || '')}\n\nGere o experimento em ${engine === 'three' ? 'Three.js' : 'p5.js'}.`;
+  const user = `PROJETO: ${body.project?.name || ''}
+PROBLEMA: ${body.project?.problem || ''}
+CONTEXTO DO CANVAS:
+${context}
+
+PROMPT DA INTERAÇÃO:
+${String(body.prompt || '')}
+
+Gere o experimento em ${engine === 'three' ? 'Three.js' : 'p5.js'}.`;
   return { system, user };
 }
 
@@ -488,17 +511,62 @@ function cleanImplementationFilesJson(text, requestedFiles) {
   return files;
 }
 
-function cleanInteractiveJson(text) {
-  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const start = stripped.indexOf('{');
-  const end = stripped.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('A interação não retornou JSON válido.');
-  const data = JSON.parse(stripped.slice(start, end + 1));
-  if (!data.interactive?.code) throw new Error('A interação retornou sem código.');
+function cleanInteractiveResponse(text, fallbackEngine = 'p5') {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('A interação retornou sem conteúdo.');
+
+  try {
+    const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const data = JSON.parse(stripped.slice(start, end + 1));
+      if (data?.interactive?.code) {
+        return {
+          title: String(data.interactive.title || 'Interação'),
+          engine: data.interactive.engine === 'three' ? 'three' : 'p5',
+          code: String(data.interactive.code),
+        };
+      }
+    }
+  } catch {
+    // Compatibilidade: o novo protocolo não depende de JSON.
+  }
+
+  const titleMatch = raw.match(/^TITLE:\s*(.+)$/im);
+  const engineMatch = raw.match(/^ENGINE:\s*(p5|three)$/im);
+  const markerStart = raw.indexOf('<<<CODE>>>');
+  const markerEnd = raw.lastIndexOf('<<<END_CODE>>>');
+  let code = '';
+
+  if (markerStart >= 0) {
+    const start = markerStart + '<<<CODE>>>'.length;
+    code = raw.slice(start, markerEnd > start ? markerEnd : undefined).trim();
+  }
+  if (!code) {
+    const fenced = raw.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) code = fenced[1].trim();
+  }
+  if (!code) {
+    code = raw
+      .replace(/^TITLE:\s*.*$/im, '')
+      .replace(/^ENGINE:\s*.*$/im, '')
+      .replace(/<<<CODE>>>/g, '')
+      .replace(/<<<END_CODE>>>/g, '')
+      .trim();
+  }
+  code = code
+    .replace(/^```(?:javascript|js)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/^<script(?:\s[^>]*)?>\s*/i, '')
+    .replace(/\s*<\/script>$/i, '')
+    .trim();
+
+  if (!code) throw new Error('A interação retornou sem código executável. Tente gerar novamente.');
   return {
-    title: String(data.interactive.title || 'Interação'),
-    engine: data.interactive.engine === 'three' ? 'three' : 'p5',
-    code: String(data.interactive.code),
+    title: String(titleMatch?.[1]?.trim() || 'Interação'),
+    engine: engineMatch?.[1] === 'three' ? 'three' : fallbackEngine,
+    code,
   };
 }
 
@@ -732,6 +800,29 @@ async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeou
   return { text, provider: 'Gemini', model };
 }
 
+async function callGeminiInteractive(system, user, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const response = await fetchWithTimeout(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: { temperature, maxOutputTokens }
+    })
+  }, timeoutMs);
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu uma resposta de transporte inválida (HTTP ${response.status}).`); }
+  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part) => typeof part?.text === 'string' ? part.text : '').join('').trim();
+  if (!text) throw new Error('O Gemini não devolveu código para a interação.');
+  return { text, provider: 'Gemini', model };
+}
+
 function offlineInsight(body) {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -798,8 +889,9 @@ async function generateMediatorInsight(body) {
   if (body.mode === 'interactive-code') {
     if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
     const { system, user } = buildInteractiveCodeMessages(body);
-    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
-    return { interactive: cleanInteractiveJson(result.text), provider: result.provider, model: result.model };
+    const engine = body.engine === 'three' ? 'three' : 'p5';
+    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'publication') {
