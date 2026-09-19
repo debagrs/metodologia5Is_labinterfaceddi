@@ -22,6 +22,7 @@ interface WorkspaceProps {
   onUpdateNodeContent: (id: string, text: string, completed?: boolean) => void;
   onDeleteNode: (id: string) => void;
   onUpdateNode: (node: ThoughtNode) => void;
+  onUpdateNodes: (nodes: ThoughtNode[]) => void;
   onAddNode: (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => void;
   onUpdatePhase: (phase: Phase) => void;
   onExit: () => void;
@@ -151,6 +152,7 @@ export default function Workspace({
   onUpdateNodeContent,
   onDeleteNode,
   onUpdateNode,
+  onUpdateNodes,
   onAddNode,
   onUpdatePhase,
   onExit,
@@ -616,6 +618,7 @@ export default function Workspace({
           onUpdateNodeContent={onUpdateNodeContent}
           onDeleteNode={onDeleteNode}
           onUpdateNode={onUpdateNode}
+          onUpdateNodes={onUpdateNodes}
           onAddNode={onAddNode}
           currentUser={currentUser!}
           collaborationPermission={collaborationPermission}
