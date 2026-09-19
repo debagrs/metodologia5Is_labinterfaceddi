@@ -48,7 +48,7 @@ export interface SharedProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab';
 
 export type DrawingElementType =
   | 'brush'
@@ -68,6 +68,16 @@ export type DrawingElementType =
   | 'cone'
   | 'pyramid'
   | 'text';
+
+
+export type InteractiveEngine = 'p5' | 'three';
+
+export interface InteractiveDocument {
+  engine: InteractiveEngine;
+  title: string;
+  prompt: string;
+  code: string;
+}
 
 export interface DrawingPoint {
   x: number;
@@ -134,6 +144,8 @@ export interface ThoughtNode {
   aspectRatio?: number;
   drawing?: DrawingDocument;
   drawingName?: string;
+  interactive?: InteractiveDocument;
+  interactiveName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
