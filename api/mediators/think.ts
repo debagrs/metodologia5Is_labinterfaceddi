@@ -124,6 +124,7 @@ Evite futurismo tecnológico automático, determinismo, hype e solução mágica
   'agent-ativista': 'Atue por bioética, design justice e educação humanitária com Potter, Haraway, Costanza-Chock e Zuboff. Pergunte sobre poder, participação, extração, sustentabilidade e impactos humanos e não humanos.',
   'agent-responsa': 'Converta responsabilidade em requisitos verificáveis: WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência e possibilidade de recusa.',
   'agent-implementa': 'Priorize Implementação como experimentação contínua: design systems, tokens, componentes, documentação, critérios de aceite, testes, publicação e manutenção.',
+  'agent-forja': 'Atue na Implementação como arquiteto e desenvolvedor full stack orientado pela documentação do projeto. Leia cards, referências, requisitos, imagens e relações antes de propor tecnologia. Gere código rastreável às decisões do projeto, com React/Vite/TypeScript no front-end, Supabase como backend quando pertinente e Vercel como alvo de deploy. Nunca exponha chaves secretas no cliente; use RLS no Supabase; preserve acessibilidade, responsividade e critérios registrados.',
   'agent-publica': 'Atue como agente editorial científico da Metodologia 5I’s. Reconstrua o percurso a partir das evidências registradas, preserve rastreabilidade, diferencie dado, decisão e interpretação, e jamais invente resultados, participantes ou referências.'
 };
 
@@ -268,6 +269,136 @@ ${JSON.stringify(conversations, null, 2)}
 Redija um artigo científico de relato de projeto usando todo o material pertinente. A narrativa deve reconstruir decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
 
   return { system, user };
+}
+
+function fullProjectContext(body) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS COMPLETOS DO CANVAS\n${JSON.stringify(records, null, 2)}\n\nCONVERSAS DOS AGENTES\n${JSON.stringify(conversations, null, 2)}`;
+}
+
+function buildImplementationPromptMessages(body) {
+  const system = `Você é Forja, agente de Implementação da Metodologia 5I’s. Sua tarefa é converter documentação real de um projeto em ENGENHARIA DE PROMPT para outra IA de desenvolvimento.
+
+REGRAS
+- Leia todo o material fornecido antes de escrever o prompt.
+- Preserve requisitos, público, contexto, decisões visuais, funcionalidades, acessibilidade, sustentabilidade e referências registradas.
+- Não invente features, dados, pesquisas, personas, identidade visual ou integrações ausentes; quando precisar assumir algo, marque explicitamente como HIPÓTESE A VALIDAR.
+- O prompt final deve solicitar uma aplicação full stack responsiva e acessível, preferencialmente React + Vite + TypeScript no front-end, Supabase no backend/banco/autenticação quando necessário e Vercel no deploy.
+- Exija variáveis de ambiente, .env.example, políticas RLS, nenhum segredo no front-end, tratamento de erros, estados vazios/loading, mobile-first e documentação de implantação.
+- Inclua instruções para gerar supabase/schema.sql, README e estrutura pronta para GitHub/Vercel.
+- Não reduza o projeto a um template genérico: faça a IA respeitar a documentação do canvas.
+
+Retorne SOMENTE JSON válido no formato:
+{"promptEngineering":"prompt completo e autocontido em markdown","architectureSummary":"resumo da arquitetura proposta","stack":["..."],"assumptions":["..."],"acceptanceCriteria":["..."]}`;
+  const user = `${fullProjectContext(body)}\n\nTransforme este material em um superprompt técnico autocontido para implementação. O prompt deve ser suficientemente detalhado para que outra IA consiga reconstruir o projeto sem ter acesso ao canvas original.`;
+  return { system, user };
+}
+
+function buildImplementationPackageMessages(body) {
+  const system = `Você é Forja, agente full stack de Implementação da Metodologia 5I’s. Gere um pacote de código funcional a partir EXCLUSIVAMENTE da documentação fornecida.
+
+OBJETIVO
+Criar um projeto pronto para ser colocado em um repositório GitHub, conectado ao Supabase e implantado na Vercel.
+
+STACK PADRÃO
+- Front-end: React + Vite + TypeScript.
+- Estilos: CSS simples ou Tailwind somente se incluído corretamente no package.json/configuração.
+- Backend/dados/autenticação: Supabase quando o projeto exigir persistência, login, storage ou API.
+- Deploy: Vercel.
+
+REGRAS DE QUALIDADE E SEGURANÇA
+- Mobile-first e responsivo.
+- HTML semântico, foco visível, navegação por teclado, labels, contraste e ARIA quando necessário.
+- Nunca coloque SUPABASE_SERVICE_ROLE_KEY, senhas ou segredos no código cliente.
+- Use somente VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no cliente e proteja dados com RLS.
+- Gere supabase/schema.sql quando houver dados persistentes. Ative RLS e inclua políticas coerentes.
+- Inclua .env.example sem valores reais.
+- Preserve conteúdo, identidade, requisitos, imagens/URLs e decisões que apareçam nos registros.
+- Não invente resultados de pesquisa, pessoas, métricas, conteúdo institucional ou funcionalidades sem base. Hipóteses devem aparecer em assumptions.
+- Prefira uma implementação pequena, coerente e executável a dezenas de arquivos incompletos.
+- Não use placeholders vazios como TODO para as funções principais.
+- package.json deve ter scripts dev/build/preview válidos.
+- O código deve compilar conceitualmente sem depender de arquivos que não estejam listados.
+
+FORMATO DE SAÍDA
+Retorne SOMENTE JSON válido, sem markdown externo:
+{
+  "package": {
+    "projectName":"slug-do-projeto",
+    "summary":"...",
+    "files":[{"path":"package.json","content":"..."},{"path":"src/main.tsx","content":"..."}],
+    "assumptions":["..."],
+    "postGenerationChecks":["..."]
+  }
+}
+
+Inclua entre 8 e 24 arquivos de texto. Sempre inclua package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Se houver persistência, inclua src/lib/supabase.ts e supabase/schema.sql.`;
+  const user = `${fullProjectContext(body)}\n\nGere agora a implementação completa. Reconstrua hierarquia, conteúdos, funcionalidades e linguagem do projeto com base nos registros. Se existirem imagens com URL, preserve-as como referências configuráveis no código.`;
+  return { system, user };
+}
+
+function buildInteractiveCodeMessages(body) {
+  const engine = body.engine === 'three' ? 'three' : 'p5';
+  const engineRules = engine === 'three'
+    ? `O código será executado dentro de <script type="module"> após a linha: import * as THREE from 'three.module.js'. Portanto NÃO escreva imports, HTML ou tags <script>. Use a variável THREE já disponível. Crie renderer, scene, camera, animação e resize. O canvas deve preencher window.innerWidth/window.innerHeight e responder a mouse e touch quando pertinente.`
+    : `O código será executado depois de carregar p5.js em modo global. Portanto NÃO escreva HTML, imports ou tags <script>. Declare setup(), draw() e, quando pertinente, mouse/touch handlers e windowResized(). Use createCanvas(windowWidth, windowHeight) e resizeCanvas.`;
+  const system = `Você é Forja em modo laboratório de interação. Gere um pequeno experimento visual executável e performático para ser salvo como camada do canvas da Metodologia 5I’s.\n${engineRules}\n- Responda a desktop e mobile/touch.\n- Evite bibliotecas extras, rede, áudio automático e assets externos não fornecidos.\n- Limite loops/partículas para manter desempenho em celular.\n- Não acesse cookies, localStorage, parent window ou APIs privadas.\n- Preserve a intenção estética e conceitual do prompt.\nRetorne SOMENTE JSON válido: {"interactive":{"title":"nome curto","engine":"${engine}","code":"JavaScript puro"}}.`;
+  const context = Array.isArray(body.existingThoughts)
+    ? body.existingThoughts.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n')
+    : '';
+  const user = `PROJETO: ${body.project?.name || ''}\nPROBLEMA: ${body.project?.problem || ''}\nCONTEXTO DO CANVAS:\n${context}\n\nPROMPT DA INTERAÇÃO:\n${String(body.prompt || '')}\n\nGere o experimento em ${engine === 'three' ? 'Three.js' : 'p5.js'}.`;
+  return { system, user };
+}
+
+function cleanImplementationPromptJson(text) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A Forja não retornou JSON válido para a engenharia de prompt.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.promptEngineering) throw new Error('A engenharia de prompt retornou vazia.');
+  return {
+    promptEngineering: String(data.promptEngineering),
+    architectureSummary: String(data.architectureSummary || ''),
+    stack: Array.isArray(data.stack) ? data.stack.map(String) : [],
+    assumptions: Array.isArray(data.assumptions) ? data.assumptions.map(String) : [],
+    acceptanceCriteria: Array.isArray(data.acceptanceCriteria) ? data.acceptanceCriteria.map(String) : [],
+  };
+}
+
+function cleanImplementationPackageJson(text) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A Forja não retornou JSON válido para o pacote.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const pack = data.package;
+  if (!pack || !Array.isArray(pack.files) || pack.files.length < 3) throw new Error('O pacote de implementação veio incompleto.');
+  return {
+    projectName: String(pack.projectName || 'projeto-5is'),
+    summary: String(pack.summary || ''),
+    files: pack.files
+      .filter((file) => file?.path && typeof file.content === 'string')
+      .slice(0, 30)
+      .map((file) => ({ path: String(file.path), content: String(file.content) })),
+    assumptions: Array.isArray(pack.assumptions) ? pack.assumptions.map(String) : [],
+    postGenerationChecks: Array.isArray(pack.postGenerationChecks) ? pack.postGenerationChecks.map(String) : [],
+  };
+}
+
+function cleanInteractiveJson(text) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A interação não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.interactive?.code) throw new Error('A interação retornou sem código.');
+  return {
+    title: String(data.interactive.title || 'Interação'),
+    engine: data.interactive.engine === 'three' ? 'three' : 'p5',
+    code: String(data.interactive.code),
+  };
 }
 
 function cleanPublicationJson(text) {
@@ -477,6 +608,29 @@ async function callGeminiPublication(system, user) {
   return { article: cleanPublicationJson(text), provider: 'Gemini', model };
 }
 
+async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const response = await fetchWithTimeout(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens }
+    })
+  }, timeoutMs);
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu uma resposta não JSON (HTTP ${response.status}).`); }
+  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part) => typeof part?.text === 'string' ? part.text : '').join('').trim();
+  if (!text) throw new Error('O Gemini não devolveu conteúdo estruturado.');
+  return { text, provider: 'Gemini', model };
+}
+
 function offlineInsight(body) {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -517,6 +671,25 @@ function offlineInsight(body) {
 async function generateMediatorInsight(body) {
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'implementation-prompt') {
+    const { system, user } = buildImplementationPromptMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 60000), 0.18);
+    return { ...cleanImplementationPromptJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-package') {
+    const { system, user } = buildImplementationPackageMessages(body);
+    const result = await callGeminiStructured(system, user, 18000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 75000), 0.15);
+    return { package: cleanImplementationPackageJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'interactive-code') {
+    if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
+    const { system, user } = buildInteractiveCodeMessages(body);
+    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    return { interactive: cleanInteractiveJson(result.text), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'publication') {
