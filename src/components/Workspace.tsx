@@ -1020,6 +1020,17 @@ const MEDIATORS: Mediator[] = [
     greeting: 'Como esta decisão será preservada, testada e revisada quando virar sistema funcional?'
   },
   {
+    id: 'agent-forja',
+    name: 'Forja',
+    role: 'Implementação full stack e tradução do projeto em sistema',
+    phase: 'Implementação',
+    description: 'Lê o projeto inteiro e o converte em engenharia de prompt ou em uma implementação full stack pronta para versionar e publicar.',
+    bio: 'Agente construtor da fase de Implementação. Lê cards, referências, requisitos, relações, imagens e conversas do projeto antes de propor arquitetura. Pode entregar um superprompt técnico autocontido ou gerar um pacote React + Vite + TypeScript com Supabase e documentação para GitHub/Vercel. Mantém rastreabilidade com a Metodologia 5I’s, responsividade, acessibilidade, segurança e políticas RLS, sem expor segredos no front-end.',
+    iconName: 'Code2',
+    themeColor: 'rose',
+    greeting: 'Você quer transformar esta documentação em um prompt técnico para outra IA ou já quer forjar a implementação full stack do projeto?'
+  },
+  {
     id: 'agent-publica',
     name: 'Publica',
     role: 'Publicação científica, síntese e documentação integral',
@@ -1327,6 +1338,135 @@ const downloadPublicationDoc = (
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 };
 
+type ForgeMode = 'prompt' | 'implementation';
+
+type ForgeFile = { path: string; content: string };
+
+const safeProjectSlug = (value: string) => String(value || 'projeto-5is')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'projeto-5is';
+
+const downloadText = (name: string, content: string, type = 'text/markdown;charset=utf-8') => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+};
+
+const crc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+const crc32 = (bytes: Uint8Array) => {
+  let crc = 0xFFFFFFFF;
+  for (const byte of bytes) crc = crc32Table[(crc ^ byte) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+};
+
+const zipPath = (value: string) => String(value || 'arquivo.txt')
+  .replace(/\\/g, '/')
+  .replace(/^\/+/, '')
+  .split('/')
+  .filter((part) => part && part !== '.' && part !== '..')
+  .join('/') || 'arquivo.txt';
+
+const createTextZip = (files: ForgeFile[]) => {
+  const encoder = new TextEncoder();
+  const localChunks: Uint8Array[] = [];
+  const centralChunks: Uint8Array[] = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const name = encoder.encode(zipPath(file.path));
+    const data = encoder.encode(String(file.content ?? ''));
+    const crc = crc32(data);
+
+    const local = new Uint8Array(30 + name.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x0800, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, 0, true);
+    lv.setUint16(12, 0, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, name.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(name, 30);
+    localChunks.push(local, data);
+
+    const central = new Uint8Array(46 + name.length);
+    const cv = new DataView(central.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, name.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    central.set(name, 46);
+    centralChunks.push(central);
+    offset += local.length + data.length;
+  }
+
+  const centralSize = centralChunks.reduce((sum, item) => sum + item.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  return new Blob([...localChunks, ...centralChunks, end], { type: 'application/zip' });
+};
+
+const deploymentGuide = (projectName: string, assumptions: string[] = [], checks: string[] = []) => `# Implantação — ${projectName}\n\nEste pacote foi gerado pelo agente Forja a partir dos registros da Metodologia 5I’s. Antes de publicar, revise código, conteúdo, acessibilidade, políticas de dados e as hipóteses abaixo.\n\n## 1. Rodar localmente\n\n1. Descompacte o ZIP.\n2. Abra a pasta no terminal.\n3. Execute \`npm install\`.\n4. Copie \`.env.example\` para \`.env.local\`.\n5. Execute \`npm run dev\`.\n\n## 2. Supabase\n\n1. Crie um projeto em Supabase.\n2. Abra **SQL Editor** e execute \`supabase/schema.sql\` caso esse arquivo exista.\n3. Em **Project Settings → API**, copie a Project URL e a chave pública/anon.\n4. Preencha \`VITE_SUPABASE_URL\` e \`VITE_SUPABASE_ANON_KEY\` em \`.env.local\`.\n5. Confira as políticas RLS antes de inserir dados reais. Nunca coloque a service role key no navegador.\n\n## 3. GitHub\n\n\`\`\`bash\ngit init\ngit add .\ngit commit -m "Implementação inicial — Metodologia 5I's"\ngit branch -M main\ngit remote add origin SEU_REPOSITORIO_GITHUB\ngit push -u origin main\n\`\`\`\n\n## 4. Vercel\n\n1. Importe o repositório GitHub na Vercel.\n2. Framework: **Vite**.\n3. Adicione as mesmas variáveis de ambiente usadas localmente.\n4. Faça o deploy.\n5. Teste desktop e mobile e revise rotas, autenticação, storage e banco.\n\n## Hipóteses a validar\n${assumptions.length ? assumptions.map((item) => `- ${item}`).join('\n') : '- Nenhuma hipótese adicional foi declarada pelo gerador.'}\n\n## Checagens recomendadas após a geração\n${checks.length ? checks.map((item) => `- ${item}`).join('\n') : '- Execute npm install e npm run build antes de publicar.\n- Revise RLS, acessibilidade, responsividade, conteúdo e tratamento de erros.'}\n`;
+
+const downloadForgeZip = (projectName: string, files: ForgeFile[], assumptions: string[] = [], checks: string[] = []) => {
+  const normalized = new Map<string, string>();
+  for (const file of files) normalized.set(zipPath(file.path), String(file.content ?? ''));
+  normalized.set('README_5IS_DEPLOY.md', deploymentGuide(projectName, assumptions, checks));
+  if (!normalized.has('.env.example')) {
+    normalized.set('.env.example', 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n');
+  }
+  const blob = createTextZip([...normalized.entries()].map(([path, content]) => ({ path, content })));
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${safeProjectSlug(projectName)}-forja-implementacao.zip`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
 export default function Workspace({
   project,
   nodes,
@@ -1351,6 +1491,10 @@ export default function Workspace({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publicationError, setPublicationError] = useState('');
   const [publicationStatus, setPublicationStatus] = useState('');
+  const [forgeMode, setForgeMode] = useState<ForgeMode>('prompt');
+  const [isForging, setIsForging] = useState(false);
+  const [forgeError, setForgeError] = useState('');
+  const [forgeStatus, setForgeStatus] = useState('');
   const desktopPanelsInitiallyOpen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
@@ -1569,6 +1713,92 @@ export default function Workspace({
       setPublicationStatus('');
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleForgeProject = async () => {
+    setIsForging(true);
+    setForgeError('');
+    setForgeStatus(forgeMode === 'prompt' ? 'Lendo o projeto e estruturando o superprompt…' : 'Lendo o projeto e arquitetando a implementação…');
+    try {
+      const conversations = collectProjectConversations(project.id);
+      const nodeById = new Map(nodes.map((node) => [node.id, node]));
+      const session = await ensureTursoSession().catch(() => null);
+      const response = await fetch('/api/mediators/think', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {})
+        },
+        body: JSON.stringify({
+          mode: forgeMode === 'prompt' ? 'implementation-prompt' : 'implementation-package',
+          project: {
+            name: project.name,
+            projectType: project.projectType,
+            problem: project.problem,
+            community: project.community,
+            ods: project.ods
+          },
+          mediator: {
+            id: activeMediator.id,
+            name: activeMediator.name,
+            role: activeMediator.role,
+            bio: activeMediator.bio
+          },
+          phase: 'Implementação',
+          existingThoughts: nodes.map((node) => ({
+            id: node.id,
+            type: node.type,
+            title: node.title,
+            content: node.content,
+            phase: node.phase,
+            scientificContext: node.scientificContext || '',
+            provocations: node.provocations || [],
+            connections: (node.connections || []).map((id) => nodeById.get(id)?.title || id),
+            imageUrl: node.imageUrl || '',
+            imageName: node.imageName || '',
+            drawingName: node.drawingName || '',
+            drawing: node.drawing || undefined,
+            interactiveName: node.interactiveName || '',
+            interactive: node.interactive ? {
+              engine: node.interactive.engine,
+              title: node.interactive.title,
+              prompt: node.interactive.prompt,
+              code: node.interactive.code,
+            } : undefined,
+            attachments: (node.attachments || []).map((attachment) => ({
+              name: attachment.name,
+              type: attachment.type,
+              url: attachment.url,
+            }))
+          })),
+          conversations
+        })
+      });
+
+      const raw = await response.text();
+      let data: any = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`A Forja devolveu uma resposta inválida (HTTP ${response.status}).`); }
+      if (!response.ok) throw new Error(data.error || `A Forja não conseguiu concluir a tarefa (HTTP ${response.status}).`);
+
+      if (forgeMode === 'prompt') {
+        if (!data.promptEngineering) throw new Error('A Forja não devolveu o superprompt.');
+        const markdown = `# Engenharia de Prompt — ${project.name}\n\n## Arquitetura sugerida\n${data.architectureSummary || 'A arquitetura está descrita no prompt abaixo.'}\n\n## Stack\n${Array.isArray(data.stack) ? data.stack.map((item: string) => `- ${item}`).join('\n') : ''}\n\n## Hipóteses a validar\n${Array.isArray(data.assumptions) && data.assumptions.length ? data.assumptions.map((item: string) => `- ${item}`).join('\n') : '- Nenhuma hipótese adicional declarada.'}\n\n## Critérios de aceite\n${Array.isArray(data.acceptanceCriteria) ? data.acceptanceCriteria.map((item: string) => `- ${item}`).join('\n') : ''}\n\n---\n\n## SUPERPROMPT\n\n${data.promptEngineering}\n`;
+        downloadText(`${safeProjectSlug(project.name)}-engenharia-de-prompt.md`, markdown);
+        setForgeStatus('Engenharia de prompt gerada e baixada.');
+      } else {
+        const pack = data.package;
+        if (!pack?.files?.length) throw new Error('A Forja não devolveu arquivos de implementação.');
+        setForgeStatus('Montando ZIP para GitHub + Supabase + Vercel…');
+        downloadForgeZip(pack.projectName || project.name, pack.files, pack.assumptions || [], pack.postGenerationChecks || []);
+        setForgeStatus('ZIP gerado. Revise e execute o passo a passo incluído.');
+      }
+    } catch (error: any) {
+      console.error(error);
+      setForgeError(error?.message || 'Não foi possível gerar a implementação.');
+      setForgeStatus('');
+    } finally {
+      setIsForging(false);
     }
   };
 
@@ -2233,13 +2463,16 @@ export default function Workspace({
           {/* Action Footer: Button to trigger generator on canvas */}
           <div className="p-4 bg-[#FDFDFB] border-t border-[#F0F0EE] space-y-3">
             
-            {(genError || publicationError) && (
+            {(genError || publicationError || forgeError) && (
               <p className="text-[10px] font-mono text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
-                {publicationError || genError}
+                {forgeError || publicationError || genError}
               </p>
             )}
             {activeMediator.id === 'agent-publica' && publicationStatus && !publicationError && (
               <p className="text-[10px] font-mono text-neutral-600 bg-[#F5F5F3] p-2.5 rounded border border-[#E0E0DE]">{publicationStatus}</p>
+            )}
+            {activeMediator.id === 'agent-forja' && forgeStatus && !forgeError && (
+              <p className="text-[10px] font-mono text-neutral-600 bg-[#FFF1F2] p-2.5 rounded border border-[#EE9BA4]">{forgeStatus}</p>
             )}
 
             <button
@@ -2264,6 +2497,23 @@ export default function Workspace({
                   <><FileText size={15} /><span>GERAR ARTIGO + DOCUMENTAÇÃO .DOC</span></>
                 )}
               </motion.button>
+            ) : activeMediator.id === 'agent-forja' ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-[#F2F1ED] p-1">
+                  <button type="button" onClick={() => setForgeMode('prompt')} className={`min-h-10 rounded-lg px-2 text-[9px] font-mono font-bold uppercase tracking-wide cursor-pointer ${forgeMode === 'prompt' ? 'bg-white shadow-sm text-black' : 'text-neutral-500'}`}>Engenharia de prompt</button>
+                  <button type="button" onClick={() => setForgeMode('implementation')} className={`min-h-10 rounded-lg px-2 text-[9px] font-mono font-bold uppercase tracking-wide cursor-pointer ${forgeMode === 'implementation' ? 'bg-white shadow-sm text-black' : 'text-neutral-500'}`}>Implementação</button>
+                </div>
+                <motion.button
+                  onClick={handleForgeProject}
+                  disabled={isForging}
+                  whileHover={{ scale: isForging ? 1 : 1.02 }}
+                  whileTap={{ scale: isForging ? 1 : 0.98 }}
+                  className="w-full bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-400 transition-colors py-4 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.11em] cursor-pointer shadow-lg"
+                >
+                  {isForging ? <><Loader2 size={14} className="animate-spin" /><span>FORJANDO…</span></> : <><Code2 size={15} /><span>{forgeMode === 'prompt' ? 'GERAR SUPERPROMPT .MD' : 'GERAR PROJETO .ZIP'}</span></>}
+                </motion.button>
+                <p className="text-[9px] leading-relaxed text-neutral-500 text-center">{forgeMode === 'prompt' ? 'Entrega a especificação técnica autocontida para usar em outra IA.' : 'Gera código + .env.example + guia GitHub/Supabase/Vercel.'}</p>
+              </div>
             ) : (
               <motion.button
                 onClick={handleTriggerMediator}
