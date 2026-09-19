@@ -148,7 +148,7 @@ export default function AgentChatPanel({ project, nodes, mediator, onClose, onAd
         </header>
 
         <div className="px-4 py-2 border-b border-[#E0E0DE] bg-[#F5F5F3] text-[10px] leading-relaxed text-neutral-600">
-          Fase ativa: <strong>{project.activePhase}</strong>. O agente usa a Metodologia 5I’s, os registros do canvas e referências teóricas coerentes com seu eixo.
+          Fase do agente: <strong>{mediator.phase || 'Transversal'}</strong> · fase ativa do projeto: <strong>{project.activePhase}</strong>. O agente usa a Metodologia 5I’s, os registros do canvas e referências teóricas coerentes com seu eixo.
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3 select-text">
