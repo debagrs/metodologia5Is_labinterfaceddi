@@ -48,7 +48,8 @@ const REFERENCES: Record<string, string> = {
   documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
   heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
   implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
-  cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.'
+  cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.',
+  futuros: 'André Coutinho e Anderson Penha; Patricia Hartmann; Anthony Dunne e Fiona Raby; design estratégico a partir do futuro; speculative design; futures thinking; sinais e tendências; contratendências; futuros prováveis, possíveis e desejáveis; cenários; design fiction; props; narrativas; participatory futures; backcasting.'
 };
 
 function referenceFor(role: string): string {
@@ -59,6 +60,7 @@ function referenceFor(role: string): string {
   if (value.includes('visual')) return REFERENCES.visual;
   if (value.includes('document') || value.includes('public') || value.includes('cient')) return REFERENCES.documentacao;
   if (value.includes('heur')) return REFERENCES.heuristicas;
+  if (value.includes('futuro') || value.includes('cenario') || value.includes('especul') || value.includes('foresight')) return REFERENCES.futuros;
   if (value.includes('cosmot') || value.includes('tecnolog') || value.includes('hi-low') || value.includes('hi low')) return REFERENCES.cosmotecnica;
   if (value.includes('implement')) return REFERENCES.implementacao;
   return REFERENCES.ux;
@@ -332,6 +334,13 @@ function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   } else if (role.includes('heur')) {
     question = 'Qual falha observável reduz previsibilidade, controle ou recuperação durante a interação?';
     provocations = ['Escolha uma heurística.', 'Registre evidência concreta.', 'Defina gravidade e critério de correção.'];
+  } else if (role.includes('futuro') || role.includes('cenario') || role.includes('especul')) {
+    question = 'Que futuro este projeto ajuda a tornar mais provável — e que futuro desejável ainda precisa ser deliberadamente projetado?';
+    provocations = [
+      'Liste um sinal fraco, uma tendência e uma contratendência já observáveis.',
+      'Construa cenários contrastantes: provável, possível e desejável, explicitando a principal incerteza de cada um.',
+      'Escolha o cenário desejável e faça backcasting: qual experimento pequeno pode começar agora?'
+    ];
   } else if (role.includes('implement')) {
     question = 'Que critério de aceite permite verificar no código que esta decisão foi preservada?';
     provocations = ['Escreva o requisito em linguagem testável.', 'Defina estado de sucesso e falha.', 'Inclua acessibilidade, privacidade e desempenho.'];
