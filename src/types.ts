@@ -48,7 +48,54 @@ export interface SharedProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet';
+
+export type DrawingElementType =
+  | 'brush'
+  | 'line'
+  | 'rectangle'
+  | 'rounded-rectangle'
+  | 'ellipse'
+  | 'triangle'
+  | 'diamond'
+  | 'pentagon'
+  | 'hexagon'
+  | 'star'
+  | 'arrow'
+  | 'cube'
+  | 'sphere'
+  | 'cylinder'
+  | 'cone'
+  | 'pyramid'
+  | 'text';
+
+export interface DrawingPoint {
+  x: number;
+  y: number;
+}
+
+export interface DrawingElement {
+  id: string;
+  type: DrawingElementType;
+  stroke: string;
+  fill?: string;
+  strokeWidth: number;
+  opacity?: number;
+  points?: DrawingPoint[];
+  x?: number;
+  y?: number;
+  x2?: number;
+  y2?: number;
+  text?: string;
+  fontSize?: number;
+}
+
+export interface DrawingDocument {
+  width: number;
+  height: number;
+  background: string;
+  elements: DrawingElement[];
+}
 
 export interface NodeComment {
   id: string;
@@ -84,6 +131,8 @@ export interface ThoughtNode {
   imageName?: string;
   imageContentType?: string;
   aspectRatio?: number;
+  drawing?: DrawingDocument;
+  drawingName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
