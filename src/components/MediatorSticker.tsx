@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import {
   Compass, Activity, Heart, Accessibility, LayoutGrid,
-  BookOpen, ShieldCheck, Code2, Sparkles, Orbit
+  BookOpen, ShieldCheck, Code2, Sparkles, Orbit, FileText
 } from 'lucide-react';
 
 type StickerState = 'idle' | 'selected' | 'thinking' | 'celebrating' | 'alert';
@@ -84,6 +84,13 @@ const STICKERS: Record<string, {
     accent: '#1689C7',
     accentSoft: '#DBF2FF',
     rotate: 4,
+  },
+  'agent-publica': {
+    symbol: FileText,
+    face: 'rounded-[54%_46%_44%_56%/48%_57%_43%_52%]',
+    accent: '#7C5CE6',
+    accentSoft: '#EEE9FF',
+    rotate: -3,
   },
 };
 
