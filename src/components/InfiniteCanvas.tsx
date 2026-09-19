@@ -746,7 +746,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           return (
             <>
               <div
-                className="absolute z-[6] pointer-events-auto canvas-control -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-xl border border-black bg-white/95 p-1 shadow-xl"
+                className="absolute z-[6] pointer-events-auto canvas-control -translate-x-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1 rounded-xl border border-black bg-white/95 p-1 shadow-xl"
                 style={{ left: geometry.midpoint.x, top: geometry.midpoint.y }}
               >
                 <button
@@ -768,20 +768,24 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               </div>
               <button
                 type="button"
-                className="absolute z-[6] pointer-events-auto canvas-control h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing"
+                className="absolute z-[6] pointer-events-auto canvas-control h-14 w-14 sm:h-8 sm:w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing flex items-center justify-center"
                 style={{ left: geometry.x1, top: geometry.y1 }}
                 onPointerDown={(event) => beginConnectionDrag(event, 'relink-source', source.id, target.id)}
                 title="Arraste para mudar a origem da seta"
                 aria-label="Mudar origem da seta"
-              />
+              >
+                <span className="sm:hidden text-[10px] font-mono font-bold pointer-events-none">O</span>
+              </button>
               <button
                 type="button"
-                className="absolute z-[6] pointer-events-auto canvas-control h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing"
+                className="absolute z-[6] pointer-events-auto canvas-control h-14 w-14 sm:h-8 sm:w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing flex items-center justify-center"
                 style={{ left: geometry.x2, top: geometry.y2 }}
                 onPointerDown={(event) => beginConnectionDrag(event, 'relink-target', source.id, target.id)}
                 title="Arraste para mudar o destino da seta"
                 aria-label="Mudar destino da seta"
-              />
+              >
+                <span className="sm:hidden text-[10px] font-mono font-bold pointer-events-none">D</span>
+              </button>
             </>
           );
         })()}
@@ -1308,6 +1312,52 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           })}
         </div>
       </div>
+
+      {selectedConnection && (() => {
+        const source = nodes.find((item) => item.id === selectedConnection.sourceId);
+        const target = nodes.find((item) => item.id === selectedConnection.targetId);
+        if (!source || !target || !source.connections.includes(target.id)) return null;
+        return (
+          <div
+            className="sm:hidden absolute top-[max(0.75rem,env(safe-area-inset-top))] left-1/2 z-[70] -translate-x-1/2 canvas-control w-[min(94vw,430px)] rounded-2xl border border-black bg-white/95 p-2 shadow-2xl"
+            style={{ touchAction: 'manipulation' }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div className="px-1 pb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[10px] font-mono font-bold uppercase tracking-wide">Seta selecionada</div>
+                <div className="text-[9px] font-mono text-neutral-500 truncate">Arraste O (origem) ou D (destino) para outro card, imagem ou desenho.</div>
+              </div>
+              <button
+                type="button"
+                className="h-9 w-9 shrink-0 rounded-xl border border-black/10 flex items-center justify-center"
+                onPointerUp={(event) => { event.stopPropagation(); setSelectedConnection(null); }}
+                aria-label="Fechar controles da seta"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="h-12 rounded-xl bg-black text-white text-[11px] font-mono font-bold uppercase tracking-wide active:scale-[0.98]"
+                onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); }}
+                onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); reverseDirectedConnection(source.id, target.id); }}
+              >
+                Inverter sentido
+              </button>
+              <button
+                type="button"
+                className="h-12 rounded-xl border border-red-300 bg-red-50 text-red-700 text-[11px] font-mono font-bold uppercase tracking-wide flex items-center justify-center gap-2 active:scale-[0.98]"
+                onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); }}
+                onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); removeDirectedConnection(source.id, target.id); }}
+              >
+                <Trash2 size={16} /> Excluir
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {connectingFromId && (
         <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 canvas-control max-w-[calc(100vw-1.5rem)] rounded-2xl border border-black bg-white/95 px-3 py-2 shadow-lg flex items-center gap-2 text-[11px] font-mono">
