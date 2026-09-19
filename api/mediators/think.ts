@@ -119,7 +119,8 @@ const AGENT_GUIDES = {
   'agent-rede': 'Leia o projeto como rede sociotécnica com Latour, Simondon e Haraway: humanos, não humanos, instituições, dados, dispositivos, plataformas e infraestruturas.',
   'agent-ativista': 'Atue por bioética, design justice e educação humanitária com Potter, Haraway, Costanza-Chock e Zuboff. Pergunte sobre poder, participação, extração, sustentabilidade e impactos humanos e não humanos.',
   'agent-responsa': 'Converta responsabilidade em requisitos verificáveis: WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência e possibilidade de recusa.',
-  'agent-implementa': 'Priorize Implementação como experimentação contínua: design systems, tokens, componentes, documentação, critérios de aceite, testes, publicação e manutenção.'
+  'agent-implementa': 'Priorize Implementação como experimentação contínua: design systems, tokens, componentes, documentação, critérios de aceite, testes, publicação e manutenção.',
+  'agent-publica': 'Atue como agente editorial científico da Metodologia 5I’s. Reconstrua o percurso a partir das evidências registradas, preserve rastreabilidade, diferencie dado, decisão e interpretação, e jamais invente resultados, participantes ou referências.'
 };
 
 function phaseGuide(phase) {
@@ -210,6 +211,82 @@ MENSAGEM ATUAL
 ${body.message}`;
 
   return { system, user };
+}
+
+function buildPublicationMessages(body) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+
+  const system = `Você é Publica, agente editorial da Metodologia 5I’s de Design de Interfaces.
+Sua tarefa é transformar documentação de projeto em um relato científico consistente, rastreável e pronto para revisão/submissão editorial.
+
+REGRAS INEGOCIÁVEIS
+- Leia todos os registros fornecidos das cinco fases: Ideação, Inambulação, Instauração, Inspeção e Implementação.
+- Considere também as conversas completas com os agentes como diário reflexivo do processo.
+- Não invente número de participantes, dados, resultados, testes, datas, referências bibliográficas, autores ou conclusões não documentadas.
+- Quando faltar uma evidência necessária, escreva a lacuna de modo editorialmente útil e registre-a em editorialNotes.
+- Preserve a autoria humana: a IA organiza, sintetiza e redige, mas não reivindica autoria do projeto.
+- Diferencie claramente decisão de projeto, evidência observada, interpretação e reflexão metodológica.
+- Produza português acadêmico brasileiro claro, sem inflar o texto com jargão.
+- O artigo é um RELATO DE PROJETO/RELATO DE EXPERIÊNCIA em design, não um experimento inventado.
+- Use a Metodologia 5I’s como eixo metodológico do percurso.
+- Retorne somente JSON válido, sem markdown externo.
+
+FORMATO OBRIGATÓRIO
+{
+  "title":"...",
+  "subtitle":"...",
+  "abstract":"150 a 250 palavras",
+  "keywords":["4 a 6 termos"],
+  "sections":[
+    {"heading":"Introdução","body":"..."},
+    {"heading":"Metodologia e percurso projetual","body":"..."},
+    {"heading":"Desenvolvimento do projeto","body":"..."},
+    {"heading":"Resultados e discussão","body":"..."},
+    {"heading":"Considerações finais","body":"..."}
+  ],
+  "references":["somente referências bibliográficas explicitamente identificáveis nos registros; se não houver dados suficientes, deixe vazio"],
+  "editorialNotes":["lacunas factuais ou bibliográficas que precisam ser conferidas antes da submissão"]
+}`;
+
+  const user = `PROJETO
+${JSON.stringify(body.project, null, 2)}
+
+FASE ATIVA NO MOMENTO DA EXPORTAÇÃO
+${body.phase}
+
+CARDS, NOTAS, CONEXÕES E REGISTROS DO CANVAS
+${JSON.stringify(records, null, 2)}
+
+CONVERSAS SALVAS COM OS AGENTES
+${JSON.stringify(conversations, null, 2)}
+
+Redija um artigo científico de relato de projeto usando todo o material pertinente. A narrativa deve reconstruir decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
+
+  return { system, user };
+}
+
+function cleanPublicationJson(text) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('O Publica não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.title || !data.abstract || !Array.isArray(data.keywords) || !Array.isArray(data.sections)) {
+    throw new Error('O artigo retornado pelo Publica veio incompleto.');
+  }
+  return {
+    title: String(data.title),
+    subtitle: data.subtitle ? String(data.subtitle) : undefined,
+    abstract: String(data.abstract),
+    keywords: data.keywords.slice(0, 8).map(String),
+    sections: data.sections.filter((section) => section?.heading && section?.body).map((section) => ({
+      heading: String(section.heading),
+      body: String(section.body)
+    })),
+    references: Array.isArray(data.references) ? data.references.map(String) : [],
+    editorialNotes: Array.isArray(data.editorialNotes) ? data.editorialNotes.map(String) : []
+  };
 }
 
 function cleanJson(text) {
@@ -360,6 +437,42 @@ async function callGeminiChat(system, user) {
   return { reply: text, provider: 'Gemini', model };
 }
 
+async function callGeminiPublication(system, user) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
+
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const timeoutMs = Number(process.env.AI_PUBLICATION_TIMEOUT_MS || 45000);
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+
+  const response = await fetchWithTimeout(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }] }],
+      generationConfig: {
+        temperature: 0.25,
+        responseMimeType: 'application/json',
+        maxOutputTokens: 7000
+      }
+    })
+  }, timeoutMs);
+
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu uma resposta não JSON (HTTP ${response.status}).`); }
+  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
+
+  const text = data?.candidates?.[0]?.content?.parts
+    ?.map((part) => typeof part?.text === 'string' ? part.text : '')
+    .join('')
+    .trim();
+  if (!text) throw new Error('O Gemini não devolveu conteúdo para a publicação.');
+
+  return { article: cleanPublicationJson(text), provider: 'Gemini', model };
+}
+
 function offlineInsight(body) {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -400,6 +513,11 @@ function offlineInsight(body) {
 async function generateMediatorInsight(body) {
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'publication') {
+    const { system, user } = buildPublicationMessages(body);
+    return callGeminiPublication(system, user);
   }
 
   if (body.mode === 'chat') {
