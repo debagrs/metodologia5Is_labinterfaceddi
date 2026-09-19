@@ -3,11 +3,12 @@ import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
-  ImagePlus, Link2, Loader2, MoveDiagonal2, X
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
+import DrawingStudio, { DrawingPreview } from './DrawingStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -24,6 +25,7 @@ interface InfiniteCanvasProps {
   onUpdateNodeContent: (id: string, text: string, completed?: boolean) => void;
   onDeleteNode: (id: string) => void;
   onUpdateNode: (node: ThoughtNode) => void;
+  onUpdateNodes: (nodes: ThoughtNode[]) => void;
   onAddNode: (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => void;
   currentUser: UserProfile;
   collaborationPermission?: CollaborationPermission | null;
@@ -38,6 +40,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   onUpdateNodeContent,
   onDeleteNode,
   onUpdateNode,
+  onUpdateNodes,
   onAddNode,
   currentUser,
   collaborationPermission = null
@@ -50,6 +53,19 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
   const [collaborationNodeId, setCollaborationNodeId] = useState<string | null>(null);
   const [connectingFromId, setConnectingFromId] = useState<string | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<{ sourceId: string; targetId: string } | null>(null);
+  const [connectionHoverNodeId, setConnectionHoverNodeId] = useState<string | null>(null);
+  const [connectionDrag, setConnectionDrag] = useState<{
+    mode: 'new' | 'relink-source' | 'relink-target';
+    sourceId: string;
+    targetId?: string;
+    fixedX: number;
+    fixedY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
+  const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
+  const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +75,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     const compactCanvas = typeof window !== 'undefined' && window.innerWidth < 640;
     if (node.type === 'canvas-image') {
       return { width: node.width || (compactCanvas ? 280 : 320), height: node.height || (compactCanvas ? 210 : 240) };
+    }
+    if (node.type === 'drawing-sheet') {
+      return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 200 : 255) };
     }
     if (node.type === 'core') {
       return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
@@ -206,10 +225,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const minWidth = node.type === 'canvas-image' ? 100 : 240;
-    const minHeight = node.type === 'canvas-image' ? 80 : 150;
-    const maxWidth = node.type === 'canvas-image' ? 1200 : 820;
-    const maxHeight = node.type === 'canvas-image' ? 1200 : 900;
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet';
+    const minWidth = isVisualNode ? 100 : 240;
+    const minHeight = isVisualNode ? 80 : 150;
+    const maxWidth = isVisualNode ? 1400 : 820;
+    const maxHeight = isVisualNode ? 1400 : 900;
 
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -258,20 +278,197 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const toggleConnection = (targetId: string) => {
     if (!connectingFromId || connectingFromId === targetId || !canEditCanvas) return;
     const source = nodes.find((item) => item.id === connectingFromId);
-    if (!source) {
-      setConnectingFromId(null);
+    if (!source) return;
+    const exists = source.connections.includes(targetId);
+    const nextNodes = nodes.map((item) => item.id === source.id ? {
+      ...item,
+      connections: exists ? item.connections.filter((id) => id !== targetId) : [...item.connections, targetId],
+    } : item);
+    onUpdateNodes(nextNodes);
+    setSelectedNodeId(targetId);
+    setSelectedConnection(exists ? null : { sourceId: source.id, targetId });
+  };
+
+  const getConnectionGeometry = (source: ThoughtNode, target: ThoughtNode) => {
+    const sourceSize = getNodeDimensions(source);
+    const targetSize = getNodeDimensions(target);
+    const sourceCenter = { x: source.x + sourceSize.width / 2, y: source.y + sourceSize.height / 2 };
+    const targetCenter = { x: target.x + targetSize.width / 2, y: target.y + targetSize.height / 2 };
+    const deltaX = targetCenter.x - sourceCenter.x;
+    const deltaY = targetCenter.y - sourceCenter.y;
+    let x1 = sourceCenter.x;
+    let y1 = sourceCenter.y;
+    let x2 = targetCenter.x;
+    let y2 = targetCenter.y;
+
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+      const direction = deltaX >= 0 ? 1 : -1;
+      x1 += direction * sourceSize.width / 2;
+      x2 -= direction * targetSize.width / 2;
+    } else {
+      const direction = deltaY >= 0 ? 1 : -1;
+      y1 += direction * sourceSize.height / 2;
+      y2 -= direction * targetSize.height / 2;
+    }
+
+    const horizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+    const bend = horizontal ? Math.max(40, Math.abs(x2 - x1) * 0.45) : Math.max(40, Math.abs(y2 - y1) * 0.45);
+    const cx1 = horizontal ? x1 + Math.sign(x2 - x1 || 1) * bend : x1;
+    const cy1 = horizontal ? y1 : y1 + Math.sign(y2 - y1 || 1) * bend;
+    const cx2 = horizontal ? x2 - Math.sign(x2 - x1 || 1) * bend : x2;
+    const cy2 = horizontal ? y2 : y2 - Math.sign(y2 - y1 || 1) * bend;
+    const midpoint = {
+      x: (x1 + 3 * cx1 + 3 * cx2 + x2) / 8,
+      y: (y1 + 3 * cy1 + 3 * cy2 + y2) / 8,
+    };
+    return {
+      x1,
+      y1,
+      x2,
+      y2,
+      cx1,
+      cy1,
+      cx2,
+      cy2,
+      midpoint,
+      path: `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`,
+    };
+  };
+
+  const addDirectedConnection = (sourceId: string, targetId: string) => {
+    if (!canEditCanvas || sourceId === targetId) return;
+    const source = nodes.find((item) => item.id === sourceId);
+    const target = nodes.find((item) => item.id === targetId);
+    if (!source || !target) return;
+    if (!source.connections.includes(targetId)) {
+      onUpdateNodes(nodes.map((item) => item.id === sourceId ? { ...item, connections: [...item.connections, targetId] } : item));
+    }
+    setSelectedConnection({ sourceId, targetId });
+    setSelectedNodeId(targetId);
+  };
+
+  const removeDirectedConnection = (sourceId: string, targetId: string) => {
+    if (!canEditCanvas) return;
+    onUpdateNodes(nodes.map((item) => item.id === sourceId ? { ...item, connections: item.connections.filter((id) => id !== targetId) } : item));
+    setSelectedConnection(null);
+  };
+
+  const reverseDirectedConnection = (sourceId: string, targetId: string) => {
+    if (!canEditCanvas || sourceId === targetId) return;
+    const nextNodes = nodes.map((item) => {
+      if (item.id === sourceId) return { ...item, connections: item.connections.filter((id) => id !== targetId) };
+      if (item.id === targetId) return { ...item, connections: item.connections.includes(sourceId) ? item.connections : [...item.connections, sourceId] };
+      return item;
+    });
+    onUpdateNodes(nextNodes);
+    setSelectedConnection({ sourceId: targetId, targetId: sourceId });
+  };
+
+  const relinkConnection = (sourceId: string, targetId: string, endpoint: 'source' | 'target', replacementId: string) => {
+    if (!canEditCanvas) return;
+    if (endpoint === 'target') {
+      if (replacementId === sourceId || replacementId === targetId) return;
+      const nextNodes = nodes.map((item) => item.id === sourceId ? {
+        ...item,
+        connections: Array.from(new Set([...item.connections.filter((id) => id !== targetId), replacementId])),
+      } : item);
+      onUpdateNodes(nextNodes);
+      setSelectedConnection({ sourceId, targetId: replacementId });
       return;
     }
-    const exists = source.connections.includes(targetId);
-    onUpdateNode({
-      ...source,
-      connections: exists
-        ? source.connections.filter((id) => id !== targetId)
-        : [...source.connections, targetId],
+
+    if (replacementId === targetId || replacementId === sourceId) return;
+    const nextNodes = nodes.map((item) => {
+      if (item.id === sourceId) return { ...item, connections: item.connections.filter((id) => id !== targetId) };
+      if (item.id === replacementId) return { ...item, connections: item.connections.includes(targetId) ? item.connections : [...item.connections, targetId] };
+      return item;
     });
-    setSelectedNodeId(targetId);
-    setConnectingFromId(null);
+    onUpdateNodes(nextNodes);
+    setSelectedConnection({ sourceId: replacementId, targetId });
   };
+
+  const canvasPointFromClient = (clientX: number, clientY: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: (clientX - rect.left - panOffset.x) / zoom,
+      y: (clientY - rect.top - panOffset.y) / zoom,
+    };
+  };
+
+  const getNodeAtClientPoint = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    return element?.closest('[data-node-id]')?.getAttribute('data-node-id') || null;
+  };
+
+  const beginConnectionDrag = (
+    event: React.PointerEvent,
+    mode: 'new' | 'relink-source' | 'relink-target',
+    sourceId: string,
+    targetId?: string,
+  ) => {
+    if (!canEditCanvas) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const source = nodes.find((item) => item.id === sourceId);
+    const target = targetId ? nodes.find((item) => item.id === targetId) : undefined;
+    if (!source) return;
+
+    let fixedX = source.x + getNodeDimensions(source).width / 2;
+    let fixedY = source.y + getNodeDimensions(source).height / 2;
+    if (target) {
+      const geometry = getConnectionGeometry(source, target);
+      if (mode === 'relink-source') {
+        fixedX = geometry.x2;
+        fixedY = geometry.y2;
+      } else {
+        fixedX = geometry.x1;
+        fixedY = geometry.y1;
+      }
+    }
+    const point = canvasPointFromClient(event.clientX, event.clientY);
+    setConnectionDrag({ mode, sourceId, targetId, fixedX, fixedY, currentX: point.x, currentY: point.y });
+    setConnectionHoverNodeId(null);
+
+    const pointerId = event.pointerId;
+    const handle = event.currentTarget as HTMLElement;
+    handle.setPointerCapture?.(pointerId);
+
+    const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      moveEvent.preventDefault();
+      const nextPoint = canvasPointFromClient(moveEvent.clientX, moveEvent.clientY);
+      setConnectionDrag((current) => current ? { ...current, currentX: nextPoint.x, currentY: nextPoint.y } : current);
+      setConnectionHoverNodeId(getNodeAtClientPoint(moveEvent.clientX, moveEvent.clientY));
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      handle.releasePointerCapture?.(pointerId);
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      const replacementId = getNodeAtClientPoint(upEvent.clientX, upEvent.clientY);
+      if (replacementId) {
+        if (mode === 'new') addDirectedConnection(sourceId, replacementId);
+        if (mode === 'relink-target' && targetId) relinkConnection(sourceId, targetId, 'target', replacementId);
+        if (mode === 'relink-source' && targetId) relinkConnection(sourceId, targetId, 'source', replacementId);
+      }
+      setConnectionDrag(null);
+      setConnectionHoverNodeId(null);
+    };
+
+    document.addEventListener('pointermove', move, { passive: false });
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
+  };
+
+  const blankDrawing = (): DrawingDocument => ({
+    width: 1200,
+    height: 800,
+    background: '#FFFFFF',
+    elements: [],
+  });
 
   useImperativeHandle(ref, () => ({
     getCenteredCardPosition: (cardWidth = 360, cardHeight = 460) => {
@@ -484,64 +681,110 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#CFCFCD" />
             </marker>
+            <marker id="arrow-drag" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#111111" />
+            </marker>
           </defs>
           {nodes.map((node) => node.connections.map((targetId) => {
             const target = nodes.find((item) => item.id === targetId);
             if (!target) return null;
-
-            const sourceSize = getNodeDimensions(node);
-            const targetSize = getNodeDimensions(target);
-            const sourceCenter = { x: node.x + sourceSize.width / 2, y: node.y + sourceSize.height / 2 };
-            const targetCenter = { x: target.x + targetSize.width / 2, y: target.y + targetSize.height / 2 };
-            const deltaX = targetCenter.x - sourceCenter.x;
-            const deltaY = targetCenter.y - sourceCenter.y;
-
-            let x1 = sourceCenter.x;
-            let y1 = sourceCenter.y;
-            let x2 = targetCenter.x;
-            let y2 = targetCenter.y;
-
-            if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-              const direction = deltaX >= 0 ? 1 : -1;
-              x1 += direction * sourceSize.width / 2;
-              x2 -= direction * targetSize.width / 2;
-            } else {
-              const direction = deltaY >= 0 ? 1 : -1;
-              y1 += direction * sourceSize.height / 2;
-              y2 -= direction * targetSize.height / 2;
-            }
-
-            const horizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
-            const bend = horizontal ? Math.max(40, Math.abs(x2 - x1) * 0.45) : Math.max(40, Math.abs(y2 - y1) * 0.45);
-            const cx1 = horizontal ? x1 + Math.sign(x2 - x1 || 1) * bend : x1;
-            const cy1 = horizontal ? y1 : y1 + Math.sign(y2 - y1 || 1) * bend;
-            const cx2 = horizontal ? x2 - Math.sign(x2 - x1 || 1) * bend : x2;
-            const cy2 = horizontal ? y2 : y2 - Math.sign(y2 - y1 || 1) * bend;
+            const geometry = getConnectionGeometry(node, target);
             const isActiveLink = node.phase === activePhase || target.phase === activePhase;
-            const path = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+            const isSelectedLink = selectedConnection?.sourceId === node.id && selectedConnection?.targetId === targetId;
 
             return (
               <g key={`${node.id}-${targetId}`}>
                 <path
-                  d={path}
+                  d={geometry.path}
                   fill="none"
-                  stroke={isActiveLink ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.025)'}
-                  strokeWidth={isActiveLink ? '5' : '3'}
-                  className="transition-all duration-300"
+                  stroke={isSelectedLink ? 'rgba(0, 0, 0, 0.14)' : isActiveLink ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.025)'}
+                  strokeWidth={isSelectedLink ? '8' : isActiveLink ? '5' : '3'}
+                  className="transition-all duration-200"
                 />
                 <path
-                  d={path}
+                  d={geometry.path}
                   fill="none"
-                  stroke={isActiveLink ? '#1A1A1A' : '#CFCFCD'}
-                  strokeWidth="1.5"
+                  stroke={isSelectedLink ? '#000000' : isActiveLink ? '#1A1A1A' : '#CFCFCD'}
+                  strokeWidth={isSelectedLink ? '2.4' : '1.5'}
                   strokeDasharray={node.type === 'user-thought' ? '3 3' : undefined}
-                  markerEnd={isActiveLink ? 'url(#arrow-active)' : 'url(#arrow-muted)'}
-                  className="transition-all duration-300"
+                  markerEnd={isSelectedLink || isActiveLink ? 'url(#arrow-active)' : 'url(#arrow-muted)'}
+                  className="transition-all duration-200"
+                />
+                <path
+                  d={geometry.path}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth="28"
+                  style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    setSelectedConnection({ sourceId: node.id, targetId });
+                    setSelectedNodeId(null);
+                  }}
+                  aria-label="Selecionar conexão"
                 />
               </g>
             );
           }))}
+          {connectionDrag && (
+            <path
+              d={`M ${connectionDrag.fixedX} ${connectionDrag.fixedY} L ${connectionDrag.currentX} ${connectionDrag.currentY}`}
+              fill="none"
+              stroke="#111111"
+              strokeWidth="2"
+              strokeDasharray="8 6"
+              markerEnd="url(#arrow-drag)"
+            />
+          )}
         </svg>
+
+        {selectedConnection && (() => {
+          const source = nodes.find((item) => item.id === selectedConnection.sourceId);
+          const target = nodes.find((item) => item.id === selectedConnection.targetId);
+          if (!source || !target || !source.connections.includes(target.id)) return null;
+          const geometry = getConnectionGeometry(source, target);
+          return (
+            <>
+              <div
+                className="absolute z-[6] pointer-events-auto canvas-control -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-xl border border-black bg-white/95 p-1 shadow-xl"
+                style={{ left: geometry.midpoint.x, top: geometry.midpoint.y }}
+              >
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); reverseDirectedConnection(source.id, target.id); }}
+                  className="h-9 px-2.5 rounded-lg hover:bg-black/5 text-[10px] font-mono font-semibold cursor-pointer"
+                  title="Inverter direção da seta"
+                >
+                  INVERTER
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); removeDirectedConnection(source.id, target.id); }}
+                  className="h-9 w-9 rounded-lg hover:bg-red-50 text-red-600 flex items-center justify-center cursor-pointer"
+                  title="Excluir seta"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="absolute z-[6] pointer-events-auto canvas-control h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing"
+                style={{ left: geometry.x1, top: geometry.y1 }}
+                onPointerDown={(event) => beginConnectionDrag(event, 'relink-source', source.id, target.id)}
+                title="Arraste para mudar a origem da seta"
+                aria-label="Mudar origem da seta"
+              />
+              <button
+                type="button"
+                className="absolute z-[6] pointer-events-auto canvas-control h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg touch-none cursor-grab active:cursor-grabbing"
+                style={{ left: geometry.x2, top: geometry.y2 }}
+                onPointerDown={(event) => beginConnectionDrag(event, 'relink-target', source.id, target.id)}
+                title="Arraste para mudar o destino da seta"
+                aria-label="Mudar destino da seta"
+              />
+            </>
+          );
+        })()}
 
         {/* Nodes Layer */}
         <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
@@ -550,20 +793,23 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isQuestion = node.type === 'question';
             const isUserThought = node.type === 'user-thought';
             const isCanvasImage = node.type === 'canvas-image';
+            const isDrawingSheet = node.type === 'drawing-sheet';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
             const dimensions = getNodeDimensions(node);
             const isConnectionSource = connectingFromId === node.id;
             const isConnectionTarget = Boolean(connectingFromId && connectingFromId !== node.id);
+            const isDragDropTarget = Boolean(connectionDrag && connectionHoverNodeId === node.id);
 
             if (isCanvasImage) {
               return (
                 <motion.div
                   key={node.id}
+                  data-node-id={node.id}
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className={`absolute thought-card canvas-image-node pointer-events-auto rounded-xl bg-white shadow-md select-none ${
-                    isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
+                    isDragDropTarget ? 'ring-4 ring-blue-500/70' : isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
                   }`}
                   style={{
                     left: node.x,
@@ -580,6 +826,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                       return;
                     }
                     setSelectedNodeId(node.id);
+                    setSelectedConnection(null);
                   }}
                 >
                   {node.imageUrl ? (
@@ -627,7 +874,123 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                   )}
 
                   {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                    <button
+                      type="button"
+                      className="absolute -left-4 top-1/2 z-40 h-8 w-8 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg flex items-center justify-center touch-none cursor-crosshair canvas-control"
+                      onPointerDown={(event) => beginConnectionDrag(event, 'new', node.id)}
+                      title="Arraste para outro card ou imagem para criar uma seta"
+                      aria-label="Arrastar nova conexão"
+                    >
+                      <Link2 size={13} />
+                    </button>
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
                     <>
+                      <div
+                        className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'x', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] left-1/2 z-30 h-4 w-11 -translate-x-1/2 rounded-full border border-black/20 bg-white shadow cursor-ns-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'y', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] right-[-7px] z-30 h-6 w-6 rounded-full border border-black/30 bg-white shadow cursor-nwse-resize flex items-center justify-center"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'both', true)}
+                        title="Redimensionar proporcionalmente"
+                      >
+                        <MoveDiagonal2 size={9} />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              );
+            }
+
+            if (isDrawingSheet) {
+              const drawing = node.drawing || blankDrawing();
+              return (
+                <motion.div
+                  key={node.id}
+                  data-node-id={node.id}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`absolute thought-card pointer-events-auto rounded-xl bg-white shadow-lg select-none overflow-visible ${
+                    isDragDropTarget ? 'ring-4 ring-blue-500/70' : isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
+                  }`}
+                  style={{ left: node.x, top: node.y, width: dimensions.width, height: dimensions.height, touchAction: 'none' }}
+                  onPointerDown={(event) => handleNodePointerDown(event, node.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isConnectionTarget) {
+                      toggleConnection(node.id);
+                      return;
+                    }
+                    setSelectedNodeId(node.id);
+                    setSelectedConnection(null);
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    setDrawingEditorNodeId(node.id);
+                  }}
+                >
+                  <DrawingPreview drawing={drawing} className="h-full w-full rounded-xl bg-white pointer-events-none" />
+                  <div className="absolute left-2 bottom-2 rounded-lg bg-black/75 text-white px-2 py-1 text-[9px] font-mono pointer-events-none">
+                    {node.drawingName || node.title || 'Folha de desenho'}
+                  </div>
+
+                  {isConnectionTarget && (
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); toggleConnection(node.id); }}
+                      className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair"
+                      aria-label={`Conectar com ${node.drawingName || 'desenho'}`}
+                    />
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                    <div className="absolute -top-11 right-0 z-30 flex items-center gap-1 rounded-xl border border-[#E0E0DE] bg-white/95 p-1 shadow-lg canvas-control">
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setDrawingEditorNodeId(node.id); }}
+                        className="h-8 px-2 rounded-lg flex items-center gap-1 hover:bg-black/5 text-[10px] font-mono cursor-pointer"
+                        title="Abrir folha de desenho"
+                      >
+                        <Pencil size={13} /> EDITAR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); setConnectingFromId(isConnectionSource ? null : node.id); }}
+                        className={`h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer ${isConnectionSource ? 'bg-black text-white' : 'hover:bg-black/5 text-neutral-700'}`}
+                        title={isConnectionSource ? 'Cancelar conexão' : 'Relacionar esta folha com vários itens'}
+                      >
+                        {isConnectionSource ? <X size={14} /> : <Link2 size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); onDeleteNode(node.id); }}
+                        className="h-8 w-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 cursor-pointer"
+                        title="Remover folha de desenho"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                    <>
+                      <button
+                        type="button"
+                        className="absolute -left-4 top-1/2 z-40 h-8 w-8 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg flex items-center justify-center touch-none cursor-crosshair canvas-control"
+                        onPointerDown={(event) => beginConnectionDrag(event, 'new', node.id)}
+                        title="Arraste para criar uma seta"
+                        aria-label="Arrastar nova conexão"
+                      >
+                        <Link2 size={13} />
+                      </button>
                       <div
                         className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
                         onPointerDown={(event) => handleResizePointerDown(event, node, 'x', true)}
@@ -654,16 +1017,19 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             return (
               <motion.div
                 key={node.id}
+                data-node-id={node.id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ 
                   opacity: 1, 
                   scale: 1,
-                  borderColor: isConnectionSource || isSelected 
+                  borderColor: isDragDropTarget || isConnectionSource || isSelected 
                     ? '#1A1A1A' 
                     : isActive 
                       ? '#E0E0DE' 
                       : '#F0F0EE',
-                  boxShadow: isConnectionSource || isSelected 
+                  boxShadow: isDragDropTarget
+                    ? '0 0 0 5px rgba(59, 130, 246, 0.35), 0 12px 30px -5px rgba(0, 0, 0, 0.15)'
+                    : isConnectionSource || isSelected 
                     ? '0 12px 30px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.05)' 
                     : '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01)'
                 }}
@@ -683,6 +1049,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     return;
                   }
                   setSelectedNodeId(node.id);
+                  setSelectedConnection(null);
                 }}
               >
                 
@@ -903,6 +1270,18 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                   />
                 )}
 
+                {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                  <button
+                    type="button"
+                    className="absolute left-1 top-1/2 z-40 h-8 w-8 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg flex items-center justify-center touch-none cursor-crosshair canvas-control"
+                    onPointerDown={(event) => beginConnectionDrag(event, 'new', node.id)}
+                    title="Arraste para outro card, imagem ou desenho para criar uma seta"
+                    aria-label="Arrastar nova conexão"
+                  >
+                    <Link2 size={13} />
+                  </button>
+                )}
+
                 {!isCore && (isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
                   <>
                     <div
@@ -933,7 +1312,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       {connectingFromId && (
         <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 canvas-control max-w-[calc(100vw-1.5rem)] rounded-2xl border border-black bg-white/95 px-3 py-2 shadow-lg flex items-center gap-2 text-[11px] font-mono">
           <Link2 size={13} className="shrink-0" />
-          <span className="truncate">Selecione outro card ou imagem para criar/remover a seta.</span>
+          <span className="truncate">Modo múltiplo: toque em vários cards, imagens ou desenhos para relacioná-los a partir deste item.</span>
           <button
             type="button"
             onClick={() => setConnectingFromId(null)}
@@ -951,7 +1330,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         {/* Double-click hint */}
         <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 hidden sm:flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
           <HelpCircle size={12} className="text-black shrink-0" />
-          <span className="truncate">Dica: duplo clique cria nota; use os botões para nota, imagem e conexões</span>
+          <span className="truncate">Dica: arraste a alça de conexão entre itens; toque numa seta para inverter ou reposicionar suas pontas</span>
         </div>
 
         {canvasImageError && (
@@ -1008,6 +1387,15 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 {uploadingCanvasImage ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
                 <span className="hidden sm:inline">IMAGEM</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setNewDrawing(blankDrawing())}
+                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                title="Abrir uma folha branca para desenhar"
+              >
+                <Pencil size={14} />
+                <span className="hidden sm:inline">DESENHO</span>
+              </button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -1030,6 +1418,65 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       </div>
 
       {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
+
+      {newDrawing && (
+        <DrawingStudio
+          key="new-drawing"
+          drawing={newDrawing}
+          title="Novo desenho"
+          canEdit={canEditCanvas}
+          allDrawings={nodes.filter((item) => item.type === 'drawing-sheet' && item.drawing).map((item) => ({
+            id: item.id,
+            name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
+            drawing: item.drawing!,
+          }))}
+          onSave={(drawing) => {
+            const startWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 300 : 420;
+            const startHeight = startWidth / (drawing.width / drawing.height);
+            const position = getCenteredPosition(startWidth, startHeight);
+            onAddNode({
+              type: 'drawing-sheet',
+              title: 'Folha de desenho',
+              drawingName: `Desenho ${nodes.filter((item) => item.type === 'drawing-sheet').length + 1}`,
+              content: '',
+              phase: activePhase,
+              x: position.x,
+              y: position.y,
+              width: startWidth,
+              height: startHeight,
+              aspectRatio: drawing.width / drawing.height,
+              drawing,
+              connections: [],
+            });
+            setNewDrawing(null);
+          }}
+          onClose={() => setNewDrawing(null)}
+        />
+      )}
+
+      {drawingEditorNodeId && (() => {
+        const drawingNode = nodes.find((item) => item.id === drawingEditorNodeId && item.type === 'drawing-sheet');
+        if (!drawingNode) return null;
+        return (
+          <DrawingStudio
+            key={drawingNode.id}
+            drawing={drawingNode.drawing || blankDrawing()}
+            title={drawingNode.drawingName || drawingNode.title || 'Folha de desenho'}
+            canEdit={canEditCanvas}
+            allDrawings={nodes.filter((item) => item.type === 'drawing-sheet' && item.drawing).map((item) => ({
+              id: item.id,
+              name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
+              drawing: item.drawing!,
+            }))}
+            onSave={(drawing) => onUpdateNode({
+              ...drawingNode,
+              drawing,
+              aspectRatio: drawing.width / drawing.height,
+            })}
+            onClose={() => setDrawingEditorNodeId(null)}
+          />
+        );
+      })()}
     </div>
   );
 });
