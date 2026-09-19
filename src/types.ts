@@ -48,7 +48,7 @@ export interface SharedProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image';
 
 export interface NodeComment {
   id: string;
@@ -78,6 +78,12 @@ export interface ThoughtNode {
   phase: Phase;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  imageUrl?: string;
+  imageName?: string;
+  imageContentType?: string;
+  aspectRatio?: number;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
