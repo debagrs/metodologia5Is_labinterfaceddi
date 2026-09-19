@@ -424,6 +424,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
+  const [desktopShapesOpen, setDesktopShapesOpen] = useState(false);
   const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -672,63 +673,121 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
         </div>
       </header>
 
-      {/* Barra completa para desktop. No celular, as ferramentas ficam em uma barra própria abaixo. */}
-      <div className="hidden md:block shrink-0 bg-white border-b border-black/10 overflow-x-auto overscroll-x-contain">
-        <div className="min-w-max px-4 py-2 flex items-center gap-2">
-          <div className="flex items-center gap-1 pr-2 border-r border-black/10">
-            <ToolButton active={tool === 'select'} onClick={() => chooseTool('select')} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
-            <ToolButton active={tool === 'brush'} onClick={() => chooseTool('brush')} label="Pincel"><Pencil size={15} /></ToolButton>
-            <ToolButton active={tool === 'text'} onClick={() => chooseTool('text')} label="Texto"><Type size={15} /></ToolButton>
+      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
+      <div className="hidden md:flex shrink-0 bg-white border-b border-black/10 flex-col">
+        <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-2 border-b border-black/5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setDesktopShapesOpen(false); }} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
+            <ToolButton active={tool === 'brush'} onClick={() => { chooseTool('brush'); setDesktopShapesOpen(false); }} label="Pincel"><Pencil size={15} /></ToolButton>
+            <ToolButton active={tool === 'text'} onClick={() => { chooseTool('text'); setDesktopShapesOpen(false); }} label="Texto"><Type size={15} /></ToolButton>
+            <ToolButton active={tool === 'line'} onClick={() => { chooseTool('line'); setDesktopShapesOpen(false); }} label="Linha"><Minus size={15} /></ToolButton>
+            <ToolButton active={tool === 'arrow'} onClick={() => { chooseTool('arrow'); setDesktopShapesOpen(false); }} label="Seta"><Minus size={15} /></ToolButton>
+            <button
+              type="button"
+              onClick={() => setDesktopShapesOpen((open) => !open)}
+              className={`h-8 px-2.5 rounded-lg border flex items-center gap-1.5 text-[10px] font-mono uppercase cursor-pointer ${desktopShapesOpen || (isShapeTool(tool) && tool !== 'line' && tool !== 'arrow') ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-black/10 hover:border-black/30'}`}
+              title="Abrir paleta de formas"
+            >
+              <Square size={15} />
+              <span>{activeShape && tool !== 'line' && tool !== 'arrow' ? activeShape.label : 'Formas'}</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-1 pr-2 border-r border-black/10">
-            {SHAPE_TOOLS.map((item) => (
-              <ToolButton key={item.tool} active={tool === item.tool} onClick={() => chooseTool(item.tool)} label={item.label} compact>
-                {shapeIcon(item.tool)}
-              </ToolButton>
-            ))}
+          <div className="h-6 w-px bg-black/10 mx-1" />
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" disabled={!canEdit || !selectedElementId} onClick={deleteSelected} className="h-8 px-2.5 rounded-lg border border-black/10 text-[10px] font-mono uppercase flex items-center gap-1.5 disabled:opacity-30 cursor-pointer"><Trash2 size={14} /> Excluir</button>
+            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={eraseLast} className="h-8 px-2.5 rounded-lg border border-black/10 text-[10px] font-mono uppercase flex items-center gap-1.5 disabled:opacity-30 cursor-pointer"><Eraser size={14} /> Último</button>
+            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={() => commit({ ...current, elements: [] })} className="h-8 px-2.5 rounded-lg border border-red-200 text-red-700 text-[10px] font-mono uppercase disabled:opacity-30 cursor-pointer">Limpar folha</button>
           </div>
 
-          <div className="flex items-center gap-1.5 pr-2 border-r border-black/10">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase">Traço</span>
-            {PALETTE.map((color) => (
-              <button key={color} type="button" onClick={() => setStrokeColor(color)} className={`h-7 w-7 rounded-full border cursor-pointer ${strokeColor === color ? 'ring-2 ring-black ring-offset-1' : 'border-black/20'}`} style={{ backgroundColor: color }} aria-label={`Cor ${color}`} />
-            ))}
-            <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor personalizada" />
-          </div>
-
-          <div className="flex items-center gap-2 pr-2 border-r border-black/10">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase">Espessura</span>
-            <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-28" />
-            <span className="text-[10px] font-mono w-7 text-right">{strokeWidth}</span>
-          </div>
-
-          <div className="flex items-center gap-2 pr-2 border-r border-black/10">
-            <label className="text-[10px] font-mono flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} /> PREENCHER</label>
-            <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor de preenchimento" />
-            <span className="text-[10px] font-mono text-neutral-500">Texto</span>
-            <select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} className="h-8 max-w-[180px] rounded-lg border border-black/10 bg-white px-2 text-[10px]" style={{ fontFamily }}>
-              {fontFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
-            </select>
-            <input type="range" min="12" max="140" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-24" />
-            <span className="text-[10px] font-mono w-8">{fontSize}px</span>
-          </div>
-
-          <div className="flex items-center gap-1 pr-2 border-r border-black/10">
-            <button type="button" disabled={!canEdit || !selectedElementId} onClick={deleteSelected} className="h-8 px-2 rounded-lg border border-black/10 text-xs flex items-center gap-1 disabled:opacity-30 cursor-pointer"><Trash2 size={14} /> Selecionado</button>
-            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={eraseLast} className="h-8 px-2 rounded-lg border border-black/10 text-xs flex items-center gap-1 disabled:opacity-30 cursor-pointer"><Eraser size={14} /> Último</button>
-            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={() => commit({ ...current, elements: [] })} className="h-8 px-2 rounded-lg border border-red-200 text-red-700 text-xs disabled:opacity-30 cursor-pointer">Limpar folha</button>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase mr-1">Exportar</span>
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            <span className="text-[9px] font-mono text-neutral-400 uppercase mr-1">Exportar</span>
             {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
               <button key={format} type="button" disabled={exporting} onClick={() => void handleExport(format)} className="h-8 px-2.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-[10px] font-mono uppercase flex items-center gap-1 disabled:opacity-50 cursor-pointer"><Download size={13} /> {format}</button>
             ))}
             {allDrawings.length > 1 && (['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-              <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-8 px-2.5 rounded-lg border border-black text-[10px] font-mono uppercase disabled:opacity-50 cursor-pointer">TODAS {format}</button>
+              <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-8 px-2.5 rounded-lg border border-black text-[9px] font-mono uppercase disabled:opacity-50 cursor-pointer">TODAS {format}</button>
             ))}
           </div>
+        </div>
+
+        {desktopShapesOpen && (
+          <div className="px-3 lg:px-4 py-2 border-b border-black/5 bg-[#FAFAF8]">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">Formas 2D e 3D</span>
+              <span className="text-[9px] text-neutral-400">Escolha uma forma e desenhe diretamente na folha.</span>
+            </div>
+            <div className="grid grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-13 gap-1.5">
+              {SHAPE_TOOLS.filter((item) => item.tool !== 'line' && item.tool !== 'arrow').map((item) => (
+                <button
+                  key={item.tool}
+                  type="button"
+                  onClick={() => { chooseTool(item.tool); setDesktopShapesOpen(false); }}
+                  className={`min-h-10 rounded-lg border px-2 flex items-center justify-center gap-1.5 text-[9px] font-mono uppercase ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10 hover:border-black/30'}`}
+                  title={item.label}
+                >
+                  {shapeIcon(item.tool)} <span className="truncate">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2 bg-white">
+          <div className="flex items-center gap-2 min-w-fit">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-neutral-500">{tool === 'select' ? 'Seleção' : tool === 'brush' ? 'Pincel' : tool === 'text' ? 'Texto' : activeShape?.label || 'Ferramenta'}</span>
+          </div>
+
+          {tool !== 'select' && (
+            <>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[9px] font-mono text-neutral-400 uppercase mr-1">Traço</span>
+                {PALETTE.map((color) => (
+                  <button key={color} type="button" onClick={() => setStrokeColor(color)} className={`h-6 w-6 rounded-full border cursor-pointer ${strokeColor === color ? 'ring-2 ring-black ring-offset-1' : 'border-black/20'}`} style={{ backgroundColor: color }} aria-label={`Cor ${color}`} />
+                ))}
+                <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor personalizada" />
+              </div>
+
+              {tool !== 'text' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-mono text-neutral-400 uppercase">Espessura</span>
+                  <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-24 lg:w-32" />
+                  <span className="text-[10px] font-mono w-8">{strokeWidth}px</span>
+                </div>
+              )}
+            </>
+          )}
+
+          {tool === 'text' && (
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <span className="text-[9px] font-mono text-neutral-400 uppercase">Tipografia</span>
+              <select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} className="h-8 w-[180px] lg:w-[220px] rounded-lg border border-black/10 bg-white px-2 text-[10px]" style={{ fontFamily }}>
+                {fontFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
+              </select>
+              <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-28" />
+              <span className="text-[10px] font-mono w-10">{fontSize}px</span>
+            </div>
+          )}
+
+          {isShapeTool(tool) && tool !== 'line' && tool !== 'arrow' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-[9px] font-mono uppercase flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} /> Preenchimento</label>
+              {useFill && (
+                <>
+                  <span className="h-6 w-px bg-black/10" />
+                  {PALETTE.map((color) => (
+                    <button key={`desktop-fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-6 w-6 rounded-full border cursor-pointer ${fillColor === color ? 'ring-2 ring-black ring-offset-1' : 'border-black/20'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
+                  ))}
+                  <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor de preenchimento" />
+                </>
+              )}
+            </div>
+          )}
+
+          {tool === 'select' && (
+            <span className="text-[10px] text-neutral-500">Selecione um elemento na folha para mover ou excluir.</span>
+          )}
         </div>
       </div>
 
