@@ -92,6 +92,13 @@ const STICKERS: Record<string, {
     accentSoft: '#FFE8EB',
     rotate: 4,
   },
+  'agent-forja': {
+    symbol: Code2,
+    face: 'rounded-[57%_43%_48%_52%/43%_58%_42%_57%]',
+    accent: '#E85D6A',
+    accentSoft: '#FFE8EB',
+    rotate: -4,
+  },
   'agent-publica': {
     symbol: FileText,
     face: 'rounded-[54%_46%_44%_56%/48%_57%_43%_52%]',
