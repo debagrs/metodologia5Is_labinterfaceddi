@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import {
   Compass, Activity, Heart, Accessibility, LayoutGrid,
-  BookOpen, ShieldCheck, Code2, Sparkles
+  BookOpen, ShieldCheck, Code2, Sparkles, Orbit
 } from 'lucide-react';
 
 type StickerState = 'idle' | 'selected' | 'thinking' | 'celebrating' | 'alert';
@@ -28,6 +28,13 @@ const STICKERS: Record<string, {
     accent: '#F6B73C',
     accentSoft: '#FFF1C7',
     rotate: -4,
+  },
+  'agent-cosmos': {
+    symbol: Orbit,
+    face: 'rounded-[52%_48%_58%_42%/44%_55%_45%_56%]',
+    accent: '#2F6FED',
+    accentSoft: '#E3EDFF',
+    rotate: -2,
   },
   'agent-passeio': {
     symbol: Activity,
