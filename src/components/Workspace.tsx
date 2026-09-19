@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText
 } from 'lucide-react';
-import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission } from '../types';
+import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
+import { drawingToSvgString } from './DrawingStudio';
 import MediatorSticker from './MediatorSticker';
 import BrandMark from './BrandMark';
 import AllCommentsPanel from './AllCommentsPanel';
@@ -132,6 +133,17 @@ const MEDIATORS: Mediator[] = [
     iconName: 'Code2',
     themeColor: 'sky',
     greeting: 'Como esta decisão será preservada, testada e revisada quando virar sistema funcional?'
+  },
+  {
+    id: 'agent-publica',
+    name: 'Publica',
+    role: 'Publicação científica, síntese e documentação integral',
+    phase: 'Transversal',
+    description: 'Transforma o percurso do projeto em relato científico rastreável, preservando evidências, imagens, notas e conversas.',
+    bio: 'Agente editorial da Metodologia 5I’s. Lê o conjunto do projeto — cards, relações, notas, registros por fase e conversas dos agentes — e organiza esse material como relato científico de projeto. Escreve sem inventar dados, resultados ou referências; explicita lacunas quando faltam evidências e preserva a autoria humana. Também monta um documento completo com o artigo e os anexos documentais do processo.',
+    iconName: 'FileText',
+    themeColor: 'violet',
+    greeting: 'Que argumento científico emerge quando o processo inteiro é lido como documentação de projeto, e não como uma coleção de fragmentos?'
   }
 ];
 
@@ -163,6 +175,273 @@ const PHASES_METADATA: { phase: Phase; description: string; scientificContext: s
   },
 ];
 
+type PublicationConversation = {
+  mediatorId: string;
+  mediatorName: string;
+  messages: Array<{ role: 'user' | 'assistant'; text: string; createdAt?: string }>;
+};
+
+type PublicationArticle = {
+  title: string;
+  subtitle?: string;
+  abstract: string;
+  keywords: string[];
+  sections: Array<{ heading: string; body: string }>;
+  references?: string[];
+  editorialNotes?: string[];
+};
+
+type PublicationVisual = {
+  title: string;
+  phase: string;
+  source: string;
+  src: string;
+};
+
+const escapeHtml = (value: string) => String(value || '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const richTextToHtml = (value: string) => {
+  const blocks = String(value || '').trim().split(/\n\s*\n/).filter(Boolean);
+  if (!blocks.length) return '<p>—</p>';
+  return blocks.map((block) => {
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.every((line) => /^[-*•]\s+/.test(line))) {
+      return `<ul>${lines.map((line) => `<li>${escapeHtml(line.replace(/^[-*•]\s+/, ''))}</li>`).join('')}</ul>`;
+    }
+    return `<p>${lines.map(escapeHtml).join('<br/>')}</p>`;
+  }).join('');
+};
+
+const publicationFileName = (name: string) => `${name || 'projeto-5is'}`
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9_-]+/g, '-')
+  .replace(/^-+|-+$/g, '') || 'projeto-5is';
+
+const collectProjectConversations = (projectId: string): PublicationConversation[] => {
+  if (typeof window === 'undefined') return [];
+  return MEDIATORS.map((mediator) => {
+    const key = `5is_agent_chat_${projectId}_${mediator.id}`;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      const messages = Array.isArray(parsed)
+        ? parsed
+            .filter((item: any) => item && (item.role === 'user' || item.role === 'assistant') && String(item.text || '').trim())
+            .map((item: any) => ({ role: item.role, text: String(item.text), createdAt: item.createdAt ? String(item.createdAt) : undefined }))
+        : [];
+      return { mediatorId: mediator.id, mediatorName: mediator.name, messages } as PublicationConversation;
+    } catch {
+      return { mediatorId: mediator.id, mediatorName: mediator.name, messages: [] } as PublicationConversation;
+    }
+  }).filter((item) => item.messages.length > 0);
+};
+
+const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ''));
+  reader.onerror = () => reject(reader.error || new Error('Não foi possível ler a imagem.'));
+  reader.readAsDataURL(blob);
+});
+
+const fetchImageAsDataUrl = async (url: string) => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Imagem indisponível (${response.status}).`);
+  return blobToDataUrl(await response.blob());
+};
+
+const drawingToPngDataUrl = async (drawing: DrawingDocument) => {
+  const svg = drawingToSvgString(drawing);
+  const blobUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error('Não foi possível rasterizar a folha de desenho.'));
+      element.src = blobUrl;
+    });
+    const maxWidth = 1600;
+    const scale = Math.min(1, maxWidth / Math.max(1, drawing.width));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(drawing.width * scale));
+    canvas.height = Math.max(1, Math.round(drawing.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas de documentação indisponível.');
+    context.fillStyle = drawing.background || '#FFFFFF';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/png');
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+};
+
+const collectProjectVisuals = async (nodes: ThoughtNode[]): Promise<PublicationVisual[]> => {
+  const visuals: PublicationVisual[] = [];
+  const seen = new Set<string>();
+  const addUrl = async (url: string, title: string, phase: string, source: string) => {
+    if (!url || seen.has(url)) return;
+    seen.add(url);
+    try {
+      visuals.push({ title, phase, source, src: await fetchImageAsDataUrl(url) });
+    } catch {
+      visuals.push({ title, phase, source, src: url });
+    }
+  };
+
+  for (const node of nodes) {
+    if (node.type === 'canvas-image' && node.imageUrl) {
+      await addUrl(node.imageUrl, node.imageName || node.title || 'Imagem do canvas', node.phase, 'Imagem livre no canvas');
+    }
+    for (const attachment of node.attachments || []) {
+      if (attachment.type === 'image' && attachment.url) {
+        await addUrl(attachment.url, attachment.name || node.title || 'Imagem anexada', node.phase, `Anexo do card “${node.title}”`);
+      }
+    }
+    if (node.type === 'drawing-sheet' && node.drawing) {
+      try {
+        visuals.push({
+          title: node.drawingName || node.title || 'Folha de desenho',
+          phase: node.phase,
+          source: 'Folha de desenho vetorial do canvas',
+          src: await drawingToPngDataUrl(node.drawing)
+        });
+      } catch {
+        // A documentação textual do desenho permanece nos cards mesmo se a rasterização falhar.
+      }
+    }
+  }
+  return visuals;
+};
+
+const downloadPublicationDoc = (
+  project: Project,
+  authorName: string,
+  article: PublicationArticle,
+  nodes: ThoughtNode[],
+  conversations: PublicationConversation[],
+  visuals: PublicationVisual[]
+) => {
+  const phaseOrder: Phase[] = ['Ideação', 'Inambulação', 'Instauração', 'Inspeção', 'Implementação'];
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const articleSections = (article.sections || []).map((section) => `
+    <h2>${escapeHtml(section.heading)}</h2>
+    ${richTextToHtml(section.body)}
+  `).join('');
+
+  const references = article.references?.length
+    ? `<h2>Referências</h2><ol>${article.references.map((reference) => `<li>${escapeHtml(reference)}</li>`).join('')}</ol>`
+    : '';
+
+  const editorialNotes = article.editorialNotes?.length
+    ? `<div class="editorial"><h3>Notas editoriais antes da submissão</h3><ul>${article.editorialNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('')}</ul></div>`
+    : '';
+
+  const visualsHtml = visuals.length
+    ? visuals.map((visual, index) => `<figure>
+        <img src="${escapeHtml(visual.src)}" alt="${escapeHtml(visual.title)}" />
+        <figcaption>Figura ${index + 1} — ${escapeHtml(visual.title)}. ${escapeHtml(visual.source)} · ${escapeHtml(visual.phase)}.</figcaption>
+      </figure>`).join('')
+    : '<p>Nenhuma imagem pôde ser incorporada automaticamente nesta exportação.</p>';
+
+  const cardsHtml = phaseOrder.map((phase) => {
+    const phaseNodes = nodes.filter((node) => node.phase === phase);
+    if (!phaseNodes.length) return '';
+    return `<h3>${escapeHtml(phase)}</h3>${phaseNodes.map((node, index) => `
+      <div class="record">
+        <p class="meta">${index + 1}. ${escapeHtml(node.type)}${node.mediatorId ? ` · ${escapeHtml(node.mediatorId)}` : ''}</p>
+        <h4>${escapeHtml(node.title || 'Sem título')}</h4>
+        ${richTextToHtml(node.content || '')}
+        ${node.scientificContext ? `<p><strong>Contexto científico:</strong> ${escapeHtml(node.scientificContext)}</p>` : ''}
+        ${node.provocations?.length ? `<p><strong>Provocações:</strong></p><ul>${node.provocations.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : ''}
+        ${node.connections?.length ? `<p class="meta"><strong>Conexões no mapa:</strong> ${node.connections.map((id) => escapeHtml(nodeById.get(id)?.title || id)).join('; ')}</p>` : ''}
+        ${node.attachments?.length ? `<p class="meta">Anexos: ${node.attachments.map((item) => escapeHtml(item.name)).join('; ')}</p>` : ''}
+        <p class="meta">Registro criado em: ${escapeHtml(new Date(node.createdAt).toLocaleString('pt-BR'))}</p>
+      </div>`).join('')}`;
+  }).join('');
+
+  const conversationHtml = conversations.length
+    ? conversations.map((conversation) => `<h3>${escapeHtml(conversation.mediatorName)}</h3>${conversation.messages.map((message) => `
+      <div class="conversation ${message.role}">
+        <p class="meta">${message.role === 'assistant' ? escapeHtml(conversation.mediatorName) : 'Estudante'}${message.createdAt ? ` · ${escapeHtml(new Date(message.createdAt).toLocaleString('pt-BR'))}` : ''}</p>
+        ${richTextToHtml(message.text)}
+      </div>`).join('')}`).join('')
+    : '<p>Não há conversas salvas com agentes neste navegador para este projeto.</p>';
+
+  const html = `<!DOCTYPE html>
+  <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(article.title || project.name)}</title>
+    <style>
+      @page { size: A4; margin: 2.5cm 2.2cm; }
+      body { font-family: Arial, sans-serif; color:#111; line-height:1.55; font-size:11pt; }
+      h1 { font-size:20pt; line-height:1.2; margin:0 0 8pt; }
+      h2 { font-size:15pt; margin:22pt 0 8pt; page-break-after:avoid; }
+      h3 { font-size:12pt; margin:18pt 0 6pt; page-break-after:avoid; }
+      h4 { font-size:11pt; margin:8pt 0 4pt; }
+      p { margin:0 0 9pt; text-align:justify; }
+      ul, ol { margin:0 0 10pt 20pt; }
+      .subtitle { font-size:12pt; color:#444; margin-bottom:16pt; }
+      .meta { font-size:9pt; color:#666; text-align:left; }
+      .abstract { border-top:1px solid #bbb; border-bottom:1px solid #bbb; padding:10pt 0; margin:16pt 0; }
+      .page-break { page-break-before:always; }
+      figure { margin:16pt 0 22pt; page-break-inside:avoid; }
+      figure img { display:block; max-width:100%; max-height:650px; margin:0 auto; }
+      figcaption { font-size:9pt; color:#555; margin-top:6pt; text-align:center; }
+      .record { border-left:3px solid #111; padding:8pt 12pt; margin:0 0 12pt; background:#fafafa; page-break-inside:avoid; }
+      .conversation { padding:8pt 10pt; margin:0 0 9pt; border:1px solid #ddd; }
+      .conversation.assistant { background:#f7f7f7; }
+      .editorial { border:1px solid #c7a900; background:#fffbea; padding:10pt 12pt; margin-top:18pt; }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml(article.title || project.name)}</h1>
+    ${article.subtitle ? `<div class="subtitle">${escapeHtml(article.subtitle)}</div>` : ''}
+    <p class="meta"><strong>Projeto:</strong> ${escapeHtml(project.name)} · <strong>Autoria:</strong> ${escapeHtml(authorName || 'A preencher')} · <strong>Metodologia:</strong> 5I’s</p>
+    <div class="abstract"><p><strong>Resumo.</strong> ${escapeHtml(article.abstract || '')}</p><p><strong>Palavras-chave:</strong> ${(article.keywords || []).map(escapeHtml).join('; ')}.</p></div>
+    ${articleSections}
+    ${references}
+    ${editorialNotes}
+
+    <div class="page-break"></div>
+    <h1>Documentação integral do projeto</h1>
+    <p>Este apêndice preserva os registros utilizados pelo agente Publica para construir o relato científico, mantendo rastreabilidade entre texto final e processo projetual.</p>
+    <h2>Dados do projeto</h2>
+    <p><strong>Nome:</strong> ${escapeHtml(project.name)}</p>
+    <p><strong>Tipo:</strong> ${escapeHtml(project.projectType)}</p>
+    <p><strong>Problema:</strong> ${escapeHtml(project.problem)}</p>
+    <p><strong>Comunidade:</strong> ${escapeHtml(project.community)}</p>
+    <p><strong>ODS:</strong> ${escapeHtml(project.ods)}</p>
+
+    <h2>Documentação visual</h2>
+    ${visualsHtml}
+
+    <div class="page-break"></div>
+    <h2>Cards, notas e registros do canvas</h2>
+    ${cardsHtml || '<p>Não há cards registrados.</p>'}
+
+    <div class="page-break"></div>
+    <h2>Conversas completas com os agentes</h2>
+    ${conversationHtml}
+  </body></html>`;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${publicationFileName(project.name)}-relato-cientifico-5is.doc`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
 export default function Workspace({
   project,
   nodes,
@@ -184,6 +463,9 @@ export default function Workspace({
   const [selectedMediatorId, setSelectedMediatorId] = useState<string>('agent-idea');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [genError, setGenError] = useState<string>('');
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publicationError, setPublicationError] = useState('');
+  const [publicationStatus, setPublicationStatus] = useState('');
   const desktopPanelsInitiallyOpen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
@@ -213,6 +495,7 @@ export default function Workspace({
       case 'Code2': return <Code2 size={size} className={className} />;
       case 'Sparkles': return <Sparkles size={size} className={className} />;
       case 'Orbit': return <Orbit size={size} className={className} />;
+      case 'FileText': return <FileText size={size} className={className} />;
       default: return <Compass size={size} className={className} />;
     }
   };
@@ -291,6 +574,83 @@ export default function Workspace({
     stopVoiceRecognition();
   };
 
+  const handleGeneratePublication = async () => {
+    setIsPublishing(true);
+    setPublicationError('');
+    setPublicationStatus('Lendo cards, notas e conversas…');
+
+    try {
+      const conversations = collectProjectConversations(project.id);
+      const nodeById = new Map(nodes.map((node) => [node.id, node]));
+      const session = await ensureTursoSession().catch(() => null);
+      const response = await fetch('/api/mediators/think', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {})
+        },
+        body: JSON.stringify({
+          mode: 'publication',
+          project: {
+            name: project.name,
+            projectType: project.projectType,
+            problem: project.problem,
+            community: project.community,
+            ods: project.ods
+          },
+          mediator: {
+            id: activeMediator.id,
+            name: activeMediator.name,
+            role: activeMediator.role,
+            bio: activeMediator.bio
+          },
+          phase: project.activePhase,
+          existingThoughts: nodes.map((node) => ({
+            id: node.id,
+            type: node.type,
+            title: node.title,
+            content: node.content,
+            phase: node.phase,
+            scientificContext: node.scientificContext || '',
+            provocations: node.provocations || [],
+            connections: (node.connections || []).map((id) => nodeById.get(id)?.title || id),
+            imageName: node.imageName || '',
+            drawingName: node.drawingName || '',
+            attachments: (node.attachments || []).map((attachment) => ({ name: attachment.name, type: attachment.type }))
+          })),
+          conversations
+        })
+      });
+
+      const raw = await response.text();
+      let data: any = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Publica devolveu uma resposta inválida (HTTP ${response.status}).`); }
+      if (!response.ok) throw new Error(data.error || `Não foi possível gerar o relato (HTTP ${response.status}).`);
+      if (!data.article?.title || !data.article?.abstract || !Array.isArray(data.article?.sections)) {
+        throw new Error('O Publica devolveu um artigo incompleto. Tente novamente.');
+      }
+
+      setPublicationStatus('Incorporando imagens e folhas de desenho…');
+      const visuals = await collectProjectVisuals(nodes);
+      setPublicationStatus('Montando o documento Word…');
+      downloadPublicationDoc(
+        project,
+        studentName || currentUser?.name || '',
+        data.article as PublicationArticle,
+        nodes,
+        conversations,
+        visuals
+      );
+      setPublicationStatus('Documento gerado.');
+    } catch (error: any) {
+      console.error(error);
+      setPublicationError(error?.message || 'Não foi possível gerar a publicação.');
+      setPublicationStatus('');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const handleTriggerMediator = async () => {
     setIsGenerating(true);
     setGenError('');
@@ -322,6 +682,7 @@ export default function Workspace({
             ods: project.ods
           },
           mediator: {
+            id: activeMediator.id,
             name: activeMediator.name,
             role: activeMediator.role,
             bio: activeMediator.bio
@@ -863,10 +1224,13 @@ export default function Workspace({
           {/* Action Footer: Button to trigger generator on canvas */}
           <div className="p-4 bg-[#FDFDFB] border-t border-[#F0F0EE] space-y-3">
             
-            {genError && (
+            {(genError || publicationError) && (
               <p className="text-[10px] font-mono text-red-600 bg-red-50 p-2.5 rounded border border-red-200">
-                {genError}
+                {publicationError || genError}
               </p>
+            )}
+            {activeMediator.id === 'agent-publica' && publicationStatus && !publicationError && (
+              <p className="text-[10px] font-mono text-neutral-600 bg-[#F5F5F3] p-2.5 rounded border border-[#E0E0DE]">{publicationStatus}</p>
             )}
 
             <button
@@ -877,25 +1241,41 @@ export default function Workspace({
               <span>CONVERSAR COM {activeMediator.name}</span>
             </button>
 
-            <motion.button
-              onClick={handleTriggerMediator}
-              disabled={isGenerating}
-              whileHover={{ scale: isGenerating ? 1 : 1.02 }}
-              whileTap={{ scale: isGenerating ? 1 : 0.98 }}
-              className="w-full bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-400 transition-colors py-4 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.15em] cursor-pointer shadow-lg"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 size={14} className="animate-spin text-white" />
-                  <span className="font-mono text-[10px] tracking-wider uppercase">Sintetizando...</span>
-                </>
-              ) : (
-                <>
-                  <span>PROVOCAR DIALÉTICA</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </>
-              )}
-            </motion.button>
+            {activeMediator.id === 'agent-publica' ? (
+              <motion.button
+                onClick={handleGeneratePublication}
+                disabled={isPublishing}
+                whileHover={{ scale: isPublishing ? 1 : 1.02 }}
+                whileTap={{ scale: isPublishing ? 1 : 0.98 }}
+                className="w-full bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-400 transition-colors py-4 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.12em] cursor-pointer shadow-lg"
+              >
+                {isPublishing ? (
+                  <><Loader2 size={14} className="animate-spin text-white" /><span className="font-mono text-[10px] tracking-wider uppercase">Documentando…</span></>
+                ) : (
+                  <><FileText size={15} /><span>GERAR ARTIGO + DOCUMENTAÇÃO .DOC</span></>
+                )}
+              </motion.button>
+            ) : (
+              <motion.button
+                onClick={handleTriggerMediator}
+                disabled={isGenerating}
+                whileHover={{ scale: isGenerating ? 1 : 1.02 }}
+                whileTap={{ scale: isGenerating ? 1 : 0.98 }}
+                className="w-full bg-black text-white hover:bg-neutral-800 disabled:bg-neutral-400 transition-colors py-4 px-4 rounded-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.15em] cursor-pointer shadow-lg"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-white" />
+                    <span className="font-mono text-[10px] tracking-wider uppercase">Sintetizando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>PROVOCAR DIALÉTICA</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </>
+                )}
+              </motion.button>
+            )}
             
             <div className="text-center">
               <span className="text-[9px] font-mono text-gray-400 uppercase tracking-widest block">
