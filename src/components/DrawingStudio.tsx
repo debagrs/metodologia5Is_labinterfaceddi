@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   Circle,
@@ -234,12 +234,17 @@ const renderDrawingElement = (element: DrawingElement, selected = false) => {
           <line x1={bounds.cx} y1={bounds.minY} x2={bounds.maxX} y2={bounds.maxY - bounds.height * 0.18} />
         </g>
       );
-    case 'text':
+    case 'text': {
+      const size = element.fontSize || 32;
+      const lines = (element.text || '').split('\n');
       return (
-        <text x={x} y={y} fill={stroke} fontSize={element.fontSize || 32} fontFamily="Arial, Helvetica, sans-serif" opacity={opacity} style={selectionStyle}>
-          {element.text || ''}
+        <text x={x} y={y} fill={stroke} fontSize={size} fontFamily="Arial, Helvetica, sans-serif" opacity={opacity} style={selectionStyle}>
+          {lines.map((line, index) => (
+            <tspan key={`${element.id}-line-${index}`} x={x} dy={index === 0 ? 0 : size * 1.2}>{line || ' '}</tspan>
+          ))}
         </text>
       );
+    }
     default:
       return null;
   }
@@ -309,7 +314,12 @@ const elementToSvgString = (element: DrawingElement) => {
       return `<g ${attrs}><path d="M ${bounds.cx} ${bounds.minY} L ${bounds.maxX} ${bounds.maxY - baseRy} A ${bounds.width / 2} ${baseRy} 0 0 1 ${bounds.minX} ${bounds.maxY - baseRy} Z"/><ellipse cx="${bounds.cx}" cy="${bounds.maxY - baseRy}" rx="${Math.max(bounds.width / 2, 1)}" ry="${baseRy}" fill="none"/></g>`;
     }
     case 'pyramid': return `<g ${attrs}><polygon points="${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.maxY - bounds.height * 0.18} ${bounds.cx},${bounds.maxY} ${bounds.minX},${bounds.maxY - bounds.height * 0.18}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.cx}" y2="${bounds.maxY}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.minX}" y2="${bounds.maxY - bounds.height * 0.18}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.maxX}" y2="${bounds.maxY - bounds.height * 0.18}"/></g>`;
-    case 'text': return `<text x="${x}" y="${y}" fill="${escapeXml(stroke)}" font-size="${element.fontSize || 32}" font-family="Arial, Helvetica, sans-serif" opacity="${opacity}">${escapeXml(element.text || '')}</text>`;
+    case 'text': {
+      const size = element.fontSize || 32;
+      const lines = (element.text || '').split('\n');
+      const tspans = lines.map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : size * 1.2}">${escapeXml(line || ' ')}</tspan>`).join('');
+      return `<text x="${x}" y="${y}" fill="${escapeXml(stroke)}" font-size="${size}" font-family="Arial, Helvetica, sans-serif" opacity="${opacity}">${tspans}</text>`;
+    }
     default: return '';
   }
 };
@@ -370,6 +380,26 @@ export const exportDrawing = async (drawing: DrawingDocument, format: ExportForm
 
 const makeElementId = () => `draw-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+const shapeIcon = (tool: DrawingTool) => {
+  if (tool === 'line' || tool === 'arrow') return <Minus size={18} />;
+  if (tool === 'ellipse' || tool === 'sphere') return <Circle size={18} />;
+  if (tool === 'triangle' || tool === 'cone' || tool === 'pyramid') return <Triangle size={18} />;
+  if (tool === 'star') return <Star size={18} />;
+  return <Square size={18} />;
+};
+
+const isShapeTool = (tool: DrawingTool) => SHAPE_TOOLS.some((item) => item.tool === tool);
+
+type MobilePanel = 'style' | 'shapes' | 'export' | null;
+
+type TextEditorState = {
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+  value: string;
+};
+
 export default function DrawingStudio({ drawing, title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onClose }: DrawingStudioProps) {
   const initial = useMemo(() => cloneDrawing(drawing), [drawing]);
   const [history, setHistory] = useState<DrawingDocument[]>([initial]);
@@ -383,8 +413,18 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const [draft, setDraft] = useState<DrawingElement | null>(null);
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
+  const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const paperRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLTextAreaElement>(null);
   const current = history[historyIndex];
+
+  useEffect(() => {
+    if (textEditor) {
+      requestAnimationFrame(() => textInputRef.current?.focus());
+    }
+  }, [textEditor]);
 
   const commit = (next: DrawingDocument) => {
     const truncated = history.slice(0, historyIndex + 1);
@@ -408,9 +448,41 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     };
   };
 
+  const drawingWithPendingText = () => {
+    if (!textEditor || !textEditor.value.trim()) return current;
+    const element: DrawingElement = {
+      id: makeElementId(),
+      type: 'text',
+      stroke: strokeColor,
+      strokeWidth,
+      x: textEditor.x,
+      y: textEditor.y,
+      text: textEditor.value.trimEnd(),
+      fontSize,
+    };
+    return { ...current, elements: [...current.elements, element] };
+  };
+
+  const commitTextEditor = () => {
+    if (!textEditor) return;
+    const next = drawingWithPendingText();
+    if (next !== current) commit(next);
+    setTextEditor(null);
+  };
+
+  const saveDrawing = () => {
+    const next = drawingWithPendingText();
+    if (next !== current) {
+      commit(next);
+      setTextEditor(null);
+    }
+    onSave(next);
+  };
+
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (!canEdit) return;
     event.preventDefault();
+    event.stopPropagation();
     const point = getSvgPoint(event);
     const target = event.target as SVGElement;
     const hitId = target.closest('[data-drawing-element-id]')?.getAttribute('data-drawing-element-id') || null;
@@ -421,21 +493,20 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     }
 
     if (tool === 'text') {
-      const text = window.prompt('Digite o texto que deseja inserir:');
-      if (!text?.trim()) return;
-      const element: DrawingElement = {
-        id: makeElementId(),
-        type: 'text',
-        stroke: strokeColor,
-        strokeWidth,
+      const paperRect = paperRef.current?.getBoundingClientRect();
+      setTextEditor({
         x: point.x,
         y: point.y,
-        text: text.trim(),
-        fontSize,
-      };
-      commit({ ...current, elements: [...current.elements, element] });
+        left: paperRect ? event.clientX - paperRect.left : 0,
+        top: paperRect ? event.clientY - paperRect.top : 0,
+        value: '',
+      });
+      setSelectedElementId(null);
       return;
     }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setSelectedElementId(null);
 
     if (tool === 'brush') {
       setDraft({
@@ -477,12 +548,29 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     setDraft({ ...draft, x2: point.x, y2: point.y });
   };
 
-  const finishDraft = () => {
+  const defaultSizedElement = (element: DrawingElement) => {
+    const x = element.x ?? 0;
+    const y = element.y ?? 0;
+    const horizontalOnly = element.type === 'line' || element.type === 'arrow';
+    const desiredX = x + 180 <= current.width ? x + 180 : Math.max(0, x - 180);
+    const desiredY = horizontalOnly ? y : y + 120 <= current.height ? y + 120 : Math.max(0, y - 120);
+    return { ...element, x2: desiredX, y2: desiredY };
+  };
+
+  const finishDraft = (event?: React.PointerEvent<SVGSVGElement>) => {
+    if (event) {
+      try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* pointer may already be released */ }
+    }
     if (!draft) return;
-    const shouldKeep = draft.type === 'brush'
-      ? (draft.points?.length || 0) > 1
-      : Math.abs((draft.x2 ?? 0) - (draft.x ?? 0)) + Math.abs((draft.y2 ?? 0) - (draft.y ?? 0)) > 4;
-    if (shouldKeep) commit({ ...current, elements: [...current.elements, draft] });
+    if (draft.type === 'brush') {
+      if ((draft.points?.length || 0) > 1) commit({ ...current, elements: [...current.elements, draft] });
+      setDraft(null);
+      return;
+    }
+
+    const distance = Math.abs((draft.x2 ?? 0) - (draft.x ?? 0)) + Math.abs((draft.y2 ?? 0) - (draft.y ?? 0));
+    const finished = distance > 4 ? draft : defaultSizedElement(draft);
+    commit({ ...current, elements: [...current.elements, finished] });
     setDraft(null);
   };
 
@@ -514,35 +602,46 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     }
   };
 
+  const chooseTool = (nextTool: DrawingTool) => {
+    setTool(nextTool);
+    setDraft(null);
+    setTextEditor(null);
+    if (nextTool !== 'select') setSelectedElementId(null);
+  };
+
+  const activeShape = SHAPE_TOOLS.find((item) => item.tool === tool);
+
   return (
     <div className="fixed inset-0 z-[100] bg-[#ECECEA] flex flex-col canvas-control" onPointerDown={(event) => event.stopPropagation()}>
-      <header className="shrink-0 bg-white border-b border-black/10 px-2 sm:px-4 py-2 flex items-center gap-2 justify-between">
+      <header className="shrink-0 bg-white border-b border-black/10 px-2 sm:px-4 py-2 flex items-center gap-2 justify-between" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <div className="min-w-0 flex items-center gap-2">
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-lg hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar folha"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar folha"><X size={18} /></button>
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">{title}</div>
             <div className="text-[10px] font-mono text-neutral-500">{current.width} × {current.height}px · {current.elements.length} elementos</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <button type="button" disabled={!canEdit} onClick={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)} className="h-9 w-9 rounded-lg border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Desfazer"><Undo2 size={16} /></button>
-          <button type="button" disabled={!canEdit} onClick={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)} className="h-9 w-9 rounded-lg border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Refazer"><Redo2 size={16} /></button>
-          <button type="button" onClick={() => onSave(current)} className="h-9 px-3 rounded-lg bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
+          <button type="button" disabled={!canEdit || historyIndex <= 0} onClick={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Desfazer"><Undo2 size={16} /></button>
+          <button type="button" disabled={!canEdit || historyIndex >= history.length - 1} onClick={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Refazer"><Redo2 size={16} /></button>
+          <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="md:hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
+          <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
         </div>
       </header>
 
-      <div className="shrink-0 bg-white border-b border-black/10 overflow-x-auto overscroll-x-contain">
-        <div className="min-w-max px-2 sm:px-4 py-2 flex items-center gap-2">
+      {/* Barra completa para desktop. No celular, as ferramentas ficam em uma barra própria abaixo. */}
+      <div className="hidden md:block shrink-0 bg-white border-b border-black/10 overflow-x-auto overscroll-x-contain">
+        <div className="min-w-max px-4 py-2 flex items-center gap-2">
           <div className="flex items-center gap-1 pr-2 border-r border-black/10">
-            <ToolButton active={tool === 'select'} onClick={() => setTool('select')} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
-            <ToolButton active={tool === 'brush'} onClick={() => setTool('brush')} label="Pincel"><Pencil size={15} /></ToolButton>
-            <ToolButton active={tool === 'text'} onClick={() => setTool('text')} label="Texto"><Type size={15} /></ToolButton>
+            <ToolButton active={tool === 'select'} onClick={() => chooseTool('select')} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
+            <ToolButton active={tool === 'brush'} onClick={() => chooseTool('brush')} label="Pincel"><Pencil size={15} /></ToolButton>
+            <ToolButton active={tool === 'text'} onClick={() => chooseTool('text')} label="Texto"><Type size={15} /></ToolButton>
           </div>
 
           <div className="flex items-center gap-1 pr-2 border-r border-black/10">
             {SHAPE_TOOLS.map((item) => (
-              <ToolButton key={item.tool} active={tool === item.tool} onClick={() => setTool(item.tool)} label={item.label} compact>
-                {item.tool === 'line' || item.tool === 'arrow' ? <Minus size={14} /> : item.tool === 'ellipse' || item.tool === 'sphere' ? <Circle size={14} /> : item.tool === 'triangle' || item.tool === 'cone' || item.tool === 'pyramid' ? <Triangle size={14} /> : item.tool === 'star' ? <Star size={14} /> : <Square size={14} />}
+              <ToolButton key={item.tool} active={tool === item.tool} onClick={() => chooseTool(item.tool)} label={item.label} compact>
+                {shapeIcon(item.tool)}
               </ToolButton>
             ))}
           </div>
@@ -556,7 +655,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
           </div>
 
           <div className="flex items-center gap-2 pr-2 border-r border-black/10">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase">Pincel</span>
+            <span className="text-[10px] font-mono text-neutral-500 uppercase">Espessura</span>
             <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-28" />
             <span className="text-[10px] font-mono w-7 text-right">{strokeWidth}</span>
           </div>
@@ -587,19 +686,18 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
         </div>
       </div>
 
-      <main className="flex-1 min-h-0 p-2 sm:p-5 overflow-auto flex items-start justify-center bg-[#ECECEA]">
-        <div className="w-full max-w-[1400px] min-w-[280px] flex justify-center">
+      <main className="flex-1 min-h-0 p-2 md:p-5 pb-24 md:pb-5 overflow-auto flex items-start justify-center bg-[#ECECEA]">
+        <div ref={paperRef} className="relative w-full max-w-[1400px] min-w-[280px] flex justify-center">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${current.width} ${current.height}`}
             preserveAspectRatio="xMidYMid meet"
-            className="block w-full h-auto max-h-[calc(100dvh-150px)] bg-white shadow-2xl border border-black/10"
+            className="block w-full h-auto max-h-[calc(100dvh-145px)] md:max-h-[calc(100dvh-150px)] bg-white shadow-2xl border border-black/10"
             style={{ touchAction: 'none', cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair' }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={finishDraft}
             onPointerCancel={finishDraft}
-            onPointerLeave={(event) => { if (event.buttons === 0) finishDraft(); }}
           >
             <rect width={current.width} height={current.height} fill={current.background || '#FFFFFF'} />
             {current.elements.map((element) => (
@@ -609,13 +707,188 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
             ))}
             {draft && <g opacity={0.85}>{renderDrawingElement(draft)}</g>}
           </svg>
+
+          {textEditor && (
+            <textarea
+              ref={textInputRef}
+              value={textEditor.value}
+              onChange={(event) => setTextEditor({ ...textEditor, value: event.target.value })}
+              onBlur={commitTextEditor}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setTextEditor(null);
+                }
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  commitTextEditor();
+                }
+              }}
+              placeholder="Digite aqui…"
+              className="absolute z-20 min-w-[160px] max-w-[min(70vw,420px)] min-h-[54px] rounded-lg border-2 border-black bg-white/95 px-2 py-1.5 shadow-xl outline-none resize both"
+              style={{
+                left: textEditor.left,
+                top: textEditor.top,
+                color: strokeColor,
+                fontSize: `${Math.max(16, Math.min(36, fontSize * 0.55))}px`,
+                lineHeight: 1.2,
+                transform: 'translateY(-0.15em)',
+                touchAction: 'manipulation',
+              }}
+              aria-label="Texto do desenho"
+            />
+          )}
         </div>
       </main>
 
-      <footer className="shrink-0 bg-white border-t border-black/10 px-3 py-1.5 text-[10px] font-mono text-neutral-500 flex items-center justify-between gap-3">
-        <span className="truncate">Caneta/touch: desenhe diretamente. Formas: toque e arraste. Texto: toque na folha e digite.</span>
-        <span className="hidden sm:inline shrink-0">SVG vetorial · PNG/JPG raster</span>
+      <footer className="hidden md:flex shrink-0 bg-white border-t border-black/10 px-3 py-1.5 text-[10px] font-mono text-neutral-500 items-center justify-between gap-3">
+        <span className="truncate">Caneta/touch: desenhe diretamente. Formas: toque e arraste ou apenas toque para inserir. Texto: escolha T e toque na folha.</span>
+        <span className="shrink-0">SVG vetorial · PNG/JPG raster</span>
       </footer>
+
+      {/* Painéis mobile */}
+      {mobilePanel === 'shapes' && (
+        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[48dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <div className="text-xs font-semibold">Formas</div>
+              <div className="text-[10px] font-mono text-neutral-500">Toque para escolher; depois arraste ou toque na folha.</div>
+            </div>
+            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {SHAPE_TOOLS.map((item) => (
+              <button
+                key={item.tool}
+                type="button"
+                onClick={() => { chooseTool(item.tool); setMobilePanel(null); }}
+                className={`min-h-16 rounded-xl border px-2 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-mono ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10'}`}
+              >
+                {shapeIcon(item.tool)}
+                <span className="text-center leading-tight">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mobilePanel === 'style' && (
+        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[54dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-xs font-semibold">Cor e tamanho</div>
+              <div className="text-[10px] font-mono text-neutral-500">{tool === 'text' ? 'Cor e tamanho do texto' : tool === 'brush' ? 'Cor e espessura do pincel' : 'Traço e preenchimento da forma'}</div>
+            </div>
+            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do traço</div>
+            <div className="grid grid-cols-6 gap-2">
+              {PALETTE.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setStrokeColor(color)}
+                  className={`h-11 rounded-xl border ${strokeColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Usar cor ${color}`}
+                />
+              ))}
+              <label className="h-11 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden">
+                + COR
+                <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="absolute opacity-0 pointer-events-none" />
+              </label>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono uppercase text-neutral-500">Espessura</span>
+              <span className="text-xs font-mono font-bold">{strokeWidth}px</span>
+            </div>
+            <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
+            <div className="grid grid-cols-5 gap-2 mt-1">
+              {[2, 4, 8, 16, 32].map((size) => (
+                <button key={size} type="button" onClick={() => setStrokeWidth(size)} className={`h-10 rounded-xl border text-[10px] font-mono ${strokeWidth === size ? 'bg-black text-white border-black' : 'border-black/10'}`}>{size}px</button>
+              ))}
+            </div>
+          </div>
+
+          {tool === 'text' && (
+            <div className="mb-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-mono uppercase text-neutral-500">Tamanho do texto</span>
+                <span className="text-xs font-mono font-bold">{fontSize}px</span>
+              </div>
+              <input type="range" min="12" max="140" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
+            </div>
+          )}
+
+          {isShapeTool(tool) && (
+            <div className="pt-3 border-t border-black/10">
+              <label className="flex items-center justify-between gap-3 min-h-11 text-xs font-mono">
+                <span>Preencher forma</span>
+                <input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} className="h-5 w-5" />
+              </label>
+              {useFill && (
+                <div className="grid grid-cols-6 gap-2 mt-2">
+                  {PALETTE.map((color) => (
+                    <button key={`fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-10 rounded-xl border ${fillColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {mobilePanel === 'export' && (
+        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-xs font-semibold">Exportar desenho</div>
+              <div className="text-[10px] font-mono text-neutral-500">SVG mantém vetores; PNG/JPG geram imagem.</div>
+            </div>
+            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
+              <button key={format} type="button" disabled={exporting} onClick={() => void handleExport(format)} className="h-12 rounded-xl bg-black text-white text-xs font-mono uppercase flex items-center justify-center gap-1.5 disabled:opacity-50"><Download size={14} /> {format}</button>
+            ))}
+          </div>
+          {allDrawings.length > 1 && (
+            <div className="mt-3 pt-3 border-t border-black/10">
+              <div className="text-[10px] font-mono text-neutral-500 mb-2">EXPORTAR TODAS AS FOLHAS</div>
+              <div className="grid grid-cols-3 gap-2">
+                {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
+                  <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-11 rounded-xl border border-black text-[10px] font-mono uppercase disabled:opacity-50">TODAS {format}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedElementId && tool === 'select' && !mobilePanel && (
+        <div className="md:hidden absolute right-2 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] z-[125] flex items-center gap-2 rounded-2xl border border-black/15 bg-white p-2 shadow-xl">
+          <button type="button" onClick={deleteSelected} className="h-11 px-3 rounded-xl bg-red-50 text-red-700 text-[10px] font-mono font-bold uppercase flex items-center gap-2"><Trash2 size={15} /> Excluir elemento</button>
+        </div>
+      )}
+
+      {/* Barra de ferramentas mobile: sempre visível e com áreas de toque grandes. */}
+      <div className="md:hidden absolute left-0 right-0 bottom-0 z-[120] border-t border-black/10 bg-white/95 backdrop-blur-xl px-2 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }} onPointerDown={(event) => event.stopPropagation()}>
+        <div className="grid grid-cols-5 gap-1 max-w-[560px] mx-auto">
+          <MobileToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setMobilePanel(null); }} label="Selecionar"><ArrowLeftRight size={18} /></MobileToolButton>
+          <MobileToolButton active={tool === 'brush'} onClick={() => { chooseTool('brush'); setMobilePanel(null); }} label="Pincel"><Pencil size={18} /></MobileToolButton>
+          <MobileToolButton active={tool === 'text'} onClick={() => { chooseTool('text'); setMobilePanel(null); }} label="Texto"><Type size={18} /></MobileToolButton>
+          <MobileToolButton active={isShapeTool(tool)} onClick={() => setMobilePanel(mobilePanel === 'shapes' ? null : 'shapes')} label={activeShape ? activeShape.label.split(' ')[0] : 'Formas'}>{activeShape ? shapeIcon(activeShape.tool) : <Square size={18} />}</MobileToolButton>
+          <MobileToolButton active={mobilePanel === 'style'} onClick={() => setMobilePanel(mobilePanel === 'style' ? null : 'style')} label="Estilo">
+            <span className="h-5 w-5 rounded-full border border-black/20" style={{ backgroundColor: strokeColor }} />
+          </MobileToolButton>
+        </div>
+      </div>
     </div>
   );
 }
@@ -630,6 +903,21 @@ function ToolButton({ active, onClick, label, compact = false, children }: { act
     >
       {children}
       <span>{label}</span>
+    </button>
+  );
+}
+
+function MobileToolButton({ active, onClick, label, children }: { active: boolean; onClick: () => void; label: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-14 rounded-xl flex flex-col items-center justify-center gap-1 px-1 text-[9px] font-mono leading-none ${active ? 'bg-black text-white' : 'bg-white text-neutral-700'}`}
+      title={label}
+      style={{ touchAction: 'manipulation' }}
+    >
+      {children}
+      <span className="max-w-full truncate">{label}</span>
     </button>
   );
 }
