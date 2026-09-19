@@ -9,6 +9,8 @@ export interface MediatorRequestBody {
   conversation?: Array<{ role: string; text: string }>;
   conversations?: Array<{ mediatorId: string; mediatorName: string; messages: Array<{ role: string; text: string; createdAt?: string }> }>;
   existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
+  engine?: 'p5' | 'three' | string;
+  prompt?: string;
 }
 
 export interface MediatorInsight {
@@ -141,6 +143,72 @@ ${JSON.stringify(conversations, null, 2)}
 
 Redija um artigo científico de relato de projeto usando todo o material pertinente. A narrativa deve reconstruir decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
   return { system, user };
+}
+
+function fullProjectContext(body: MediatorRequestBody) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS COMPLETOS DO CANVAS\n${JSON.stringify(records, null, 2)}\n\nCONVERSAS DOS AGENTES\n${JSON.stringify(conversations, null, 2)}`;
+}
+
+function buildImplementationPromptMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, agente de Implementação da Metodologia 5I’s. Converta a documentação real do projeto em ENGENHARIA DE PROMPT para uma IA de desenvolvimento. Preserve requisitos, público, contexto, decisões visuais, funcionalidades, acessibilidade e referências. Não invente conteúdo ausente: marque hipóteses. Solicite React + Vite + TypeScript, Supabase quando houver persistência/autenticação/storage, Vercel, .env.example, RLS, mobile-first, acessibilidade, estados de erro/loading e documentação. Retorne somente JSON válido: {"promptEngineering":"...","architectureSummary":"...","stack":["..."],"assumptions":["..."],"acceptanceCriteria":["..."]}.`;
+  return { system, user: `${fullProjectContext(body)}\n\nCrie um superprompt técnico autocontido que permita reconstruir o projeto sem acesso ao canvas original.` };
+}
+
+function buildImplementationPackageMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, agente full stack de Implementação da Metodologia 5I’s. Gere um pacote funcional em React + Vite + TypeScript, Supabase quando pertinente e Vercel. Leia todos os registros antes de codificar. Não exponha service role ou segredos no cliente; use VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY, RLS e .env.example. Preserve conteúdo, identidade, responsividade e acessibilidade. Não invente features sem marcar como hipótese. Retorne somente JSON válido: {"package":{"projectName":"slug","summary":"...","files":[{"path":"package.json","content":"..."}],"assumptions":["..."],"postGenerationChecks":["..."]}}. Inclua de 8 a 24 arquivos e sempre package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md, .env.example e, quando houver persistência, src/lib/supabase.ts e supabase/schema.sql.`;
+  return { system, user: `${fullProjectContext(body)}\n\nGere agora a implementação completa e pequena o suficiente para ser executável.` };
+}
+
+function buildInteractiveCodeMessages(body: MediatorRequestBody) {
+  const engine = body.engine === 'three' ? 'three' : 'p5';
+  const engineRules = engine === 'three'
+    ? `O código será executado em módulo depois de import * as THREE. Não escreva imports, HTML ou tags script. Use THREE, renderer, scene, camera, requestAnimationFrame e resize.`
+    : `O código será executado depois de carregar p5.js global. Não escreva HTML/imports/tags script. Declare setup(), draw() e handlers necessários, usando createCanvas(windowWidth, windowHeight) e resizeCanvas.`;
+  const system = `Você é Forja em modo laboratório interativo. Gere JavaScript performático, responsivo a mouse e touch, sem bibliotecas extras nem acesso a parent/localStorage. ${engineRules} Retorne somente JSON: {"interactive":{"title":"...","engine":"${engine}","code":"..."}}.`;
+  const context = body.existingThoughts?.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n') || '';
+  const user = `PROJETO: ${body.project.name}\nPROBLEMA: ${body.project.problem}\nCONTEXTO:\n${context}\n\nPROMPT: ${body.prompt || ''}`;
+  return { system, user };
+}
+
+function parseJsonObject(text: string, errorMessage: string) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error(errorMessage);
+  return JSON.parse(stripped.slice(start, end + 1));
+}
+
+function cleanImplementationPromptJson(text: string) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para a engenharia de prompt.');
+  if (!data.promptEngineering) throw new Error('A engenharia de prompt retornou vazia.');
+  return {
+    promptEngineering: String(data.promptEngineering),
+    architectureSummary: String(data.architectureSummary || ''),
+    stack: Array.isArray(data.stack) ? data.stack.map(String) : [],
+    assumptions: Array.isArray(data.assumptions) ? data.assumptions.map(String) : [],
+    acceptanceCriteria: Array.isArray(data.acceptanceCriteria) ? data.acceptanceCriteria.map(String) : [],
+  };
+}
+
+function cleanImplementationPackageJson(text: string) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para o pacote.');
+  const pack = data.package;
+  if (!pack || !Array.isArray(pack.files) || pack.files.length < 3) throw new Error('O pacote de implementação veio incompleto.');
+  return {
+    projectName: String(pack.projectName || 'projeto-5is'),
+    summary: String(pack.summary || ''),
+    files: pack.files.filter((file: any) => file?.path && typeof file.content === 'string').slice(0, 30).map((file: any) => ({ path: String(file.path), content: String(file.content) })),
+    assumptions: Array.isArray(pack.assumptions) ? pack.assumptions.map(String) : [],
+    postGenerationChecks: Array.isArray(pack.postGenerationChecks) ? pack.postGenerationChecks.map(String) : [],
+  };
+}
+
+function cleanInteractiveJson(text: string) {
+  const data = parseJsonObject(text, 'A interação não retornou JSON válido.');
+  if (!data.interactive?.code) throw new Error('A interação retornou sem código.');
+  return { title: String(data.interactive.title || 'Interação'), engine: data.interactive.engine === 'three' ? 'three' : 'p5', code: String(data.interactive.code) };
 }
 
 function cleanPublicationJson(text: string): PublicationArticle {
@@ -312,6 +380,30 @@ async function callGeminiPublication(system: string, user: string): Promise<Publ
   return { article: cleanPublicationJson(text), provider: 'Gemini', model };
 }
 
+async function callGeminiStructured(system: string, user: string, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens }
+      })
+    },
+    timeoutMs
+  );
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu conteúdo estruturado.');
+  return { text, provider: 'Gemini', model };
+}
+
 function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -356,9 +448,28 @@ function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   };
 }
 
-export async function generateMediatorInsight(body: MediatorRequestBody): Promise<MediatorInsight | PublicationResult> {
+export async function generateMediatorInsight(body: MediatorRequestBody): Promise<any> {
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'implementation-prompt') {
+    const { system, user } = buildImplementationPromptMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 60000), 0.18);
+    return { ...cleanImplementationPromptJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-package') {
+    const { system, user } = buildImplementationPackageMessages(body);
+    const result = await callGeminiStructured(system, user, 18000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 75000), 0.15);
+    return { package: cleanImplementationPackageJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'interactive-code') {
+    if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
+    const { system, user } = buildInteractiveCodeMessages(body);
+    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    return { interactive: cleanInteractiveJson(result.text), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'publication') {
