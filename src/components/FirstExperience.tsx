@@ -66,10 +66,10 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
   };
 
   return (
-    <div id="first-experience-container" className="min-h-[100dvh] bg-brand-beige flex flex-col md:flex-row font-sans overflow-x-hidden">
+    <div id="first-experience-container" className="w-full min-h-0 md:h-[calc(100dvh-7rem)] md:max-h-[calc(100dvh-7rem)] bg-brand-beige flex flex-col md:flex-row font-sans overflow-x-hidden md:overflow-hidden">
       
       {/* Left side: Premium Methodology Laboratory Context */}
-      <div id="left-sidebar" className="md:w-[42%] md:min-h-[100dvh] bg-brand-charcoal text-white p-6 sm:p-8 md:p-12 xl:p-16 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden">
+      <div id="left-sidebar" className="md:w-[42%] md:h-full bg-brand-charcoal text-white p-6 sm:p-8 md:p-8 lg:p-10 xl:p-12 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden md:overflow-y-auto">
         
         {/* Abstract organism glow in left side background */}
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-brand-accent/15 blur-3xl animate-pulse pointer-events-none" />
@@ -185,12 +185,12 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
       </div>
 
       {/* Right side: Elegant Display Questionnaire Form */}
-      <div id="onboarding-form-section" className="md:w-[58%] px-4 sm:px-6 py-10 md:px-10 xl:px-20 md:py-12 flex flex-col justify-center md:h-[100dvh] overflow-y-auto">
+      <div id="onboarding-form-section" className="md:w-[58%] min-h-0 md:h-full px-4 sm:px-6 py-8 md:px-8 lg:px-10 xl:px-16 md:py-8 flex flex-col justify-start overflow-y-auto overscroll-contain">
         
-        <div className="max-w-xl mx-auto w-full">
+        <div className="max-w-xl mx-auto w-full py-2 md:py-4">
           
           {/* Main Question Accentuated */}
-          <div className="mb-8 md:mb-12 text-center">
+          <div className="mb-7 md:mb-8 text-center shrink-0">
             <span className="text-[10px] font-bold font-mono tracking-widest text-[#70706E] uppercase block mb-4">
               LABORATÓRIO DE INTELIGÊNCIA PROJETUAL
             </span>
@@ -200,7 +200,7 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
             <div className="h-0.5 w-12 bg-black mx-auto"></div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
+          <form onSubmit={handleSubmit} className="space-y-6 md:space-y-7 pb-4">
             
             {/* Project Name Field */}
             <div className="flex flex-col gap-1.5">
