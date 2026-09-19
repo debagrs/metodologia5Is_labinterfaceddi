@@ -16,6 +16,15 @@ export interface InfiniteCanvasHandle {
   focusNode: (nodeId: string, openCollaboration?: boolean) => void;
 }
 
+
+const PHASE_NOTE_PALETTE: Record<Phase, { body: string; header: string; border: string; dot: string }> = {
+  'Ideação': { body: '#FFF9E8', header: '#FFF0B8', border: '#E7C75C', dot: '#E4AC16' },
+  'Inambulação': { body: '#EEF5FF', header: '#DCEBFF', border: '#8BB9F6', dot: '#3B82F6' },
+  'Instauração': { body: '#EFF9F2', header: '#DDF3E4', border: '#8BC9A3', dot: '#43B581' },
+  'Inspeção': { body: '#F7F0FF', header: '#EBDDFF', border: '#BE9BE8', dot: '#9A65D6' },
+  'Implementação': { body: '#FFF1F2', header: '#FFDDE1', border: '#EE9BA4', dot: '#E85D6A' },
+};
+
 interface InfiniteCanvasProps {
   project: Project;
   nodes: ThoughtNode[];
@@ -800,6 +809,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isDrawingSheet = node.type === 'drawing-sheet';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
+            const phasePalette = PHASE_NOTE_PALETTE[node.phase];
             const dimensions = getNodeDimensions(node);
             const isConnectionSource = connectingFromId === node.id;
             const isConnectionTarget = Boolean(connectingFromId && connectingFromId !== node.id);
@@ -1028,23 +1038,22 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                   scale: 1,
                   borderColor: isDragDropTarget || isConnectionSource || isSelected 
                     ? '#1A1A1A' 
-                    : isActive 
-                      ? '#E0E0DE' 
-                      : '#F0F0EE',
+                    : phasePalette.border,
                   boxShadow: isDragDropTarget
                     ? '0 0 0 5px rgba(59, 130, 246, 0.35), 0 12px 30px -5px rgba(0, 0, 0, 0.15)'
                     : isConnectionSource || isSelected 
                     ? '0 12px 30px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.05)' 
                     : '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01)'
                 }}
-                className="absolute thought-card pointer-events-auto rounded-2xl border bg-white text-neutral-800 overflow-hidden transition-all duration-200 cursor-default"
+                className="absolute thought-card pointer-events-auto rounded-2xl border text-neutral-800 overflow-hidden transition-all duration-200 cursor-default"
                 style={{
                   left: node.x,
                   top: node.y,
                   width: dimensions.width,
                   height: node.height || undefined,
                   minWidth: isCore ? 320 : 240,
-                  opacity: isActive ? 1 : 0.65
+                  opacity: isActive ? 1 : 0.65,
+                  backgroundColor: isCore ? '#FFFFFF' : phasePalette.body
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1060,13 +1069,15 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 {/* Drag Handle Bar */}
                 <div 
                   onPointerDown={(e) => handleNodePointerDown(e, node.id)}
-                  style={{ touchAction: 'none' }}
+                  style={{
+                    touchAction: 'none',
+                    backgroundColor: isCore ? '#1A1A1A' : phasePalette.header,
+                    borderColor: isCore ? '#000000' : phasePalette.border,
+                  }}
                   className={`px-4 py-3.5 sm:py-3 flex items-center justify-between cursor-grab active:cursor-grabbing border-b select-none ${
                     isCore 
-                      ? 'bg-[#1A1A1A] border-black text-white' 
-                      : isQuestion 
-                        ? 'bg-[#F5F5F3] border-[#E0E0DE] text-neutral-700 font-mono text-[10px]'
-                        : 'bg-stone-50 border-[#E0E0DE] text-neutral-700 font-mono text-[10px]'
+                      ? 'text-white' 
+                      : 'text-neutral-700 font-mono text-[10px]'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -1074,9 +1085,10 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                       <span className="text-[10px] tracking-widest font-mono text-white/65 uppercase font-bold">Âncora Central do Projeto</span>
                     ) : (
                       <>
-                        <span className={`w-2 h-2 rounded-full ${
-                          isActive ? 'bg-black animate-pulse' : 'bg-gray-300'
-                        }`} />
+                        <span
+                          className={`w-2 h-2 rounded-full ${isActive ? 'animate-pulse' : 'opacity-55'}`}
+                          style={{ backgroundColor: phasePalette.dot }}
+                        />
                         <span className="uppercase tracking-wider font-semibold font-mono">{node.phase}</span>
                       </>
                     )}
