@@ -196,9 +196,23 @@ function buildInteractiveCodeMessages(body: MediatorRequestBody) {
   const engineRules = engine === 'three'
     ? `O código será executado em módulo depois de import * as THREE. Não escreva imports, HTML ou tags script. Use THREE, renderer, scene, camera, requestAnimationFrame e resize.`
     : `O código será executado depois de carregar p5.js global. Não escreva HTML/imports/tags script. Declare setup(), draw() e handlers necessários, usando createCanvas(windowWidth, windowHeight) e resizeCanvas.`;
-  const system = `Você é Forja em modo laboratório interativo. Gere JavaScript performático, responsivo a mouse e touch, sem bibliotecas extras nem acesso a parent/localStorage. ${engineRules} Retorne somente JSON: {"interactive":{"title":"...","engine":"${engine}","code":"..."}}.`;
+  const system = `Você é Forja em modo laboratório interativo. Gere JavaScript performático, responsivo a mouse e touch, sem bibliotecas extras nem acesso a parent/localStorage. ${engineRules}
+
+IMPORTANTE: NÃO devolva JSON. JavaScript dentro de JSON é frágil por causa de aspas e quebras de linha. Responda exatamente neste protocolo textual:
+TITLE: nome curto da interação
+ENGINE: ${engine}
+<<<CODE>>>
+JavaScript puro aqui
+<<<END_CODE>>>
+
+Não escreva explicações fora desse protocolo. Não use cercas Markdown se puder evitá-las.`;
   const context = body.existingThoughts?.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n') || '';
-  const user = `PROJETO: ${body.project.name}\nPROBLEMA: ${body.project.problem}\nCONTEXTO:\n${context}\n\nPROMPT: ${body.prompt || ''}`;
+  const user = `PROJETO: ${body.project.name}
+PROBLEMA: ${body.project.problem}
+CONTEXTO:
+${context}
+
+PROMPT: ${body.prompt || ''}`;
   return { system, user };
 }
 
@@ -245,10 +259,58 @@ function cleanImplementationFilesJson(text: string, requestedFiles: Array<{ path
   return files;
 }
 
-function cleanInteractiveJson(text: string) {
-  const data = parseJsonObject(text, 'A interação não retornou JSON válido.');
-  if (!data.interactive?.code) throw new Error('A interação retornou sem código.');
-  return { title: String(data.interactive.title || 'Interação'), engine: data.interactive.engine === 'three' ? 'three' : 'p5', code: String(data.interactive.code) };
+function cleanInteractiveResponse(text: string, fallbackEngine: 'p5' | 'three' = 'p5') {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('A interação retornou sem conteúdo.');
+
+  try {
+    const data = parseJsonObject(raw, '');
+    if (data?.interactive?.code) {
+      return {
+        title: String(data.interactive.title || 'Interação'),
+        engine: data.interactive.engine === 'three' ? 'three' : 'p5',
+        code: String(data.interactive.code),
+      };
+    }
+  } catch {
+    // Compatibilidade: o novo protocolo não depende de JSON.
+  }
+
+  const titleMatch = raw.match(/^TITLE:\s*(.+)$/im);
+  const engineMatch = raw.match(/^ENGINE:\s*(p5|three)$/im);
+  const markerStart = raw.indexOf('<<<CODE>>>');
+  const markerEnd = raw.lastIndexOf('<<<END_CODE>>>');
+  let code = '';
+
+  if (markerStart >= 0) {
+    const start = markerStart + '<<<CODE>>>'.length;
+    code = raw.slice(start, markerEnd > start ? markerEnd : undefined).trim();
+  }
+  if (!code) {
+    const fenced = raw.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) code = fenced[1].trim();
+  }
+  if (!code) {
+    code = raw
+      .replace(/^TITLE:\s*.*$/im, '')
+      .replace(/^ENGINE:\s*.*$/im, '')
+      .replace(/<<<CODE>>>/g, '')
+      .replace(/<<<END_CODE>>>/g, '')
+      .trim();
+  }
+  code = code
+    .replace(/^```(?:javascript|js)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/^<script(?:\s[^>]*)?>\s*/i, '')
+    .replace(/\s*<\/script>$/i, '')
+    .trim();
+
+  if (!code) throw new Error('A interação retornou sem código executável. Tente gerar novamente.');
+  return {
+    title: String(titleMatch?.[1]?.trim() || 'Interação'),
+    engine: engineMatch?.[1] === 'three' ? 'three' : fallbackEngine,
+    code,
+  };
 }
 
 function cleanPublicationJson(text: string): PublicationArticle {
@@ -444,6 +506,30 @@ async function callGeminiStructured(system: string, user: string, maxOutputToken
   return { text, provider: 'Gemini', model };
 }
 
+async function callGeminiInteractive(system: string, user: string, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature, maxOutputTokens }
+      })
+    },
+    timeoutMs
+  );
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu código para a interação.');
+  return { text, provider: 'Gemini', model };
+}
+
 function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -515,8 +601,9 @@ export async function generateMediatorInsight(body: MediatorRequestBody): Promis
   if (body.mode === 'interactive-code') {
     if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
     const { system, user } = buildInteractiveCodeMessages(body);
-    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
-    return { interactive: cleanInteractiveJson(result.text), provider: result.provider, model: result.model };
+    const engine = body.engine === 'three' ? 'three' : 'p5';
+    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'publication') {
