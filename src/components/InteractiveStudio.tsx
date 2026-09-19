@@ -19,51 +19,7 @@ export const blankInteractiveDocument = (engine: 'p5' | 'three' = 'p5'): Interac
   engine,
   title: engine === 'p5' ? 'Experimento p5.js' : 'Experimento Three.js',
   prompt: '',
-  code: engine === 'p5'
-    ? `function setup() {
-  createCanvas(windowWidth, windowHeight);
-  noStroke();
-}
-
-function draw() {
-  background(248, 247, 243, 24);
-  const size = 28 + sin(frameCount * 0.04) * 8;
-  fill(25, 25, 25, 180);
-  circle(mouseX || width / 2, mouseY || height / 2, size);
-}
-
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-}`
-    : `const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf8f7f3);
-
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0, 4);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const geometry = new THREE.TorusKnotGeometry(0.8, 0.22, 96, 12);
-const material = new THREE.MeshNormalMaterial();
-const mesh = new THREE.Mesh(geometry, material);
-scene.add(mesh);
-
-function animate() {
-  requestAnimationFrame(animate);
-  mesh.rotation.x += 0.004;
-  mesh.rotation.y += 0.007;
-  renderer.render(scene, camera);
-}
-animate();
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});`,
+  code: '',
 });
 
 export const interactiveToSrcDoc = (document: InteractiveDocument) => {
@@ -86,7 +42,21 @@ export function InteractivePreview({
   className?: string;
   interactive?: boolean;
 }) {
+  const hasCode = Boolean(document.code?.trim());
   const srcDoc = useMemo(() => interactiveToSrcDoc(document), [document]);
+
+  if (!hasCode) {
+    return (
+      <div className={`bg-[#F8F7F3] flex items-center justify-center p-6 ${className}`}>
+        <div className="max-w-sm text-center">
+          <Sparkles size={24} className="mx-auto mb-3 text-neutral-400" />
+          <div className="text-sm font-bold text-neutral-700">Sua interação começa pelo que você imaginar.</div>
+          <div className="mt-2 text-xs leading-relaxed text-neutral-500">Descreva ao lado o comportamento, a aparência e como mouse ou toque devem participar. Depois toque em GERAR POR PROMPT.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <iframe
       title={document.title || 'Experimento interativo'}
@@ -190,7 +160,14 @@ export default function InteractiveStudio({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-[#F4F3EF] flex flex-col select-none">
+    <div
+      className="fixed inset-0 z-[120] bg-[#F4F3EF] flex flex-col select-text"
+      style={{ touchAction: 'auto' }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerMove={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
       <header className="shrink-0 border-b border-[#D8D7D2] bg-white px-3 sm:px-5 py-3 flex items-center gap-3">
         <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar laboratório"><X size={20} /></button>
         <div className="min-w-0 flex-1">
@@ -223,7 +200,7 @@ export default function InteractiveStudio({
               value={draft.title}
               onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
               disabled={!canEdit}
-              className="mt-2 w-full h-11 rounded-xl border border-[#D8D7D2] px-3 text-sm outline-none focus:border-black disabled:bg-neutral-100"
+              className="mt-2 w-full h-11 rounded-xl border border-[#D8D7D2] px-3 text-sm outline-none focus:border-black disabled:bg-neutral-100 select-text" style={{ touchAction: 'manipulation' }}
             />
           </label>
 
@@ -234,7 +211,7 @@ export default function InteractiveStudio({
               onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))}
               disabled={!canEdit}
               placeholder="Ex.: partículas que se aproximam do toque e formam constelações; no mobile responder ao arraste do dedo..."
-              className="mt-2 w-full min-h-[126px] rounded-xl border border-[#D8D7D2] p-3 text-sm leading-relaxed outline-none focus:border-black resize-y disabled:bg-neutral-100"
+              className="mt-2 w-full min-h-[150px] rounded-xl border border-[#D8D7D2] p-3 text-sm leading-relaxed outline-none focus:border-black resize-y disabled:bg-neutral-100 select-text" style={{ touchAction: 'manipulation' }}
             />
           </label>
 
@@ -260,7 +237,7 @@ export default function InteractiveStudio({
               onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))}
               disabled={!canEdit}
               spellCheck={false}
-              className="w-full min-h-[300px] p-3 font-mono text-[11px] leading-relaxed outline-none resize-y bg-[#101010] text-[#F5F5F5] disabled:opacity-70"
+              className="w-full min-h-[300px] p-3 font-mono text-[11px] leading-relaxed outline-none resize-y bg-[#101010] text-[#F5F5F5] disabled:opacity-70 select-text" style={{ touchAction: 'manipulation' }}
             />
           </div>
         </section>
