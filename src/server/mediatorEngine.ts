@@ -2,9 +2,13 @@ export type AiProvider = 'groq' | 'gemini' | 'offline';
 
 export interface MediatorRequestBody {
   project: { name: string; projectType: string; problem: string; community: string; ods: string };
-  mediator: { name: string; role: string; bio: string };
+  mediator: { id?: string; name: string; role: string; bio: string };
   phase: string;
-  existingThoughts?: Array<{ type: string; title: string; content: string; phase: string }>;
+  mode?: 'chat' | 'publication' | string;
+  message?: string;
+  conversation?: Array<{ role: string; text: string }>;
+  conversations?: Array<{ mediatorId: string; mediatorName: string; messages: Array<{ role: string; text: string; createdAt?: string }> }>;
+  existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
 }
 
 export interface MediatorInsight {
@@ -15,6 +19,23 @@ export interface MediatorInsight {
   provider?: string;
   model?: string;
   remainingToday?: number | null;
+  warnings?: string[];
+}
+
+export interface PublicationArticle {
+  title: string;
+  subtitle?: string;
+  abstract: string;
+  keywords: string[];
+  sections: Array<{ heading: string; body: string }>;
+  references?: string[];
+  editorialNotes?: string[];
+}
+
+export interface PublicationResult {
+  article: PublicationArticle;
+  provider?: string;
+  model?: string;
   warnings?: string[];
 }
 
@@ -36,7 +57,7 @@ function referenceFor(role: string): string {
   if (value.includes('bio')) return REFERENCES.bioetica;
   if (value.includes('acess')) return REFERENCES.acessibilidade;
   if (value.includes('visual')) return REFERENCES.visual;
-  if (value.includes('document')) return REFERENCES.documentacao;
+  if (value.includes('document') || value.includes('public') || value.includes('cient')) return REFERENCES.documentacao;
   if (value.includes('heur')) return REFERENCES.heuristicas;
   if (value.includes('cosmot') || value.includes('tecnolog') || value.includes('hi-low') || value.includes('hi low')) return REFERENCES.cosmotecnica;
   if (value.includes('implement')) return REFERENCES.implementacao;
@@ -67,6 +88,79 @@ ${thoughts}
 Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas.`;
 
   return { system, user };
+}
+
+function buildPublicationMessages(body: MediatorRequestBody) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+  const system = `Você é Publica, agente editorial da Metodologia 5I’s de Design de Interfaces.
+Sua tarefa é transformar documentação de projeto em um relato científico consistente, rastreável e pronto para revisão/submissão editorial.
+
+REGRAS INEGOCIÁVEIS
+- Leia todos os registros fornecidos das cinco fases: Ideação, Inambulação, Instauração, Inspeção e Implementação.
+- Considere também as conversas completas com os agentes como diário reflexivo do processo.
+- Não invente número de participantes, dados, resultados, testes, datas, referências bibliográficas, autores ou conclusões não documentadas.
+- Quando faltar uma evidência necessária, escreva a lacuna de modo editorialmente útil e registre-a em editorialNotes.
+- Preserve a autoria humana: a IA organiza, sintetiza e redige, mas não reivindica autoria do projeto.
+- Diferencie claramente decisão de projeto, evidência observada, interpretação e reflexão metodológica.
+- Produza português acadêmico brasileiro claro, sem inflar o texto com jargão.
+- O artigo é um RELATO DE PROJETO/RELATO DE EXPERIÊNCIA em design, não um experimento inventado.
+- Use a Metodologia 5I’s como eixo metodológico do percurso.
+- Retorne somente JSON válido, sem markdown externo.
+
+FORMATO OBRIGATÓRIO
+{
+  "title":"...",
+  "subtitle":"...",
+  "abstract":"150 a 250 palavras",
+  "keywords":["4 a 6 termos"],
+  "sections":[
+    {"heading":"Introdução","body":"..."},
+    {"heading":"Metodologia e percurso projetual","body":"..."},
+    {"heading":"Desenvolvimento do projeto","body":"..."},
+    {"heading":"Resultados e discussão","body":"..."},
+    {"heading":"Considerações finais","body":"..."}
+  ],
+  "references":["somente referências bibliográficas explicitamente identificáveis nos registros; se não houver dados suficientes, deixe vazio"],
+  "editorialNotes":["lacunas factuais ou bibliográficas que precisam ser conferidas antes da submissão"]
+}`;
+
+  const user = `PROJETO
+${JSON.stringify(body.project, null, 2)}
+
+FASE ATIVA NO MOMENTO DA EXPORTAÇÃO
+${body.phase}
+
+CARDS, NOTAS, CONEXÕES E REGISTROS DO CANVAS
+${JSON.stringify(records, null, 2)}
+
+CONVERSAS SALVAS COM OS AGENTES
+${JSON.stringify(conversations, null, 2)}
+
+Redija um artigo científico de relato de projeto usando todo o material pertinente. A narrativa deve reconstruir decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
+  return { system, user };
+}
+
+function cleanPublicationJson(text: string): PublicationArticle {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('O Publica não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.title || !data.abstract || !Array.isArray(data.keywords) || !Array.isArray(data.sections)) {
+    throw new Error('O artigo retornado pelo Publica veio incompleto.');
+  }
+  return {
+    title: String(data.title),
+    subtitle: data.subtitle ? String(data.subtitle) : undefined,
+    abstract: String(data.abstract),
+    keywords: data.keywords.slice(0, 8).map(String),
+    sections: data.sections
+      .filter((section: any) => section?.heading && section?.body)
+      .map((section: any) => ({ heading: String(section.heading), body: String(section.body) })),
+    references: Array.isArray(data.references) ? data.references.map(String) : [],
+    editorialNotes: Array.isArray(data.editorialNotes) ? data.editorialNotes.map(String) : []
+  };
 }
 
 function cleanJson(text: string): MediatorInsight {
@@ -188,6 +282,34 @@ async function callGemini(system: string, user: string): Promise<MediatorInsight
   };
 }
 
+async function callGeminiPublication(system: string, user: string): Promise<PublicationResult> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: {
+          temperature: 0.25,
+          responseMimeType: 'application/json',
+          maxOutputTokens: 7000
+        }
+      })
+    },
+    Number(process.env.AI_PUBLICATION_TIMEOUT_MS || 45_000)
+  );
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('') || '';
+  if (!text.trim()) throw new Error('O Gemini não devolveu conteúdo para a publicação.');
+  return { article: cleanPublicationJson(text), provider: 'Gemini', model };
+}
+
 function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -225,9 +347,14 @@ function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   };
 }
 
-export async function generateMediatorInsight(body: MediatorRequestBody): Promise<MediatorInsight> {
+export async function generateMediatorInsight(body: MediatorRequestBody): Promise<MediatorInsight | PublicationResult> {
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'publication') {
+    const { system, user } = buildPublicationMessages(body);
+    return callGeminiPublication(system, user);
   }
 
   const { system, user } = buildMessages(body);
