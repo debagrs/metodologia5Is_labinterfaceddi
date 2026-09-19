@@ -679,6 +679,10 @@ export default function App() {
     saveActiveProjectAndNodes(project, updated);
   };
 
+  const handleUpdateNodes = (updatedNodes: ThoughtNode[]) => {
+    saveActiveProjectAndNodes(project, updatedNodes);
+  };
+
   const handleDeleteNode = (id: string) => {
     const updated = nodes
       .filter(n => n.id !== id)
@@ -844,6 +848,7 @@ export default function App() {
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
             onUpdateNode={handleUpdateNode}
+            onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -901,6 +906,7 @@ export default function App() {
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
             onUpdateNode={handleUpdateNode}
+            onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -923,6 +929,7 @@ export default function App() {
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
             onUpdateNode={handleUpdateNode}
+            onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -1081,6 +1088,7 @@ export default function App() {
             onUpdateNodeContent={canEditShared ? handleUpdateNodeContent : noOp}
             onDeleteNode={canEditShared ? handleDeleteNode : noOp}
             onUpdateNode={activeSharedProject.permission === 'view' ? noOp : handleUpdateNode}
+            onUpdateNodes={canEditShared ? handleUpdateNodes : noOp}
             onAddNode={canEditShared ? handleAddNode : noOp}
             onUpdatePhase={canEditShared ? handleUpdatePhase : noOp}
             onExit={handleExit}
@@ -1104,6 +1112,7 @@ export default function App() {
             onUpdateNodeContent={handleUpdateNodeContent}
             onDeleteNode={handleDeleteNode}
             onUpdateNode={handleUpdateNode}
+            onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
             onExit={handleExit}
@@ -1160,6 +1169,7 @@ export default function App() {
           onUpdateNodeContent={handleUpdateNodeContent}
           onDeleteNode={handleDeleteNode}
           onUpdateNode={handleUpdateNode}
+          onUpdateNodes={handleUpdateNodes}
           onAddNode={handleAddNode}
           onUpdatePhase={handleUpdatePhase}
           onExit={handleExit}
