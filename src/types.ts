@@ -88,6 +88,7 @@ export interface DrawingElement {
   y2?: number;
   text?: string;
   fontSize?: number;
+  fontFamily?: string;
 }
 
 export interface DrawingDocument {
@@ -148,6 +149,7 @@ export interface Mediator {
   id: string;
   name: string;
   role: string;
+  phase?: Phase | 'Transversal';
   description: string;
   bio: string;
   iconName: string; // Lucide icon identifier
