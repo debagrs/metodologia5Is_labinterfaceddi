@@ -1,6 +1,8 @@
 // @ts-nocheck
 import crypto from 'node:crypto';
 
+export const maxDuration = 60;
+
 const DATABASE_URL = process.env.TURSO_DATABASE_URL || '';
 const AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || '';
@@ -271,10 +273,56 @@ Redija um artigo científico de relato de projeto usando todo o material pertine
   return { system, user };
 }
 
-function fullProjectContext(body) {
+function clipText(value, limit = 1600) {
+  const text = String(value || '').trim();
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n[… conteúdo abreviado para geração técnica …]`;
+}
+
+function compactProjectContext(body) {
   const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
   const conversations = Array.isArray(body.conversations) ? body.conversations : [];
-  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS COMPLETOS DO CANVAS\n${JSON.stringify(records, null, 2)}\n\nCONVERSAS DOS AGENTES\n${JSON.stringify(conversations, null, 2)}`;
+
+  const compactRecords = records.slice(0, 140).map((item) => ({
+    id: item.id,
+    type: item.type,
+    phase: item.phase,
+    title: clipText(item.title, 220),
+    content: clipText(item.content, 1800),
+    scientificContext: clipText(item.scientificContext, 700),
+    provocations: Array.isArray(item.provocations) ? item.provocations.slice(0, 5).map((value) => clipText(value, 320)) : [],
+    connections: Array.isArray(item.connections) ? item.connections.slice(0, 20) : [],
+    imageName: item.imageName || '',
+    imageUrl: clipText(item.imageUrl, 700),
+    drawingName: item.drawingName || '',
+    interactiveName: item.interactiveName || '',
+    interactive: item.interactive ? {
+      engine: item.interactive.engine,
+      title: clipText(item.interactive.title, 180),
+      prompt: clipText(item.interactive.prompt, 900),
+      code: clipText(item.interactive.code, 2600),
+    } : undefined,
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments.slice(0, 12).map((attachment) => ({
+          name: clipText(attachment?.name, 220),
+          type: clipText(attachment?.type, 120),
+          url: clipText(attachment?.url, 700),
+        }))
+      : [],
+  }));
+
+  const compactConversations = conversations.slice(0, 20).map((conversation) => ({
+    mediatorId: conversation.mediatorId,
+    mediatorName: conversation.mediatorName,
+    messages: Array.isArray(conversation.messages)
+      ? conversation.messages.slice(-16).map((message) => ({
+          role: message.role,
+          text: clipText(message.text, 900),
+        }))
+      : [],
+  }));
+
+  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS DO CANVAS — CONTEXTO TÉCNICO COMPACTADO\n${JSON.stringify(compactRecords, null, 2)}\n\nCONVERSAS DOS AGENTES — TRECHOS MAIS RECENTES\n${JSON.stringify(compactConversations, null, 2)}`;
 }
 
 function buildImplementationPromptMessages(body) {
@@ -291,50 +339,64 @@ REGRAS
 
 Retorne SOMENTE JSON válido no formato:
 {"promptEngineering":"prompt completo e autocontido em markdown","architectureSummary":"resumo da arquitetura proposta","stack":["..."],"assumptions":["..."],"acceptanceCriteria":["..."]}`;
-  const user = `${fullProjectContext(body)}\n\nTransforme este material em um superprompt técnico autocontido para implementação. O prompt deve ser suficientemente detalhado para que outra IA consiga reconstruir o projeto sem ter acesso ao canvas original.`;
+  const user = `${compactProjectContext(body)}\n\nTransforme este material em um superprompt técnico autocontido para implementação. O prompt deve ser suficientemente detalhado para que outra IA consiga reconstruir o projeto sem ter acesso ao canvas original.`;
   return { system, user };
 }
 
-function buildImplementationPackageMessages(body) {
-  const system = `Você é Forja, agente full stack de Implementação da Metodologia 5I’s. Gere um pacote de código funcional a partir EXCLUSIVAMENTE da documentação fornecida.
+function buildImplementationPlanMessages(body) {
+  const system = `Você é Forja, arquiteta de implementação da Metodologia 5I’s. Nesta etapa NÃO gere o código completo. Leia a documentação compactada do projeto e produza um PLANO DE IMPLEMENTAÇÃO suficientemente detalhado para que os arquivos possam ser gerados em lotes curtos e coerentes.
 
-OBJETIVO
-Criar um projeto pronto para ser colocado em um repositório GitHub, conectado ao Supabase e implantado na Vercel.
+REGRAS
+- Preserve requisitos, público, conteúdo, decisões visuais, acessibilidade, relações e referências registradas.
+- Não invente funcionalidades; qualquer inferência necessária deve ir para assumptions.
+- Stack padrão: React + Vite + TypeScript; Supabase somente quando houver necessidade de persistência, autenticação, storage ou backend; deploy Vercel.
+- O plano deve explicitar rotas/telas, modelo de dados, componentes, identidade visual, comportamento responsivo, acessibilidade e contratos entre arquivos.
+- Liste entre 8 e 20 arquivos de texto. Sempre inclua package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Quando houver Supabase, inclua src/lib/supabase.ts e supabase/schema.sql.
+- Descreva em purpose o que cada arquivo deve exportar, importar e fazer, para que lotes independentes permaneçam compatíveis.
+- Retorne SOMENTE JSON válido, sem markdown externo.
 
-STACK PADRÃO
-- Front-end: React + Vite + TypeScript.
-- Estilos: CSS simples ou Tailwind somente se incluído corretamente no package.json/configuração.
-- Backend/dados/autenticação: Supabase quando o projeto exigir persistência, login, storage ou API.
-- Deploy: Vercel.
-
-REGRAS DE QUALIDADE E SEGURANÇA
-- Mobile-first e responsivo.
-- HTML semântico, foco visível, navegação por teclado, labels, contraste e ARIA quando necessário.
-- Nunca coloque SUPABASE_SERVICE_ROLE_KEY, senhas ou segredos no código cliente.
-- Use somente VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no cliente e proteja dados com RLS.
-- Gere supabase/schema.sql quando houver dados persistentes. Ative RLS e inclua políticas coerentes.
-- Inclua .env.example sem valores reais.
-- Preserve conteúdo, identidade, requisitos, imagens/URLs e decisões que apareçam nos registros.
-- Não invente resultados de pesquisa, pessoas, métricas, conteúdo institucional ou funcionalidades sem base. Hipóteses devem aparecer em assumptions.
-- Prefira uma implementação pequena, coerente e executável a dezenas de arquivos incompletos.
-- Não use placeholders vazios como TODO para as funções principais.
-- package.json deve ter scripts dev/build/preview válidos.
-- O código deve compilar conceitualmente sem depender de arquivos que não estejam listados.
-
-FORMATO DE SAÍDA
-Retorne SOMENTE JSON válido, sem markdown externo:
+FORMATO
 {
-  "package": {
+  "plan": {
     "projectName":"slug-do-projeto",
     "summary":"...",
-    "files":[{"path":"package.json","content":"..."},{"path":"src/main.tsx","content":"..."}],
+    "architectureSummary":"...",
+    "implementationBrief":"especificação técnica autocontida e objetiva",
+    "stack":["..."],
+    "routes":[{"path":"/","purpose":"..."}],
+    "dataModel":[{"name":"...","purpose":"...","fields":["..."]}],
+    "designSystem":{"direction":"...","tokens":["..."],"responsive":"...","accessibility":"..."},
+    "files":[{"path":"src/App.tsx","purpose":"responsabilidade, exports, imports e contratos"}],
     "assumptions":["..."],
     "postGenerationChecks":["..."]
   }
+}`;
+  const user = `${compactProjectContext(body)}\n\nCrie o plano técnico de implementação. Esta etapa deve ser curta o suficiente para uma função serverless: não escreva o conteúdo integral dos arquivos ainda.`;
+  return { system, user };
 }
 
-Inclua entre 8 e 24 arquivos de texto. Sempre inclua package.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Se houver persistência, inclua src/lib/supabase.ts e supabase/schema.sql.`;
-  const user = `${fullProjectContext(body)}\n\nGere agora a implementação completa. Reconstrua hierarquia, conteúdos, funcionalidades e linguagem do projeto com base nos registros. Se existirem imagens com URL, preserve-as como referências configuráveis no código.`;
+function buildImplementationFilesMessages(body) {
+  const plan = body.implementationPlan || {};
+  const requestedFiles = Array.isArray(body.requestedFiles) ? body.requestedFiles : [];
+  const system = `Você é Forja, agente full stack da Metodologia 5I’s. Gere SOMENTE os arquivos solicitados neste lote, obedecendo estritamente ao plano técnico recebido.
+
+REGRAS
+- Produza código funcional e consistente com os contratos do plano.
+- React + Vite + TypeScript no front-end. Supabase somente se estiver previsto no plano.
+- Mobile-first, responsivo, semântico e acessível.
+- Nunca exponha service role, senhas ou segredos no cliente.
+- Use VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY e RLS quando previsto.
+- Não crie imports para arquivos que não estejam listados no plano.
+- Não use TODO nas funções principais.
+- package.json precisa de scripts dev/build/preview válidos.
+- .env.example nunca contém valores reais.
+- Para supabase/schema.sql, gere SQL idempotente quando possível, habilite RLS e políticas coerentes com o plano.
+- Preserve conteúdo e linguagem do projeto descritos em implementationBrief.
+- Retorne SOMENTE JSON válido.
+
+FORMATO
+{"files":[{"path":"caminho/exato","content":"conteúdo integral"}]}`;
+  const user = `PLANO TÉCNICO\n${JSON.stringify(plan, null, 2)}\n\nARQUIVOS DESTE LOTE\n${JSON.stringify(requestedFiles, null, 2)}\n\nGere exatamente esses arquivos. Não gere arquivos de outros lotes.`;
   return { system, user };
 }
 
@@ -367,24 +429,63 @@ function cleanImplementationPromptJson(text) {
   };
 }
 
-function cleanImplementationPackageJson(text) {
+function cleanImplementationPlanJson(text) {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = stripped.indexOf('{');
   const end = stripped.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('A Forja não retornou JSON válido para o pacote.');
+  if (start < 0 || end < start) throw new Error('A Forja não retornou JSON válido para o plano técnico.');
   const data = JSON.parse(stripped.slice(start, end + 1));
-  const pack = data.package;
-  if (!pack || !Array.isArray(pack.files) || pack.files.length < 3) throw new Error('O pacote de implementação veio incompleto.');
+  const plan = data.plan;
+  if (!plan || !Array.isArray(plan.files) || plan.files.length < 5) throw new Error('O plano técnico da Forja veio incompleto.');
+  const plannedFiles = plan.files
+    .filter((file) => file?.path)
+    .slice(0, 22)
+    .map((file) => ({ path: String(file.path), purpose: String(file.purpose || '') }));
+  const requiredFiles = [
+    ['package.json', 'Dependências e scripts dev/build/preview do projeto Vite.'],
+    ['index.html', 'Documento HTML de entrada do Vite.'],
+    ['src/main.tsx', 'Bootstrap React e importação dos estilos globais.'],
+    ['src/App.tsx', 'Composição principal da aplicação, rotas/telas e fluxo central.'],
+    ['src/index.css', 'Estilos globais, tokens visuais, responsividade e acessibilidade.'],
+    ['README.md', 'Documentação do projeto, execução local e decisões principais.'],
+    ['.env.example', 'Variáveis de ambiente públicas necessárias, sem valores reais.'],
+  ];
+  const seen = new Set(plannedFiles.map((file) => file.path));
+  for (const [path, purpose] of requiredFiles) {
+    if (!seen.has(path)) {
+      plannedFiles.push({ path, purpose });
+      seen.add(path);
+    }
+  }
   return {
-    projectName: String(pack.projectName || 'projeto-5is'),
-    summary: String(pack.summary || ''),
-    files: pack.files
-      .filter((file) => file?.path && typeof file.content === 'string')
-      .slice(0, 30)
-      .map((file) => ({ path: String(file.path), content: String(file.content) })),
-    assumptions: Array.isArray(pack.assumptions) ? pack.assumptions.map(String) : [],
-    postGenerationChecks: Array.isArray(pack.postGenerationChecks) ? pack.postGenerationChecks.map(String) : [],
+    projectName: String(plan.projectName || 'projeto-5is'),
+    summary: String(plan.summary || ''),
+    architectureSummary: String(plan.architectureSummary || ''),
+    implementationBrief: String(plan.implementationBrief || ''),
+    stack: Array.isArray(plan.stack) ? plan.stack.map(String) : [],
+    routes: Array.isArray(plan.routes) ? plan.routes.slice(0, 30) : [],
+    dataModel: Array.isArray(plan.dataModel) ? plan.dataModel.slice(0, 30) : [],
+    designSystem: plan.designSystem && typeof plan.designSystem === 'object' ? plan.designSystem : {},
+    files: plannedFiles.slice(0, 24),
+    assumptions: Array.isArray(plan.assumptions) ? plan.assumptions.map(String) : [],
+    postGenerationChecks: Array.isArray(plan.postGenerationChecks) ? plan.postGenerationChecks.map(String) : [],
   };
+}
+
+function cleanImplementationFilesJson(text, requestedFiles) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A Forja não retornou JSON válido para este lote de arquivos.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const requestedPaths = new Set((requestedFiles || []).map((file) => String(file.path || file)));
+  const files = Array.isArray(data.files)
+    ? data.files
+        .filter((file) => file?.path && typeof file.content === 'string' && requestedPaths.has(String(file.path)))
+        .map((file) => ({ path: String(file.path), content: String(file.content) }))
+    : [];
+  if (!files.length) throw new Error('A Forja não devolveu os arquivos solicitados neste lote.');
+  return files;
 }
 
 function cleanInteractiveJson(text) {
@@ -679,10 +780,19 @@ async function generateMediatorInsight(body) {
     return { ...cleanImplementationPromptJson(result.text), provider: result.provider, model: result.model };
   }
 
-  if (body.mode === 'implementation-package') {
-    const { system, user } = buildImplementationPackageMessages(body);
-    const result = await callGeminiStructured(system, user, 18000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 75000), 0.15);
-    return { package: cleanImplementationPackageJson(result.text), provider: result.provider, model: result.model };
+  if (body.mode === 'implementation-plan') {
+    const { system, user } = buildImplementationPlanMessages(body);
+    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_IMPLEMENTATION_PLAN_TIMEOUT_MS || 32000), 0.15);
+    return { plan: cleanImplementationPlanJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-files') {
+    if (!body.implementationPlan || !Array.isArray(body.requestedFiles) || !body.requestedFiles.length) {
+      throw new Error('Plano técnico ou lote de arquivos ausente.');
+    }
+    const { system, user } = buildImplementationFilesMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_BATCH_TIMEOUT_MS || 38000), 0.12);
+    return { files: cleanImplementationFilesJson(result.text, body.requestedFiles), provider: result.provider, model: result.model };
   }
 
   if (body.mode === 'interactive-code') {
@@ -720,7 +830,8 @@ export default async function handler(req: any, res: any) {
     let remainingToday: number | null = null;
     const warnings: string[] = [];
 
-    if (ownerId) {
+    const shouldCountQuota = req.body?.mode !== 'implementation-files';
+    if (ownerId && shouldCountQuota) {
       try {
         remainingToday = await consumeAiQuota(ownerId, Number(process.env.AI_DAILY_LIMIT || 20));
       } catch (quotaError: any) {
@@ -729,7 +840,7 @@ export default async function handler(req: any, res: any) {
         console.error('[5I API] Turso/cota indisponível:', quotaError);
         warnings.push('A IA respondeu, mas o controle de cota do Turso não pôde ser atualizado.');
       }
-    } else {
+    } else if (!ownerId) {
       warnings.push('Sessão de nuvem indisponível; a IA foi executada sem contabilizar a cota.');
     }
 
