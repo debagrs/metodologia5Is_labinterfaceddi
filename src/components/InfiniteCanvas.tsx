@@ -2,11 +2,13 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
-  HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip
+  HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X
 } from 'lucide-react';
 import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
+import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
   getCenteredCardPosition: (cardWidth?: number, cardHeight?: number) => { x: number; y: number };
@@ -22,6 +24,7 @@ interface InfiniteCanvasProps {
   onUpdateNodeContent: (id: string, text: string, completed?: boolean) => void;
   onDeleteNode: (id: string) => void;
   onUpdateNode: (node: ThoughtNode) => void;
+  onAddNode: (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => void;
   currentUser: UserProfile;
   collaborationPermission?: CollaborationPermission | null;
 }
@@ -35,6 +38,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   onUpdateNodeContent,
   onDeleteNode,
   onUpdateNode,
+  onAddNode,
   currentUser,
   collaborationPermission = null
 }, ref) {
@@ -45,6 +49,229 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
   const [collaborationNodeId, setCollaborationNodeId] = useState<string | null>(null);
+  const [connectingFromId, setConnectingFromId] = useState<string | null>(null);
+  const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
+  const [canvasImageError, setCanvasImageError] = useState('');
+  const canvasImageInputRef = useRef<HTMLInputElement>(null);
+  const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
+
+  const getNodeDimensions = (node: ThoughtNode) => {
+    const compactCanvas = typeof window !== 'undefined' && window.innerWidth < 640;
+    if (node.type === 'canvas-image') {
+      return { width: node.width || (compactCanvas ? 280 : 320), height: node.height || (compactCanvas ? 210 : 240) };
+    }
+    if (node.type === 'core') {
+      return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
+    }
+    return {
+      width: node.width || (compactCanvas ? 340 : 360),
+      height: node.height || (node.type === 'question' ? 460 : 200),
+    };
+  };
+
+  const getDefaultZoom = () => {
+    if (typeof window === 'undefined') return 0.9;
+    if (window.innerWidth < 420) return 0.86;
+    if (window.innerWidth < 768) return 0.9;
+    return 0.9;
+  };
+
+  const getCenteredPosition = (width: number, height: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 1000, y: 1000 };
+    return {
+      x: Math.max(0, (rect.width / 2 - panOffset.x) / zoom - width / 2),
+      y: Math.max(0, (rect.height / 2 - panOffset.y) / zoom - height / 2),
+    };
+  };
+
+  const readApiResponse = async (response: Response) => {
+    const raw = await response.text();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { error: raw };
+    }
+  };
+
+  const getImageSize = (file: File) => new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const width = image.naturalWidth || 1;
+      const height = image.naturalHeight || 1;
+      URL.revokeObjectURL(url);
+      resolve({ width, height });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Não foi possível ler as dimensões da imagem.'));
+    };
+    image.src = url;
+  });
+
+  const uploadCanvasImage = async (file: File) => {
+    if (!canEditCanvas) return;
+    if (!file.type.startsWith('image/')) {
+      setCanvasImageError('Escolha um arquivo de imagem.');
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setCanvasImageError('Escolha uma imagem de até 4 MB.');
+      return;
+    }
+
+    setUploadingCanvasImage(true);
+    setCanvasImageError('');
+
+    try {
+      const session = readStoredTursoSession();
+      if (!session?.token) throw new Error('Sua sessão expirou. Saia e entre novamente.');
+
+      const sourceSize = await getImageSize(file);
+      const aspectRatio = sourceSize.width / Math.max(sourceSize.height, 1);
+      const maxInitialSide = typeof window !== 'undefined' && window.innerWidth < 640 ? 300 : 420;
+      let startWidth: number;
+      let startHeight: number;
+      if (aspectRatio >= 1) {
+        startWidth = Math.min(maxInitialSide, Math.max(220, sourceSize.width));
+        startHeight = startWidth / aspectRatio;
+      } else {
+        startHeight = Math.min(maxInitialSide, Math.max(220, sourceSize.height));
+        startWidth = startHeight * aspectRatio;
+      }
+      startWidth = Math.max(100, startWidth);
+      startHeight = Math.max(80, startHeight);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+        },
+        body: file,
+      });
+      const data: any = await readApiResponse(response);
+      if (!response.ok || !data.url) {
+        throw new Error(data.error || `O upload falhou na Vercel (HTTP ${response.status}).`);
+      }
+
+      const position = getCenteredPosition(startWidth, startHeight);
+      onAddNode({
+        type: 'canvas-image',
+        title: data.name || file.name,
+        content: '',
+        phase: activePhase,
+        x: position.x,
+        y: position.y,
+        width: startWidth,
+        height: startHeight,
+        imageUrl: data.url,
+        imageName: data.name || file.name,
+        imageContentType: data.contentType || file.type,
+        aspectRatio,
+        connections: [],
+      });
+    } catch (error: any) {
+      setCanvasImageError(error?.message || 'Não foi possível adicionar a imagem ao canvas.');
+    } finally {
+      setUploadingCanvasImage(false);
+      if (canvasImageInputRef.current) canvasImageInputRef.current.value = '';
+    }
+  };
+
+  const handleResizePointerDown = (
+    event: React.PointerEvent,
+    node: ThoughtNode,
+    axis: 'x' | 'y' | 'both',
+    lockAspect = false,
+  ) => {
+    if (!canEditCanvas) return;
+    event.stopPropagation();
+    event.preventDefault();
+
+    const handle = event.currentTarget as HTMLElement;
+    const card = handle.closest('.thought-card') as HTMLElement | null;
+    if (!card) return;
+
+    const pointerId = event.pointerId;
+    handle.setPointerCapture?.(pointerId);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startWidth = card.offsetWidth;
+    const startHeight = card.offsetHeight;
+    const aspectRatio = node.aspectRatio || startWidth / Math.max(startHeight, 1);
+    let finalWidth = startWidth;
+    let finalHeight = startHeight;
+
+    const minWidth = node.type === 'canvas-image' ? 100 : 240;
+    const minHeight = node.type === 'canvas-image' ? 80 : 150;
+    const maxWidth = node.type === 'canvas-image' ? 1200 : 820;
+    const maxHeight = node.type === 'canvas-image' ? 1200 : 900;
+
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+    const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      const dx = (moveEvent.clientX - startX) / zoom;
+      const dy = (moveEvent.clientY - startY) / zoom;
+
+      if (lockAspect) {
+        if (axis === 'y') {
+          finalHeight = clamp(startHeight + dy, minHeight, maxHeight);
+          finalWidth = clamp(finalHeight * aspectRatio, minWidth, maxWidth);
+          finalHeight = finalWidth / aspectRatio;
+        } else {
+          const delta = axis === 'both' && Math.abs(dy) > Math.abs(dx) ? dy * aspectRatio : dx;
+          finalWidth = clamp(startWidth + delta, minWidth, maxWidth);
+          finalHeight = finalWidth / aspectRatio;
+          if (finalHeight > maxHeight) {
+            finalHeight = maxHeight;
+            finalWidth = finalHeight * aspectRatio;
+          }
+        }
+      } else {
+        finalWidth = axis === 'y' ? startWidth : clamp(startWidth + dx, minWidth, maxWidth);
+        finalHeight = axis === 'x' ? startHeight : clamp(startHeight + dy, minHeight, maxHeight);
+      }
+
+      card.style.width = `${finalWidth}px`;
+      card.style.height = `${finalHeight}px`;
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      handle.releasePointerCapture?.(pointerId);
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', finish);
+      document.removeEventListener('pointercancel', finish);
+      onUpdateNode({ ...node, width: Math.round(finalWidth), height: Math.round(finalHeight) });
+    };
+
+    document.addEventListener('pointermove', move, { passive: false });
+    document.addEventListener('pointerup', finish);
+    document.addEventListener('pointercancel', finish);
+  };
+
+  const toggleConnection = (targetId: string) => {
+    if (!connectingFromId || connectingFromId === targetId || !canEditCanvas) return;
+    const source = nodes.find((item) => item.id === connectingFromId);
+    if (!source) {
+      setConnectingFromId(null);
+      return;
+    }
+    const exists = source.connections.includes(targetId);
+    onUpdateNode({
+      ...source,
+      connections: exists
+        ? source.connections.filter((id) => id !== targetId)
+        : [...source.connections, targetId],
+    });
+    setSelectedNodeId(targetId);
+    setConnectingFromId(null);
+  };
 
   useImperativeHandle(ref, () => ({
     getCenteredCardPosition: (cardWidth = 360, cardHeight = 460) => {
@@ -69,11 +296,10 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       const node = nodes.find((item) => item.id === nodeId);
       const rect = containerRef.current?.getBoundingClientRect();
       if (!node || !rect) return;
-      const estimatedWidth = node.type === 'core' ? 480 : 360;
-      const estimatedHeight = node.type === 'core' ? 320 : 460;
+      const dimensions = getNodeDimensions(node);
       setPanOffset({
-        x: rect.width / 2 - (node.x + estimatedWidth / 2) * zoom,
-        y: rect.height / 2 - (node.y + estimatedHeight / 2) * zoom,
+        x: rect.width / 2 - (node.x + dimensions.width / 2) * zoom,
+        y: rect.height / 2 - (node.y + dimensions.height / 2) * zoom,
       });
       setSelectedNodeId(nodeId);
       if (openCollaboration) setCollaborationNodeId(nodeId);
@@ -84,9 +310,16 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   useEffect(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      const centerX = rect.width / 2 - 250; // Half of core card width approximately
-      const centerY = rect.height / 2 - 150;
-      setPanOffset({ x: centerX, y: centerY });
+      const core = nodes.find((node) => node.type === 'core');
+      const coreDimensions = core ? getNodeDimensions(core) : { width: 480, height: 320 };
+      const nextZoom = getDefaultZoom();
+      setZoom(nextZoom);
+      const coreX = core?.x ?? 1000;
+      const coreY = core?.y ?? 1000;
+      setPanOffset({
+        x: rect.width / 2 - (coreX + coreDimensions.width / 2) * nextZoom,
+        y: rect.height / 2 - (coreY + coreDimensions.height / 2) * nextZoom,
+      });
     }
   }, [project.id]);
 
@@ -98,8 +331,16 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const handleResetView = () => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      setPanOffset({ x: rect.width / 2 - 250, y: rect.height / 2 - 150 });
-      setZoom(0.9);
+      const core = nodes.find((node) => node.type === 'core');
+      const dimensions = core ? getNodeDimensions(core) : { width: 480, height: 320 };
+      const nextZoom = getDefaultZoom();
+      const coreX = core?.x ?? 1000;
+      const coreY = core?.y ?? 1000;
+      setPanOffset({
+        x: rect.width / 2 - (coreX + dimensions.width / 2) * nextZoom,
+        y: rect.height / 2 - (coreY + dimensions.height / 2) * nextZoom,
+      });
+      setZoom(nextZoom);
     }
   };
 
@@ -155,8 +396,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   // Arraste unificado para mouse, caneta e toque. O cabeçalho inteiro funciona
   // como uma alça grande, facilitando o uso no celular.
   const handleNodePointerDown = (e: React.PointerEvent, id: string) => {
+    if (!canEditCanvas) return;
     const target = e.target as HTMLElement;
-    if (target.closest('button, a, input, textarea, select')) return;
+    if (target.closest('button, a, input, textarea, select, .resize-handle')) return;
     e.stopPropagation();
     e.preventDefault();
 
@@ -235,55 +477,70 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       >
         {/* Connection paths layer */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" style={{ zIndex: 1 }}>
-          {nodes.map(node => {
-            return node.connections.map(targetId => {
-              const targetCoords = findNodeCoords(targetId);
-              if (!targetCoords) return null;
+          <defs>
+            <marker id="arrow-active" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#1A1A1A" />
+            </marker>
+            <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#CFCFCD" />
+            </marker>
+          </defs>
+          {nodes.map((node) => node.connections.map((targetId) => {
+            const target = nodes.find((item) => item.id === targetId);
+            if (!target) return null;
 
-              // Calculate start and end positions centered on cards
-              // Approximating node widths (Core is wider, custom smaller)
-              const startWidth = node.type === 'core' ? 240 : 180;
-              const startHeight = node.type === 'core' ? 120 : 100;
-              const endWidth = nodes.find(n => n.id === targetId)?.type === 'core' ? 240 : 180;
-              const endHeight = nodes.find(n => n.id === targetId)?.type === 'core' ? 120 : 100;
+            const sourceSize = getNodeDimensions(node);
+            const targetSize = getNodeDimensions(target);
+            const sourceCenter = { x: node.x + sourceSize.width / 2, y: node.y + sourceSize.height / 2 };
+            const targetCenter = { x: target.x + targetSize.width / 2, y: target.y + targetSize.height / 2 };
+            const deltaX = targetCenter.x - sourceCenter.x;
+            const deltaY = targetCenter.y - sourceCenter.y;
 
-              const x1 = node.x + startWidth;
-              const y1 = node.y + startHeight / 2;
-              const x2 = targetCoords.x;
-              const y2 = targetCoords.y + endHeight / 2;
+            let x1 = sourceCenter.x;
+            let y1 = sourceCenter.y;
+            let x2 = targetCenter.x;
+            let y2 = targetCenter.y;
 
-              // Control points for a beautiful organic Bezier curve
-              const dx = Math.abs(x2 - x1) * 0.5;
-              const cx1 = x1 + dx;
-              const cy1 = y1;
-              const cx2 = x2 - dx;
-              const cy2 = y2;
+            if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+              const direction = deltaX >= 0 ? 1 : -1;
+              x1 += direction * sourceSize.width / 2;
+              x2 -= direction * targetSize.width / 2;
+            } else {
+              const direction = deltaY >= 0 ? 1 : -1;
+              y1 += direction * sourceSize.height / 2;
+              y2 -= direction * targetSize.height / 2;
+            }
 
-              const isActiveLink = node.phase === activePhase;
+            const horizontal = Math.abs(x2 - x1) >= Math.abs(y2 - y1);
+            const bend = horizontal ? Math.max(40, Math.abs(x2 - x1) * 0.45) : Math.max(40, Math.abs(y2 - y1) * 0.45);
+            const cx1 = horizontal ? x1 + Math.sign(x2 - x1 || 1) * bend : x1;
+            const cy1 = horizontal ? y1 : y1 + Math.sign(y2 - y1 || 1) * bend;
+            const cx2 = horizontal ? x2 - Math.sign(x2 - x1 || 1) * bend : x2;
+            const cy2 = horizontal ? y2 : y2 - Math.sign(y2 - y1 || 1) * bend;
+            const isActiveLink = node.phase === activePhase || target.phase === activePhase;
+            const path = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 
-              return (
-                <g key={`${node.id}-${targetId}`}>
-                  {/* Outer glow link */}
-                  <path
-                    d={`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`}
-                    fill="none"
-                    stroke={isActiveLink ? "rgba(0, 0, 0, 0.08)" : "rgba(0, 0, 0, 0.02)"}
-                    strokeWidth={isActiveLink ? "5" : "3"}
-                    className="transition-all duration-300"
-                  />
-                  {/* Direct vector link */}
-                  <path
-                    d={`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`}
-                    fill="none"
-                    stroke={isActiveLink ? "#1A1A1A" : "#E2E2E2"}
-                    strokeWidth="1.5"
-                    strokeDasharray={node.type === 'user-thought' ? "3 3" : undefined}
-                    className="transition-all duration-300"
-                  />
-                </g>
-              );
-            });
-          })}
+            return (
+              <g key={`${node.id}-${targetId}`}>
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={isActiveLink ? 'rgba(0, 0, 0, 0.08)' : 'rgba(0, 0, 0, 0.025)'}
+                  strokeWidth={isActiveLink ? '5' : '3'}
+                  className="transition-all duration-300"
+                />
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={isActiveLink ? '#1A1A1A' : '#CFCFCD'}
+                  strokeWidth="1.5"
+                  strokeDasharray={node.type === 'user-thought' ? '3 3' : undefined}
+                  markerEnd={isActiveLink ? 'url(#arrow-active)' : 'url(#arrow-muted)'}
+                  className="transition-all duration-300"
+                />
+              </g>
+            );
+          }))}
         </svg>
 
         {/* Nodes Layer */}
@@ -292,8 +549,107 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isCore = node.type === 'core';
             const isQuestion = node.type === 'question';
             const isUserThought = node.type === 'user-thought';
+            const isCanvasImage = node.type === 'canvas-image';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
+            const dimensions = getNodeDimensions(node);
+            const isConnectionSource = connectingFromId === node.id;
+            const isConnectionTarget = Boolean(connectingFromId && connectingFromId !== node.id);
+
+            if (isCanvasImage) {
+              return (
+                <motion.div
+                  key={node.id}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`absolute thought-card canvas-image-node pointer-events-auto rounded-xl bg-white shadow-md select-none ${
+                    isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
+                  }`}
+                  style={{
+                    left: node.x,
+                    top: node.y,
+                    width: dimensions.width,
+                    height: dimensions.height,
+                    touchAction: 'none',
+                  }}
+                  onPointerDown={(event) => handleNodePointerDown(event, node.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isConnectionTarget) {
+                      toggleConnection(node.id);
+                      return;
+                    }
+                    setSelectedNodeId(node.id);
+                  }}
+                >
+                  {node.imageUrl ? (
+                    <img
+                      src={node.imageUrl}
+                      alt={node.imageName || node.title || 'Imagem no canvas'}
+                      draggable={false}
+                      className="h-full w-full rounded-xl object-contain bg-white pointer-events-none"
+                    />
+                  ) : (
+                    <div className="h-full w-full rounded-xl bg-[#F5F5F3] flex items-center justify-center text-xs text-neutral-400">Imagem indisponível</div>
+                  )}
+
+                  {isConnectionTarget && (
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); toggleConnection(node.id); }}
+                      className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair"
+                      aria-label={`Conectar com ${node.imageName || 'imagem'}`}
+                    />
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                    <div className="absolute -top-11 right-0 z-30 flex items-center gap-1 rounded-xl border border-[#E0E0DE] bg-white/95 p-1 shadow-lg canvas-control">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConnectingFromId(isConnectionSource ? null : node.id);
+                        }}
+                        className={`h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer ${isConnectionSource ? 'bg-black text-white' : 'hover:bg-black/5 text-neutral-700'}`}
+                        title={isConnectionSource ? 'Cancelar conexão' : 'Criar conexão a partir desta imagem'}
+                      >
+                        {isConnectionSource ? <X size={14} /> : <Link2 size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => { event.stopPropagation(); onDeleteNode(node.id); }}
+                        className="h-8 w-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 cursor-pointer"
+                        title="Remover imagem do canvas"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                    <>
+                      <div
+                        className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'x', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] left-1/2 z-30 h-4 w-11 -translate-x-1/2 rounded-full border border-black/20 bg-white shadow cursor-ns-resize"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'y', true)}
+                        title="Redimensionar proporcionalmente"
+                      />
+                      <div
+                        className="resize-handle absolute bottom-[-7px] right-[-7px] z-30 h-6 w-6 rounded-full border border-black/30 bg-white shadow cursor-nwse-resize flex items-center justify-center"
+                        onPointerDown={(event) => handleResizePointerDown(event, node, 'both', true)}
+                        title="Redimensionar proporcionalmente"
+                      >
+                        <MoveDiagonal2 size={9} />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              );
+            }
 
             return (
               <motion.div
@@ -302,27 +658,30 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 animate={{ 
                   opacity: 1, 
                   scale: 1,
-                  borderColor: isSelected 
+                  borderColor: isConnectionSource || isSelected 
                     ? '#1A1A1A' 
                     : isActive 
                       ? '#E0E0DE' 
                       : '#F0F0EE',
-                  boxShadow: isSelected 
+                  boxShadow: isConnectionSource || isSelected 
                     ? '0 12px 30px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.05)' 
                     : '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01)'
                 }}
-                className={`absolute thought-card pointer-events-auto rounded-2xl border bg-white text-neutral-800 overflow-hidden transition-all duration-200 cursor-default ${
-                  isCore 
-                    ? 'w-[480px] max-w-[calc(100vw-2rem)]' 
-                    : 'w-[360px] max-w-[calc(100vw-2rem)]'
-                }`}
+                className="absolute thought-card pointer-events-auto rounded-2xl border bg-white text-neutral-800 overflow-hidden transition-all duration-200 cursor-default"
                 style={{
                   left: node.x,
                   top: node.y,
+                  width: dimensions.width,
+                  height: node.height || undefined,
+                  minWidth: isCore ? 320 : 240,
                   opacity: isActive ? 1 : 0.65
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isConnectionTarget) {
+                    toggleConnection(node.id);
+                    return;
+                  }
                   setSelectedNodeId(node.id);
                 }}
               >
@@ -353,17 +712,30 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                   </div>
                   
                   {/* Right side telemetry */}
-                  <div className="flex items-center gap-3">
-                    <span className="text-[9px] font-mono opacity-50">
+                  <div className="flex items-center gap-1.5 sm:gap-2.5">
+                    <span className="text-[9px] font-mono opacity-50 hidden md:inline">
                       X: {Math.round(node.x)} Y: {Math.round(node.y)}
                     </span>
-                    <button onClick={(e)=>{e.stopPropagation();setCollaborationNodeId(node.id)}} className="opacity-60 hover:opacity-100 transition-colors cursor-pointer flex items-center gap-1" title="Comentários e arquivos"><MessageCircle size={12}/><span className="text-[9px]">{node.comments?.length||0}</span><Paperclip size={11}/><span className="text-[9px]">{node.attachments?.length||0}</span></button>
-                    {!isCore && (<button onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}} className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer" title="Remover card"><Trash2 size={12}/></button>)}
+                    {canEditCanvas && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConnectingFromId(isConnectionSource ? null : node.id);
+                        }}
+                        className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${isConnectionSource ? 'bg-black text-white' : 'opacity-60 hover:opacity-100 hover:bg-black/5'}`}
+                        title={isConnectionSource ? 'Cancelar conexão' : 'Criar seta a partir deste card'}
+                      >
+                        {isConnectionSource ? <X size={12} /> : <Link2 size={12} />}
+                      </button>
+                    )}
+                    <button onClick={(e)=>{e.stopPropagation();setCollaborationNodeId(node.id)}} className="opacity-60 hover:opacity-100 transition-colors cursor-pointer flex items-center gap-1" title="Comentários e arquivos"><MessageCircle size={12}/><span className="text-[9px] hidden sm:inline">{node.comments?.length||0}</span><Paperclip size={11}/><span className="text-[9px] hidden sm:inline">{node.attachments?.length||0}</span></button>
+                    {!isCore && canEditCanvas && (<button onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}} className="opacity-40 hover:opacity-100 hover:text-red-600 transition-colors cursor-pointer" title="Remover card"><Trash2 size={12}/></button>)}
                   </div>
                 </div>
 
                 {/* Card Content body */}
-                <div className="p-5 flex flex-col gap-4">
+                <div className="p-4 sm:p-5 flex flex-col gap-4" style={{ height: node.height ? Math.max(90, node.height - 48) : undefined, overflowY: node.height ? 'auto' : undefined }}>
                   
                   {isCore ? (
                     // Core Node content representation
@@ -504,7 +876,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                   ) : (
                     // Simple Custom thought or note card (Double click to spawn)
-                    <div className="flex flex-col gap-2">
+                    <div className="flex h-full min-h-0 flex-col gap-2">
                       <div className="flex items-start justify-between">
                         <span className="text-[9px] font-mono text-black font-semibold tracking-wider uppercase">Bloco de Notas</span>
                         <span className="text-[10px] text-gray-400 font-mono">#{node.id.substring(0, 4)}</span>
@@ -514,17 +886,64 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                         value={node.content}
                         rows={3}
                         onChange={(e) => onUpdateNodeContent(node.id, e.target.value)}
-                        className="w-full text-xs font-light text-neutral-800 placeholder:text-gray-400 border-none outline-none resize-none bg-transparent p-0"
+                        className="w-full flex-1 min-h-[72px] text-xs font-light text-neutral-800 placeholder:text-gray-400 border-none outline-none resize-none bg-transparent p-0"
                       />
                     </div>
                   )}
 
                 </div>
+
+                {isConnectionTarget && (
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); toggleConnection(node.id); }}
+                    className="absolute inset-0 z-30 rounded-2xl border-2 border-dashed border-black bg-white/10 cursor-crosshair"
+                    aria-label={`Conectar com ${node.title || 'card'}`}
+                    title={nodes.find((item) => item.id === connectingFromId)?.connections.includes(node.id) ? 'Clique para remover esta conexão' : 'Clique para criar a conexão'}
+                  />
+                )}
+
+                {!isCore && (isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
+                  <>
+                    <div
+                      className="resize-handle absolute right-[2px] top-1/2 z-40 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize"
+                      onPointerDown={(event) => handleResizePointerDown(event, node, 'x')}
+                      title="Ajustar largura"
+                    />
+                    <div
+                      className="resize-handle absolute bottom-[2px] left-1/2 z-40 h-4 w-11 -translate-x-1/2 rounded-full border border-black/20 bg-white shadow cursor-ns-resize"
+                      onPointerDown={(event) => handleResizePointerDown(event, node, 'y')}
+                      title="Ajustar altura"
+                    />
+                    <div
+                      className="resize-handle absolute bottom-[2px] right-[2px] z-40 h-6 w-6 rounded-full border border-black/30 bg-white shadow cursor-nwse-resize flex items-center justify-center"
+                      onPointerDown={(event) => handleResizePointerDown(event, node, 'both')}
+                      title="Ajustar largura e altura"
+                    >
+                      <MoveDiagonal2 size={9} />
+                    </div>
+                  </>
+                )}
               </motion.div>
             );
           })}
         </div>
       </div>
+
+      {connectingFromId && (
+        <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2 canvas-control max-w-[calc(100vw-1.5rem)] rounded-2xl border border-black bg-white/95 px-3 py-2 shadow-lg flex items-center gap-2 text-[11px] font-mono">
+          <Link2 size={13} className="shrink-0" />
+          <span className="truncate">Selecione outro card ou imagem para criar/remover a seta.</span>
+          <button
+            type="button"
+            onClick={() => setConnectingFromId(null)}
+            className="shrink-0 rounded-lg p-1 hover:bg-black/5 cursor-pointer"
+            aria-label="Cancelar conexão"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
 
       {/* Floating Canvas Controls (Zoom / Recenter / Spawn guide) */}
       <div id="canvas-actions-panel" className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-20 flex flex-col gap-2 sm:gap-3 canvas-control max-w-[calc(100vw-2rem)]">
@@ -532,11 +951,18 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         {/* Double-click hint */}
         <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 hidden sm:flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
           <HelpCircle size={12} className="text-black shrink-0" />
-          <span className="truncate">Dica: Clique duplo para criar nota ou use o botão abaixo</span>
+          <span className="truncate">Dica: duplo clique cria nota; use os botões para nota, imagem e conexões</span>
         </div>
 
+        {canvasImageError && (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 shadow-sm flex items-center justify-between gap-2">
+            <span>{canvasImageError}</span>
+            <button type="button" onClick={() => setCanvasImageError('')} className="p-1 cursor-pointer" aria-label="Fechar aviso"><X size={12} /></button>
+          </div>
+        )}
+
         {/* Action button bar */}
-        <div className="flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#E0E0DE] rounded-xl p-1.5 shadow-lg">
+        <div className="flex flex-wrap items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#E0E0DE] rounded-xl p-1.5 shadow-lg">
           <button 
             onClick={() => handleZoom(0.1)} 
             className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
@@ -559,22 +985,46 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           >
             <Maximize size={15} />
           </button>
-          <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
-          <button 
-            onClick={() => {
-              const rect = containerRef.current?.getBoundingClientRect();
-              if (!rect) return;
-              onAddCustomThought(
-                Math.max(0, (rect.width / 2 - panOffset.x) / zoom - 180),
-                Math.max(0, (rect.height / 2 - panOffset.y) / zoom - 100)
-              );
-            }} 
-            className="px-3 h-8 rounded-lg bg-black text-white hover:bg-neutral-800 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
-            title="Criar bloco de notas"
-          >
-            <Plus size={14} />
-            <span>NOTAS</span>
-          </button>
+          {canEditCanvas && (
+            <>
+              <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
+              <input
+                ref={canvasImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadCanvasImage(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => canvasImageInputRef.current?.click()}
+                disabled={uploadingCanvasImage}
+                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                title="Adicionar imagem solta ao canvas"
+              >
+                {uploadingCanvasImage ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+                <span className="hidden sm:inline">IMAGEM</span>
+              </button>
+              <button 
+                onClick={() => {
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  onAddCustomThought(
+                    Math.max(0, (rect.width / 2 - panOffset.x) / zoom - 180),
+                    Math.max(0, (rect.height / 2 - panOffset.y) / zoom - 100)
+                  );
+                }} 
+                className="px-2.5 sm:px-3 h-8 rounded-lg bg-black text-white hover:bg-neutral-800 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                title="Criar bloco de notas"
+              >
+                <Plus size={14} />
+                <span className="hidden sm:inline">NOTAS</span>
+              </button>
+            </>
+          )}
         </div>
 
       </div>
