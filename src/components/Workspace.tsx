@@ -350,11 +350,11 @@ export default function Workspace({
           <div className="h-4 w-[1px] bg-[#E0E0DE]" />
           
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <BrandMark compact priority className="w-[38px] h-[33px] flex-shrink-0" />
+            <BrandMark compact priority className="w-[38px] h-[33px] flex-shrink-0 hidden min-[390px]:block" />
             <div className="h-4 w-[1px] bg-[#E0E0DE] hidden sm:block" />
             <div className="flex flex-col text-left">
               <span className="text-[11px] font-bold uppercase tracking-widest text-black/40 hidden sm:block">Laboratório de Inteligência Projetual</span>
-              <span className="text-sm font-semibold text-neutral-900 leading-tight truncate max-w-[88px] sm:max-w-[200px]">{project.name}</span>
+              <span className="text-sm font-semibold text-neutral-900 leading-tight truncate max-w-[64px] min-[390px]:max-w-[88px] sm:max-w-[200px]">{project.name}</span>
             </div>
           </div>
         </div>
@@ -367,7 +367,7 @@ export default function Workspace({
         </div>
 
         {/* Current status telemetry & Mobile Panel toggles */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           {canManageCollaborators && (
             <button
               onClick={() => setIsCollaboratorsOpen(true)}
@@ -485,13 +485,13 @@ export default function Workspace({
         {/* Backdrops for mobile drawers */}
         {isLeftSidebarOpen && (
           <div 
-            className="fixed inset-0 top-16 bg-black/30 z-30 lg:hidden" 
+            className="absolute inset-0 bg-black/30 z-30 lg:hidden" 
             onClick={() => setIsLeftSidebarOpen(false)}
           />
         )}
         {isRightSidebarOpen && (
           <div 
-            className="fixed inset-0 top-16 bg-black/30 z-30 lg:hidden" 
+            className="absolute inset-0 bg-black/30 z-30 lg:hidden" 
             onClick={() => setIsRightSidebarOpen(false)}
           />
         )}
@@ -499,7 +499,7 @@ export default function Workspace({
         {/* Left Sidebar: Metodologia 5I’s organism tracker */}
         <aside 
           id="left-sidebar-methodology" 
-          className={`fixed lg:relative top-16 lg:top-0 left-0 h-[calc(100dvh-4rem)] lg:h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+          className={`absolute lg:relative top-0 left-0 h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
             isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'
           }`}
         >
@@ -616,6 +616,7 @@ export default function Workspace({
           onUpdateNodeContent={onUpdateNodeContent}
           onDeleteNode={onDeleteNode}
           onUpdateNode={onUpdateNode}
+          onAddNode={onAddNode}
           currentUser={currentUser!}
           collaborationPermission={collaborationPermission}
         />
@@ -623,7 +624,7 @@ export default function Workspace({
         {/* Right Sidebar: Intelligent Mediators Panel */}
         <aside 
           id="right-sidebar-mediators" 
-          className={`fixed lg:relative top-16 lg:top-0 right-0 h-[calc(100dvh-4rem)] lg:h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+          className={`absolute lg:relative top-0 right-0 h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
             isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'
           }`}
         >
