@@ -1452,6 +1452,66 @@ const deploymentGuide = (projectName: string, assumptions: string[] = [], checks
 const downloadForgeZip = (projectName: string, files: ForgeFile[], assumptions: string[] = [], checks: string[] = []) => {
   const normalized = new Map<string, string>();
   for (const file of files) normalized.set(zipPath(file.path), String(file.content ?? ''));
+
+  // Infraestrutura mínima garantida pela própria plataforma. A IA pode esquecer
+  // um arquivo de configuração; o pacote baixado não deve quebrar por isso.
+  if (!normalized.has('tsconfig.json')) {
+    normalized.set('tsconfig.json', JSON.stringify({
+      compilerOptions: {
+        target: 'ES2020',
+        useDefineForClassFields: true,
+        lib: ['ES2020', 'DOM', 'DOM.Iterable'],
+        allowJs: false,
+        skipLibCheck: true,
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+        strict: false,
+        forceConsistentCasingInFileNames: true,
+        module: 'ESNext',
+        moduleResolution: 'Bundler',
+        resolveJsonModule: true,
+        isolatedModules: true,
+        noEmit: true,
+        jsx: 'react-jsx'
+      },
+      include: ['src'],
+      exclude: ['node_modules', 'dist']
+    }, null, 2));
+  }
+
+  if (!normalized.has('tsconfig.node.json')) {
+    normalized.set('tsconfig.node.json', JSON.stringify({
+      compilerOptions: {
+        target: 'ES2022',
+        lib: ['ES2023'],
+        module: 'ESNext',
+        skipLibCheck: true,
+        moduleResolution: 'Bundler',
+        allowImportingTsExtensions: true,
+        noEmit: true
+      },
+      include: ['vite.config.ts']
+    }, null, 2));
+  }
+
+  const packageSource = normalized.get('package.json');
+  if (packageSource) {
+    try {
+      const pkg = JSON.parse(packageSource);
+      pkg.scripts = {
+        ...(pkg.scripts || {}),
+        dev: 'vite',
+        build: 'vite build',
+        preview: 'vite preview',
+        typecheck: 'tsc --noEmit'
+      };
+      normalized.set('package.json', JSON.stringify(pkg, null, 2));
+    } catch {
+      // Se o modelo devolveu package.json inválido, preservamos o conteúdo para
+      // não apagar dependências. O README orienta revisar o arquivo antes do deploy.
+    }
+  }
+
   normalized.set('README_5IS_DEPLOY.md', deploymentGuide(projectName, assumptions, checks));
   if (!normalized.has('.env.example')) {
     normalized.set('.env.example', 'VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n');
