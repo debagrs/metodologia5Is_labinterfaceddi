@@ -8,6 +8,7 @@ import {
 import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
+import RichNote from './RichNote';
 import DrawingStudio, { DrawingPreview } from './DrawingStudio';
 import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
 import { readStoredTursoSession } from '../lib/turso';
@@ -1398,13 +1399,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                         <span className="text-[9px] font-mono text-black font-semibold tracking-wider uppercase">Bloco de Notas</span>
                         <span className="text-[10px] text-gray-400 font-mono">#{node.id.substring(0, 4)}</span>
                       </div>
-                      <textarea
-                        placeholder="Escreva uma reflexão livre, insight de campo, ou ideia..."
-                        value={node.content}
-                        rows={3}
-                        onChange={(e) => onUpdateNodeContent(node.id, e.target.value)}
-                        className="w-full flex-1 min-h-[72px] text-xs font-light text-neutral-800 placeholder:text-gray-400 border-none outline-none resize-none bg-transparent p-0"
-                      />
+                      <RichNote content={node.content} onChange={(value) => onUpdateNodeContent(node.id, value)} disabled={!canEditCanvas} />
                     </div>
                   )}
 
