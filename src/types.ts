@@ -48,6 +48,20 @@ export interface SharedProjectSummary {
   nodeCount: number;
 }
 
+export interface AdminProjectSummary {
+  ownerId: string;
+  ownerName: string;
+  ownerRole: 'advisor' | 'partner';
+  partnerType?: PartnerType;
+  institution?: string;
+  projectId: string;
+  projectName: string;
+  projectProblem: string;
+  activePhase: Phase;
+  updatedAt: string;
+  nodeCount: number;
+}
+
 export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab';
 
 export type DrawingElementType =
