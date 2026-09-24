@@ -76,6 +76,22 @@ async function getCollaboration(requesterId: string, ownerId: string, projectId:
   const row = result?.rows?.[0];
   return row ? { permission: String(cellValue(row[0]) || 'view'), label: String(cellValue(row[1]) || 'colega') } : null;
 }
+async function canAdminReadWorkspace(requesterId: string, ownerId: string) {
+  const [result] = await pipeline([{
+    sql: `SELECT requester.role, owner.role
+      FROM users requester, users owner
+      WHERE requester.id = ? AND owner.id = ?
+      LIMIT 1`,
+    args: [arg(requesterId), arg(ownerId)],
+  }]);
+  const row = result?.rows?.[0];
+  if (!row) return false;
+  const requesterRole = String(cellValue(row[0]) || '').toLowerCase();
+  const ownerRole = String(cellValue(row[1]) || '').toLowerCase();
+  const requesterIsAdvisor = ['advisor', 'teacher', 'professor'].includes(requesterRole);
+  const ownerIsAdminVisible = ['advisor', 'teacher', 'professor', 'partner'].includes(ownerRole);
+  return requesterIsAdvisor && ownerIsAdminVisible;
+}
 function readSnapshot(payload: any) {
   if (typeof payload !== 'string') return {};
   try { return JSON.parse(payload); } catch { return {}; }
@@ -129,20 +145,36 @@ export default async function handler(req: any, res: any) {
     const requestedOwnerId = String(req.query?.ownerId || requesterId).trim();
     const projectId = String(req.query?.projectId || '').trim();
 
-    let advisorAllowed = false; let collaboration: any = null;
+    let advisorAllowed = false; let adminReadAllowed = false; let collaboration: any = null;
     if (requestedOwnerId !== requesterId) {
       advisorAllowed = await canAccessStudentWorkspace(requesterId, requestedOwnerId).catch(() => false);
       if (!advisorAllowed) collaboration = await getCollaboration(requesterId, requestedOwnerId, projectId);
-      if (!advisorAllowed && !collaboration) return res.status(403).json({ error: 'Você não tem permissão para acessar este workspace.', stage: 'permission' });
+      if (!advisorAllowed && !collaboration && req.method === 'GET') {
+        adminReadAllowed = await canAdminReadWorkspace(requesterId, requestedOwnerId).catch(() => false);
+      }
+      if (!advisorAllowed && !collaboration && !adminReadAllowed) {
+        return res.status(403).json({ error: 'Você não tem permissão para acessar este workspace.', stage: 'permission' });
+      }
+      if (adminReadAllowed && !projectId) {
+        return res.status(400).json({ error: 'Informe o projeto que deseja visualizar.', stage: 'permission' });
+      }
     }
 
     if (req.method === 'GET') {
       const [result] = await pipeline([{ sql: 'SELECT payload, updated_at FROM workspace_snapshots WHERE owner_id = ? LIMIT 1', args: [arg(requestedOwnerId)] }]);
       const payload = cellValue(result?.rows?.[0]?.[0]); const updatedAt = cellValue(result?.rows?.[0]?.[1]);
-      if (typeof payload !== 'string') return res.status(200).json({ payload: null, ownerId: requestedOwnerId, updatedAt: null, permission: collaboration?.permission });
+      if (typeof payload !== 'string') return res.status(200).json({ payload: null, ownerId: requestedOwnerId, updatedAt: null, permission: collaboration?.permission || (adminReadAllowed ? 'view' : undefined) });
       const snapshot = readSnapshot(payload);
-      const responsePayload = requestedOwnerId !== requesterId && collaboration ? filteredSnapshot(snapshot, projectId) : snapshot;
-      return res.status(200).json({ payload: responsePayload, ownerId: requestedOwnerId, updatedAt, permission: collaboration?.permission, collaborationLabel: collaboration?.label });
+      const shouldFilterProject = requestedOwnerId !== requesterId && Boolean(projectId) && (Boolean(collaboration) || adminReadAllowed);
+      const responsePayload = shouldFilterProject ? filteredSnapshot(snapshot, projectId) : snapshot;
+      return res.status(200).json({
+        payload: responsePayload,
+        ownerId: requestedOwnerId,
+        updatedAt,
+        permission: collaboration?.permission || (adminReadAllowed ? 'view' : undefined),
+        collaborationLabel: collaboration?.label,
+        adminReadOnly: adminReadAllowed || undefined,
+      });
     }
 
     if (req.method === 'PUT') {
