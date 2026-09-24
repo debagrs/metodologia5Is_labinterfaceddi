@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, Settings, BookOpen, Users, Trash2, RefreshCw, Mail,
-  AlertTriangle, UserMinus, Loader2
+  AlertTriangle, UserMinus, Loader2, FolderOpen, GraduationCap, Globe2, ChevronRight, Layers3
 } from 'lucide-react';
-import type { Classroom, StudentProfile } from '../types';
+import type { AdminProjectSummary, Classroom, StudentProfile } from '../types';
 import { readAuthSession } from '../lib/auth';
 
 type CloudMember = {
@@ -30,6 +30,7 @@ interface AdminPanelProps {
   onClose: () => void;
   onDeleteClassroom: (classroomId: string) => void;
   onDeleteStudent: (studentId: string) => void;
+  onOpenAdminProject?: (project: AdminProjectSummary) => void;
 }
 
 export default function AdminPanel({
@@ -38,10 +39,12 @@ export default function AdminPanel({
   onClose,
   onDeleteClassroom,
   onDeleteStudent,
+  onOpenAdminProject,
 }: AdminPanelProps) {
-  const [tab, setTab] = useState<'turmas' | 'alunos' | 'convites'>('turmas');
+  const [tab, setTab] = useState<'turmas' | 'alunos' | 'convites' | 'projetos'>('turmas');
   const [cloudMembers, setCloudMembers] = useState<CloudMember[]>([]);
   const [cloudInvitations, setCloudInvitations] = useState<CloudInvitation[]>([]);
+  const [adminProjects, setAdminProjects] = useState<AdminProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -59,6 +62,7 @@ export default function AdminPanel({
       if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar a administração.');
       setCloudMembers(Array.isArray(data.members) ? data.members : []);
       setCloudInvitations(Array.isArray(data.invitations) ? data.invitations : []);
+      setAdminProjects(Array.isArray(data.projects) ? data.projects : []);
     } catch (error: any) {
       setMessage(error?.message || 'Falha ao carregar os dados da administração.');
     } finally {
@@ -189,7 +193,7 @@ export default function AdminPanel({
             <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center"><Settings size={19} /></div>
             <div>
               <span className="text-[9px] uppercase tracking-widest font-bold text-neutral-400">Painel de administração</span>
-              <h2 className="text-base sm:text-lg font-bold text-neutral-950 leading-tight">Turmas, alunos e convites</h2>
+              <h2 className="text-base sm:text-lg font-bold text-neutral-950 leading-tight">Turmas, usuários, convites e projetos</h2>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl border border-[#E0E0DE] hover:bg-neutral-100 cursor-pointer" aria-label="Fechar administração"><X size={18} /></button>
@@ -200,6 +204,7 @@ export default function AdminPanel({
             ['turmas', BookOpen, `Turmas (${classrooms.length})`],
             ['alunos', Users, `Alunos (${cloudMembers.length})`],
             ['convites', Mail, `Convites (${cloudInvitations.length})`],
+            ['projetos', FolderOpen, `Projetos (${adminProjects.length})`],
           ] as const).map(([id, Icon, label]) => (
             <button key={id} onClick={() => setTab(id)} className={`flex-none px-3.5 py-2 rounded-xl border text-xs font-mono font-bold uppercase flex items-center gap-2 cursor-pointer whitespace-nowrap ${tab === id ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-[#E0E0DE] hover:border-black'}`}>
               <Icon size={14} /> {label}
@@ -252,6 +257,47 @@ export default function AdminPanel({
 
               {cloudMembers.length === 0 && (
                 <p className="text-center text-sm text-neutral-400 py-10">Nenhuma conta de estudante vinculada às suas turmas.</p>
+              )}
+            </div>
+          )}
+
+          {tab === 'projetos' && (
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900">
+                Aqui aparecem os projetos das contas de professores/orientadores e das contas do ecossistema/comunidade. A abertura pelo painel administrativo é somente para visualização.
+              </div>
+
+              {adminProjects.map((project) => (
+                <article key={`${project.ownerId}-${project.projectId}`} className="p-4 bg-white border border-[#E0E0DE] rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase ${project.ownerRole === 'advisor' ? 'bg-violet-50 text-violet-800 border border-violet-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>
+                        {project.ownerRole === 'advisor' ? <GraduationCap size={12} /> : <Globe2 size={12} />}
+                        {project.ownerRole === 'advisor' ? 'Professor(a)' : (project.partnerType || 'Comunidade')}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-neutral-100 text-[10px] font-mono font-bold uppercase text-neutral-600">
+                        <Layers3 size={12} /> {project.nodeCount} cards
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-base text-neutral-950 truncate">{project.projectName}</h3>
+                    <p className="text-xs text-neutral-600 mt-1 line-clamp-2">{project.projectProblem || 'Sem descrição do problema.'}</p>
+                    <p className="text-[10px] font-mono text-neutral-400 mt-2">
+                      {project.ownerName}{project.institution ? ` · ${project.institution}` : ''} · {project.activePhase}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAdminProject?.(project)}
+                    disabled={!onOpenAdminProject}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-black text-white text-xs font-mono font-bold uppercase flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                  >
+                    Abrir projeto <ChevronRight size={14} />
+                  </button>
+                </article>
+              ))}
+
+              {adminProjects.length === 0 && (
+                <p className="text-center text-sm text-neutral-400 py-10">Nenhum projeto de professor ou comunidade foi encontrado ainda.</p>
               )}
             </div>
           )}
