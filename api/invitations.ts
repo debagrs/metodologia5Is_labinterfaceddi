@@ -38,6 +38,14 @@ function validateSessionToken(rawHeader: string | undefined) {
   const a = Buffer.from(signature); const b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b) ? ownerId : null;
 }
+async function isAdvisorUser(userId: string) {
+  const [result] = await pipeline([{
+    sql: `SELECT role FROM users WHERE id = ? LIMIT 1`,
+    args: [arg(userId)],
+  }]);
+  const role = String(cell(result?.rows?.[0]?.[0]) || '').toLowerCase();
+  return ['advisor', 'teacher', 'professor'].includes(role);
+}
 async function ensureDatabase() {
   await pipeline([
     { sql: `CREATE TABLE IF NOT EXISTS users (
@@ -342,7 +350,11 @@ export default async function handler(req: any, res: any) {
 
 
     if (req.method === 'GET' && req.query?.admin) {
-      const [membersResult, invitationsResult] = await pipeline([
+      if (!(await isAdvisorUser(advisorId))) {
+        return res.status(403).json({ error: 'Somente contas de professor/orientador podem acessar a administração.' });
+      }
+
+      const [membersResult, invitationsResult, projectOwnersResult] = await pipeline([
         { sql: `SELECT u.id, u.name, u.email, m.classroom_id, c.name, m.joined_at
           FROM classroom_members m
           JOIN users u ON u.id = m.user_id
@@ -354,6 +366,12 @@ export default async function handler(req: any, res: any) {
           JOIN shared_classrooms c ON c.id = i.classroom_id
           WHERE i.advisor_id = ?
           ORDER BY i.created_at DESC`, args: [arg(advisorId)] },
+        { sql: `SELECT u.id, u.name, u.role, u.partner_type, u.institution, w.payload, w.updated_at
+          FROM users u
+          LEFT JOIN workspace_snapshots w ON w.owner_id = u.id
+          WHERE u.id <> ? AND lower(u.role) IN ('advisor', 'teacher', 'professor', 'partner')
+          ORDER BY CASE WHEN lower(u.role) IN ('advisor', 'teacher', 'professor') THEN 0 ELSE 1 END, u.name`,
+          args: [arg(advisorId)] },
       ]);
 
       const members = (membersResult?.rows || []).map((row: any[]) => ({
@@ -372,7 +390,52 @@ export default async function handler(req: any, res: any) {
         expiresAt: String(cell(row[4])),
         acceptedBy: cell(row[5]),
       }));
-      return res.status(200).json({ members, invitations });
+
+      const projects: any[] = [];
+      for (const row of projectOwnersResult?.rows || []) {
+        const ownerId = String(cell(row[0]));
+        const ownerName = String(cell(row[1]));
+        const rawRole = String(cell(row[2]) || '').toLowerCase();
+        const ownerRole = rawRole === 'partner' ? 'partner' : 'advisor';
+        const partnerType = cell(row[3]) || undefined;
+        const institution = cell(row[4]) || undefined;
+        const rawPayload = cell(row[5]);
+        const snapshotUpdatedAt = String(cell(row[6]) || '');
+        let snapshot: any = {};
+        if (typeof rawPayload === 'string') {
+          try { snapshot = JSON.parse(rawPayload); } catch { snapshot = {}; }
+        }
+
+        const workspaces = Array.isArray(snapshot.projectWorkspaces) ? [...snapshot.projectWorkspaces] : [];
+        if (snapshot.soloProject && !workspaces.some((item: any) => item?.project?.id === snapshot.soloProject?.id)) {
+          workspaces.push({
+            project: snapshot.soloProject,
+            nodes: Array.isArray(snapshot.soloNodes) ? snapshot.soloNodes : [],
+            updatedAt: snapshotUpdatedAt || snapshot.soloProject?.createdAt || new Date().toISOString(),
+          });
+        }
+
+        for (const workspace of workspaces) {
+          const project = workspace?.project;
+          if (!project?.id) continue;
+          projects.push({
+            ownerId,
+            ownerName,
+            ownerRole,
+            partnerType,
+            institution,
+            projectId: String(project.id),
+            projectName: String(project.name || 'Projeto sem título'),
+            projectProblem: String(project.problem || ''),
+            activePhase: String(project.activePhase || 'Ideação'),
+            updatedAt: String(workspace.updatedAt || snapshotUpdatedAt || project.createdAt || new Date().toISOString()),
+            nodeCount: Array.isArray(workspace.nodes) ? workspace.nodes.length : 0,
+          });
+        }
+      }
+
+      projects.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      return res.status(200).json({ members, invitations, projects });
     }
 
     if (req.method === 'DELETE') {
