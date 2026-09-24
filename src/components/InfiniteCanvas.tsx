@@ -558,6 +558,40 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
   };
 
+  // Roda do mouse e trackpad deslocam a mesa sem alterar a arquitetura de pan/zoom.
+  // Shift + roda faz deslocamento horizontal; trackpads usam deltaX naturalmente.
+  const handleCanvasWheel = (e: React.WheelEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.thought-card') || target.closest('.canvas-control')) return;
+    if (e.ctrlKey || e.metaKey) return;
+
+    e.preventDefault();
+    const horizontalDelta = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+    const verticalDelta = e.shiftKey ? 0 : e.deltaY;
+    setPanOffset((current) => ({
+      x: current.x - horizontalDelta,
+      y: current.y - verticalDelta,
+    }));
+  };
+
+  // Setas do teclado funcionam como navegação da viewport quando o fundo do canvas está em foco.
+  const handleCanvasKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.matches('input, textarea, select, [contenteditable="true"]')) return;
+
+    const step = e.shiftKey ? 140 : 60;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = step;
+    else if (e.key === 'ArrowRight') dx = -step;
+    else if (e.key === 'ArrowUp') dy = step;
+    else if (e.key === 'ArrowDown') dy = -step;
+    else return;
+
+    e.preventDefault();
+    setPanOffset((current) => ({ x: current.x + dx, y: current.y + dy }));
+  };
+
   // Pan unificado do canvas com mouse, caneta ou um dedo no celular.
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
@@ -566,12 +600,14 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
     const pointerId = e.pointerId;
     const viewport = e.currentTarget as HTMLElement;
+    viewport.focus({ preventScroll: true });
     viewport.setPointerCapture?.(pointerId);
     const startX = e.clientX - panOffset.x;
     const startY = e.clientY - panOffset.y;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
+      moveEvent.preventDefault();
       setPanOffset({
         x: moveEvent.clientX - startX,
         y: moveEvent.clientY - startY,
@@ -668,8 +704,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       ref={containerRef}
       onPointerDown={handleCanvasPointerDown}
       onDoubleClick={handleDoubleClick}
+      onWheel={handleCanvasWheel}
+      onKeyDown={handleCanvasKeyDown}
+      tabIndex={0}
+      aria-label="Canvas de projeto. Arraste o fundo, use a roda ou trackpad e as setas do teclado para navegar."
       style={{ touchAction: 'none' }}
-      className="relative flex-1 h-full overflow-hidden bg-[#FDFDFB] select-none cursor-grab active:cursor-grabbing"
+      className="relative flex-1 h-full overflow-hidden bg-[#FDFDFB] select-none cursor-grab active:cursor-grabbing outline-none"
     >
       {/* Absolute floating guide */}
       <div className="absolute top-4 left-4 z-20 bg-white/80 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-1.5 text-xs font-mono text-neutral-600 hidden sm:flex items-center gap-2 pointer-events-none shadow-sm">
