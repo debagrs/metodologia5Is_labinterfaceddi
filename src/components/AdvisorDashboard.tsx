@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, FolderOpen
 } from 'lucide-react';
-import { Classroom, StudentProfile, Project, UserProfile } from '../types';
+import { AdminProjectSummary, Classroom, StudentProfile, Project, UserProfile } from '../types';
 import { readAuthSession } from '../lib/auth';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
@@ -18,6 +18,8 @@ interface AdvisorDashboardProps {
   onDeleteClassroom: (classroomId: string) => void;
   onDeleteStudent: (studentId: string) => void;
   onLogout: () => void;
+  onOpenOwnProjects?: () => void;
+  onOpenAdminProject?: (project: AdminProjectSummary) => void;
   loadingStudentWorkspace?: boolean;
   studentWorkspaceError?: string;
 }
@@ -32,6 +34,8 @@ export default function AdvisorDashboard({
   onDeleteClassroom,
   onDeleteStudent,
   onLogout,
+  onOpenOwnProjects,
+  onOpenAdminProject,
   loadingStudentWorkspace = false,
   studentWorkspaceError = ''
 }: AdvisorDashboardProps) {
@@ -229,6 +233,15 @@ export default function AdvisorDashboard({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {onOpenOwnProjects && (
+              <button
+                onClick={onOpenOwnProjects}
+                className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+              >
+                <FolderOpen size={13} />
+                <span>Meus projetos</span>
+              </button>
+            )}
             <button
               onClick={() => setShowAdmin(true)}
               className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
@@ -581,6 +594,10 @@ export default function AdvisorDashboard({
           students={students}
           onDeleteClassroom={onDeleteClassroom}
           onDeleteStudent={onDeleteStudent}
+          onOpenAdminProject={(project) => {
+            setShowAdmin(false);
+            onOpenAdminProject?.(project);
+          }}
           onClose={() => setShowAdmin(false)}
         />
       )}
