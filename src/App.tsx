@@ -967,7 +967,7 @@ export default function App() {
               </div>
               <button onClick={() => setShowStudentProjectForm(false)} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
             </header>
-            <div className="flex-1 flex items-center justify-center py-6"><FirstExperience onStart={handleStartProject} /></div>
+            <div className="flex-1 flex items-stretch justify-center py-0 md:items-center md:py-6"><FirstExperience onStart={handleStartProject} /></div>
           </div>
         );
       }
@@ -1274,7 +1274,7 @@ export default function App() {
             </div>
             <button onClick={() => setShowStudentProjectForm(false)} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
           </header>
-          <div className="flex-1 flex items-center justify-center py-6"><FirstExperience onStart={handleStartProject} /></div>
+          <div className="flex-1 flex items-stretch justify-center py-0 md:items-center md:py-6"><FirstExperience onStart={handleStartProject} /></div>
         </div>
       );
     }
@@ -1339,7 +1339,7 @@ export default function App() {
         </button>
       </header>
 
-      <div className="flex-1 flex items-center justify-center py-6">
+      <div className="flex-1 flex items-stretch justify-center py-0 md:items-center md:py-6">
         <FirstExperience onStart={handleStartProject} />
       </div>
     </div>
