@@ -66,7 +66,7 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
   };
 
   return (
-    <div id="first-experience-container" className="w-full min-h-0 md:h-[calc(100dvh-7rem)] md:max-h-[calc(100dvh-7rem)] bg-brand-beige flex flex-col md:flex-row font-sans overflow-x-hidden md:overflow-hidden">
+    <div id="first-experience-container" className="w-full min-h-[100dvh] md:min-h-0 md:h-[calc(100dvh-7rem)] md:max-h-[calc(100dvh-7rem)] bg-brand-beige flex flex-col md:flex-row font-sans overflow-x-hidden overflow-y-visible md:overflow-hidden">
       
       {/* Left side: Premium Methodology Laboratory Context */}
       <div id="left-sidebar" className="md:w-[42%] md:h-full bg-brand-charcoal text-white p-6 sm:p-8 md:p-8 lg:p-10 xl:p-12 flex flex-col justify-between border-b md:border-b-0 md:border-r border-white/10 relative overflow-hidden md:overflow-y-auto">
@@ -185,7 +185,7 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
       </div>
 
       {/* Right side: Elegant Display Questionnaire Form */}
-      <div id="onboarding-form-section" className="md:w-[58%] min-h-0 md:h-full px-4 sm:px-6 py-8 md:px-8 lg:px-10 xl:px-16 md:py-8 flex flex-col justify-start overflow-y-auto overscroll-contain">
+      <div id="onboarding-form-section" className="md:w-[58%] min-h-0 md:h-full px-4 sm:px-6 py-8 md:px-8 lg:px-10 xl:px-16 md:py-8 flex flex-col justify-start overflow-visible overscroll-auto touch-pan-y md:overflow-y-auto md:overscroll-contain">
         
         <div className="max-w-xl mx-auto w-full py-2 md:py-4">
           
@@ -254,7 +254,7 @@ export default function FirstExperience({ onStart }: FirstExperienceProps) {
                 <Globe size={14} className="text-black" /> Objetivos de Desenvolvimento Sustentável relacionados
               </label>
               <p className="text-xs text-neutral-500">Selecione nenhum, um ou vários ODS. Você poderá aprofundar essa relação durante o projeto.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1 border border-[#E0E0DE] rounded-xl p-2 bg-[#F9F9F8]" role="group" aria-label="Seleção opcional dos 17 ODS da ONU">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border border-[#E0E0DE] rounded-xl p-2 bg-[#F9F9F8] md:max-h-64 md:overflow-y-auto md:pr-1" role="group" aria-label="Seleção opcional dos 17 ODS da ONU">
                 {ODS_LIST.map((item) => (
                   <button
                     key={item.id}
