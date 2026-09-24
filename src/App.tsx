@@ -5,7 +5,7 @@ import Workspace from './components/Workspace';
 import LoginScreen from './components/LoginScreen';
 import AdvisorDashboard from './components/AdvisorDashboard';
 import StudentProjectsDashboard from './components/StudentProjectsDashboard';
-import { Project, ProjectWorkspace, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile, SharedProjectSummary, CollaborationPermission } from './types';
+import { Project, ProjectWorkspace, ThoughtNode, Phase, UserProfile, Classroom, StudentProfile, SharedProjectSummary, CollaborationPermission, AdminProjectSummary } from './types';
 import { Users, Sparkles, LogOut, ArrowLeft, GraduationCap, Globe, Building } from 'lucide-react';
 import { useCloudWorkspace, WorkspaceSnapshot } from './lib/useCloudWorkspace';
 import { readAuthSession, clearAuthSession } from './lib/auth';
@@ -172,6 +172,14 @@ export default function App() {
     nodes: ThoughtNode[];
   } | null>(null);
   const [sharedProjectsLoading, setSharedProjectsLoading] = useState(false);
+
+  // Área própria do professor e inspeção administrativa de projetos externos.
+  const [showAdvisorProjects, setShowAdvisorProjects] = useState(false);
+  const [activeAdminProject, setActiveAdminProject] = useState<{
+    summary: AdminProjectSummary;
+    project: Project;
+    nodes: ThoughtNode[];
+  } | null>(null);
 
   const applyCloudSnapshot = (snapshot: WorkspaceSnapshot) => {
     /*
@@ -347,6 +355,8 @@ export default function App() {
     setShowStudentProjectForm(false);
     setSharedProjects([]);
     setActiveSharedProject(null);
+    setShowAdvisorProjects(false);
+    setActiveAdminProject(null);
     localStorage.removeItem(STORAGE_PROFILE_KEY);
     localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
     clearAuthSession();
@@ -449,6 +459,10 @@ export default function App() {
 
   // Helper to retrieve the current active project & nodes
   const getActiveData = (): { project: Project | null; nodes: ThoughtNode[] } => {
+    if (activeAdminProject) {
+      return { project: activeAdminProject.project, nodes: activeAdminProject.nodes };
+    }
+
     if (activeSharedProject) {
       return { project: activeSharedProject.project, nodes: activeSharedProject.nodes };
     }
@@ -463,7 +477,7 @@ export default function App() {
       };
     }
 
-    if (activeProfile?.role === 'student') {
+    if (activeProfile?.role === 'student' || (activeProfile?.role === 'advisor' && showAdvisorProjects)) {
       const activeWorkspace = projectWorkspaces.find((item) => item.project.id === activeProjectId);
       return {
         project: activeWorkspace?.project || null,
@@ -577,7 +591,7 @@ export default function App() {
           });
         }
       }
-    } else if (activeProfile?.role === 'student') {
+    } else if (activeProfile?.role === 'student' || (activeProfile?.role === 'advisor' && showAdvisorProjects)) {
       if (!updatedProject) return;
       const now = new Date().toISOString();
       const updatedWorkspaces = projectWorkspaces.some((item) => item.project.id === updatedProject.id)
@@ -722,6 +736,10 @@ export default function App() {
   };
 
   const handleExit = () => {
+    if (activeAdminProject) {
+      setActiveAdminProject(null);
+      return;
+    }
     if (activeSharedProject) {
       setActiveSharedProject(null);
       void loadSharedProjects();
@@ -735,7 +753,7 @@ export default function App() {
       // Exit student projects back to advisor/partner dashboard
       setViewingStudent(null);
       setViewingStudentProjects([]);
-    } else if (activeProfile?.role === 'student') {
+    } else if (activeProfile?.role === 'student' || (activeProfile?.role === 'advisor' && showAdvisorProjects)) {
       setActiveProjectId(null);
       setSoloProject(null);
       setSoloNodes([]);
@@ -798,6 +816,35 @@ export default function App() {
     }
   };
 
+  const handleOpenAdminProject = async (summary: AdminProjectSummary) => {
+    const auth = readAuthSession();
+    if (!auth?.token) {
+      alert('Sua sessão expirou. Saia e entre novamente.');
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/api/workspace?ownerId=${encodeURIComponent(summary.ownerId)}&projectId=${encodeURIComponent(summary.projectId)}`,
+        { headers: { Authorization: `Bearer ${auth.token}` } },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível abrir este projeto.');
+      const snapshot = data?.payload || {};
+      const workspace = Array.isArray(snapshot.projectWorkspaces)
+        ? snapshot.projectWorkspaces.find((item: ProjectWorkspace) => item?.project?.id === summary.projectId)
+        : null;
+      const projectToOpen = workspace?.project || (snapshot.soloProject?.id === summary.projectId ? snapshot.soloProject : null);
+      if (!projectToOpen) throw new Error('O projeto não foi encontrado no workspace desta conta.');
+      setActiveAdminProject({
+        summary,
+        project: projectToOpen,
+        nodes: workspace?.nodes || snapshot.soloNodes || [],
+      });
+    } catch (error: any) {
+      alert(error?.message || 'Não foi possível abrir este projeto.');
+    }
+  };
+
   const handleDeleteStudentProject = (projectId: string) => {
     const target = projectWorkspaces.find((item) => item.project.id === projectId);
     if (!target || !confirm(`Excluir o projeto “${target.project.name}”? Esta ação não poderá ser desfeita.`)) return;
@@ -821,6 +868,31 @@ export default function App() {
 
   // ADVISOR ROLE VIEW
   if (activeProfile.role === 'advisor') {
+    if (activeAdminProject) {
+      const noOp: any = () => {};
+      return (
+        <div className="min-h-screen bg-brand-beige">
+          <Workspace
+            project={activeAdminProject.project}
+            nodes={activeAdminProject.nodes}
+            onUpdateNodeCoords={noOp}
+            onAddCustomThought={noOp}
+            onUpdateNodeContent={noOp}
+            onDeleteNode={noOp}
+            onUpdateNode={noOp}
+            onUpdateNodes={noOp}
+            onAddNode={noOp}
+            onUpdatePhase={noOp}
+            onExit={handleExit}
+            onClearAll={noOp}
+            currentUser={activeProfile}
+            studentName={`${activeAdminProject.summary.ownerRole === 'advisor' ? 'Professor(a)' : 'Comunidade'}: ${activeAdminProject.summary.ownerName}`}
+            collaborationPermission="view"
+          />
+        </div>
+      );
+    }
+
     if (viewingStudent) {
       if (!viewingStudentActiveProjectId) {
         return (
@@ -860,6 +932,66 @@ export default function App() {
       );
     }
 
+    if (showAdvisorProjects) {
+      if (project && activeProjectId) {
+        return (
+          <div className="min-h-screen bg-brand-beige">
+            <Workspace
+              project={project}
+              nodes={nodes}
+              onUpdateNodeCoords={handleUpdateNodeCoords}
+              onAddCustomThought={handleAddCustomThought}
+              onUpdateNodeContent={handleUpdateNodeContent}
+              onDeleteNode={handleDeleteNode}
+              onUpdateNode={handleUpdateNode}
+              onUpdateNodes={handleUpdateNodes}
+              onAddNode={handleAddNode}
+              onUpdatePhase={handleUpdatePhase}
+              onExit={handleExit}
+              onClearAll={handleClearAllContent}
+              currentUser={activeProfile}
+              studentName="Projeto do(a) professor(a)"
+              canManageCollaborators={true}
+            />
+          </div>
+        );
+      }
+
+      if (showStudentProjectForm) {
+        return (
+          <div className="min-h-[100dvh] bg-[#FDFDFB] flex flex-col">
+            <header className="h-16 border-b border-[#F0F0EE] px-4 sm:px-8 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <BrandMark compact priority className="w-[38px] h-[33px]" />
+                <div><span className="text-[9px] font-bold uppercase tracking-widest text-black/40 block">Novo projeto do professor</span><span className="text-xs font-semibold">{activeProfile.name}</span></div>
+              </div>
+              <button onClick={() => setShowStudentProjectForm(false)} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
+            </header>
+            <div className="flex-1 flex items-center justify-center py-6"><FirstExperience onStart={handleStartProject} /></div>
+          </div>
+        );
+      }
+
+      return (
+        <StudentProjectsDashboard
+          user={activeProfile}
+          projects={projectWorkspaces}
+          onOpen={handleOpenStudentProject}
+          onCreate={() => setShowStudentProjectForm(true)}
+          onDelete={handleDeleteStudentProject}
+          onBack={() => {
+            setShowAdvisorProjects(false);
+            setShowStudentProjectForm(false);
+            setActiveProjectId(null);
+            localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
+          }}
+          title="Meus projetos como professor(a)"
+          emptyTitle="Você ainda não criou um projeto próprio"
+          emptyDescription="Além de orientar turmas, sua conta de professor também pode criar e desenvolver projetos completos na Metodologia 5I's."
+        />
+      );
+    }
+
     return (
       <AdvisorDashboard
         advisor={activeProfile}
@@ -871,6 +1003,13 @@ export default function App() {
         onDeleteClassroom={handleDeleteClassroom}
         onDeleteStudent={handleDeleteStudent}
         onLogout={handleLogout}
+        onOpenOwnProjects={() => {
+          setShowAdvisorProjects(true);
+          setActiveProjectId(null);
+          setShowStudentProjectForm(false);
+          localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
+        }}
+        onOpenAdminProject={handleOpenAdminProject}
         loadingStudentWorkspace={loadingStudentWorkspace}
         studentWorkspaceError={studentWorkspaceError}
       />
