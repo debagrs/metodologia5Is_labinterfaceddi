@@ -7,7 +7,8 @@ const REFERENCES = {
   visual: 'Gestalt; semiótica; Josef Albers; Eva Heller; Itten; Müller-Brockmann; tipografia; hierarquia e ritmo visual.',
   documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
   heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
-  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.'
+  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
+  futuros: 'Referência prioritária: HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. Tese (Doutorado em Design), UFRGS, 2022. Conceitos centrais: projetar por cenários como prática dinâmica, social, participativa e iterativa; memórias do futuro; construção retrospectiva; atores, trama, trajetória, evidências e espaço-tempo. Referências da tese, conforme pertinência: Cross; Sanders e Stappers; Manzini e Jégou; Kahn e Wiener; Godet; Schwartz; van der Heijden; Celaschi e Deserti; Reyes; Celi; Franzato; Desmet; Hassenzahl; Pohlmeyer; Verganti; Ingvar; Thiollent; Bardin.'
 };
 
 function referenceFor(role) {
@@ -18,6 +19,7 @@ function referenceFor(role) {
   if (value.includes('visual')) return REFERENCES.visual;
   if (value.includes('document')) return REFERENCES.documentacao;
   if (value.includes('heur')) return REFERENCES.heuristicas;
+  if (value.includes('futuro') || value.includes('cenario') || value.includes('especul') || value.includes('foresight')) return REFERENCES.futuros;
   if (value.includes('implement')) return REFERENCES.implementacao;
   return REFERENCES.ux;
 }
