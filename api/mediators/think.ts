@@ -116,8 +116,26 @@ const METHODOLOGY = {
 const AGENT_GUIDES = {
   'agent-idea': 'Priorize Ideação. Use Gasparetto, Santaella, Manovich e Flusser para ampliar repertório, subjetividade, cultura visual e imaginação crítica.',
   'agent-mago': `Priorize Ideação por cenários futuros. Você NÃO prevê o futuro como certeza; você ajuda a projetar possibilidades e a usar futuros para questionar decisões do presente.
-BASE: design estratégico a partir do futuro de André Coutinho e Anderson Penha, difundido por Patricia Hartmann; speculative design de Anthony Dunne e Fiona Raby; narrativas de futuros, everyday things, time travelling, participatory futures e create your own narrative. Mantenha também a lente ética e social trabalhada no laboratório com Sasha Costanza-Chock, Mike Monteiro, Critical Design Lab e Guto Requena.
-MÉTODO DE CONVERSA: (1) formular uma pergunta de futuro; (2) identificar sinais, tendências, contratendências e incertezas críticas; (3) distinguir futuro provável, possível/plausível e desejável; (4) construir 2 a 4 cenários contrastantes, nunca uma única previsão; (5) perguntar quem se beneficia, quem é excluído e quais impactos humanos, não humanos, sociais e ambientais surgem; (6) quando útil, materializar o cenário como narrativa, artefato/prop, interface, notícia, objeto cotidiano ou pequeno design fiction; (7) fazer backcasting do futuro desejável para uma decisão ou experimento no presente.
+
+REFERÊNCIA CENTRAL — PATRICIA HARTMANN HINDRICHSON:
+HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. 2022. 318 f. Tese (Doutorado em Design) — Universidade Federal do Rio Grande do Sul, Porto Alegre, 2022. Trate esta tese como referência prioritária do Mago sempre que a conversa envolver cenários, futuros, cocriação de possibilidades, narrativas futuras, retrospectiva a partir do futuro ou artefatos de cenário.
+A tecnologia proposta por Hartmann desloca a ênfase do problema no passado/presente para a exploração de possibilidades em um futuro próximo e entende o projetar por cenários como prática dinâmica, social, participativa e iterativa que pode atravessar o processo de projeto. Ao construir cenários, considere articuladamente: ATORES (quem participa, com atitudes, valores e emoções), TRAMA (a narrativa e o encadeamento dos acontecimentos), TRAJETÓRIA (o que acontece ao longo do tempo), EVIDÊNCIAS (artefatos, pontos de contato e impactos tangíveis) e o ESPAÇO-TEMPO em transformação. Estimule a produção de narrativas e artefatos físicos/digitais para pensar e compartilhar futuros, a construção retrospectiva desde um futuro próximo e a criação de "memórias do futuro" compartilhadas.
+
+REFERÊNCIAS TEÓRICAS MOBILIZADAS NA TESE DE HARTMANN — use somente quando forem pertinentes ao ponto discutido e sem atribuir a Hartmann conceitos que pertencem aos autores originais:
+- projeto e pensamento em design: Nigel Cross; Herbert Simon; Donald Schön; Horst Rittel e Melvin Webber; Richard Buchanan; Ezio Manzini; Francesco Zurlo; Vijay Kumar; Design Council; IDEO; d.school;
+- práticas participativas e codesign: Elizabeth Sanders e Pieter Jan Stappers; Finn Kensing e Jeanette Blomberg; Klaus Krippendorff; Ezio Manzini;
+- possibilidades e positive design: Pieter Desmet; Marc Hassenzahl; Anna Pohlmeyer;
+- cenários e planejamento: Herman Kahn e Anthony Wiener; Michel Godet; Peter Schwartz; Kees van der Heijden; Ute von Reibnitz;
+- cenários no design estratégico: Ezio Manzini e François Jégou; Francesco Celaschi e Alessandro Deserti; Paulo Reyes; Manuela Celi; Carlo Franzato; Patricia Hartmann Hindrichson;
+- inovação dirigida pelo design e novos significados: Roberto Verganti; Tim Brown; Kyffin e Gardien; Vijay Kumar;
+- memória, antecipação e narrativa futura: David Ingvar e Kees van der Heijden;
+- pesquisa-ação e análise qualitativa usadas na tese: Michel Thiollent e Laurence Bardin.
+
+BASE COMPLEMENTAR: design estratégico a partir do futuro de André Coutinho e Anderson Penha; speculative design de Anthony Dunne e Fiona Raby; narrativas de futuros, everyday things, time travelling, participatory futures e create your own narrative. Mantenha também a lente ética e social trabalhada no laboratório com Sasha Costanza-Chock, Mike Monteiro, Critical Design Lab e Guto Requena.
+
+MÉTODO DE CONVERSA: (1) formular uma pergunta de futuro; (2) identificar sinais, tendências, contratendências e incertezas críticas; (3) distinguir futuro provável, possível/plausível e desejável; (4) construir 2 a 4 cenários contrastantes, nunca uma única previsão; (5) quando trabalhar à maneira de Hartmann, estruturar cada cenário por atores, trama, trajetória, evidências e espaço-tempo; (6) perguntar quem se beneficia, quem é excluído e quais impactos humanos, não humanos, sociais e ambientais surgem; (7) quando útil, materializar o cenário como narrativa, artefato/prop, interface, notícia, objeto cotidiano ou pequeno design fiction; (8) fazer backcasting do futuro desejável para uma decisão ou experimento no presente.
+
+REGRA DE CITAÇÃO DO MAGO: em respostas cujo núcleo seja cenário/projetar por cenários, cite explicitamente Hartmann Hindrichson (2022) no contexto científico e, quando útil, relacione-a aos autores acima. Não cite a autora apenas de passagem como "difusora" de Coutinho e Penha. Diferencie com clareza o que é proposição de Hartmann, o que ela mobiliza de outros autores e o que é repertório complementar do laboratório.
 Evite futurismo tecnológico automático, determinismo, hype e solução mágica. Explicite sempre o que é evidência presente, hipótese, incerteza e especulação.`,
   'agent-passeio': 'Priorize Inambulação. Use cartografia, pesquisa participante, etnografia de interfaces, Latour e Costanza-Chock. Sempre devolva a pessoa ao território e à escuta.',
   'agent-instaura': 'Priorize Instauração. Use Norman, Preece/Rogers/Sharp, Gestalt, Heller, semiótica, arquitetura da informação e prototipação. Evite figmarismo e respostas visuais genéricas.',
@@ -595,6 +613,26 @@ function cleanPublicationJson(text) {
   };
 }
 
+function ensureMagoHartmannReference(result, body) {
+  if (body?.mediator?.id !== 'agent-mago' || !result || typeof result !== 'object') return result;
+
+  const shortReference = 'Hartmann Hindrichson (2022), Memórias do Futuro: uma tecnologia para projetar por cenários (Tese de Doutorado em Design, UFRGS).';
+  const fullReference = 'Referência central: HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. 2022. 318 f. Tese (Doutorado em Design) — UFRGS, Porto Alegre, 2022.';
+
+  if (typeof result.scientificContext === 'string' && !/hartmann/i.test(result.scientificContext)) {
+    result.scientificContext = `${result.scientificContext.trim()} ${fullReference}`;
+  }
+
+  if (typeof result.reply === 'string' && !/hartmann/i.test(result.reply)) {
+    const futureTopic = /cen[aá]rio|futur|possibil|mem[oó]ria|antecip|trajet[oó]ria|trama|evid[eê]ncia|backcast|design especulativo/i.test(result.reply);
+    if (futureTopic) result.reply = `${result.reply.trim()}
+
+Referência: ${shortReference}`;
+  }
+
+  return result;
+}
+
 function cleanJson(text) {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = stripped.indexOf('{');
@@ -829,6 +867,7 @@ function offlineInsight(body) {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
   let question = `Que evidência ainda falta para sustentar a principal decisão deste projeto na fase de ${phase}?`;
+  let scientificContext = `Modo pedagógico sem API. Use como roteiro de investigação na fase ${phase}; valide depois com evidências e referências.`;
   let provocations = [
     'Identifique uma suposição ainda não verificada.',
     'Registre uma evidência observável que poderia confirmá-la ou refutá-la.',
@@ -844,6 +883,10 @@ function offlineInsight(body) {
   } else if (role.includes('visual')) {
     question = 'A hierarquia visual revela a prioridade real da tarefa ou apenas a preferência estética?';
     provocations = ['Liste os três primeiros elementos percebidos.', 'Compare contraste, proximidade e alinhamento.', 'Remova um ruído e teste novamente.'];
+  } else if (role.includes('futuro') || role.includes('cenario') || role.includes('cenário') || role.includes('especul')) {
+    question = 'Quem participa deste futuro, que trama se desenrola, qual trajetória o produz e que evidências tornariam esse cenário experienciável?';
+    provocations = ['Construa dois cenários contrastantes, sem tratá-los como previsão.', 'Organize cada cenário por atores, trama, trajetória, evidências e espaço-tempo.', 'Volte retrospectivamente do futuro desejável para uma decisão que possa ser testada agora.'];
+    scientificContext = 'Hartmann Hindrichson (2022), em Memórias do Futuro: uma tecnologia para projetar por cenários (Tese de Doutorado em Design, UFRGS), propõe o projetar por cenários como prática dinâmica, social, participativa e iterativa, articulando atores, trama, trajetória, evidências e espaço-tempo.';
   } else if (role.includes('heur')) {
     question = 'Qual falha observável reduz previsibilidade, controle ou recuperação durante a interação?';
     provocations = ['Escolha uma heurística.', 'Registre evidência concreta.', 'Defina gravidade e critério de correção.'];
@@ -856,7 +899,7 @@ function offlineInsight(body) {
     title: 'Roteiro pedagógico offline',
     question,
     provocations,
-    scientificContext: `Modo pedagógico sem API. Use como roteiro de investigação na fase ${phase}; valide depois com evidências e referências.`,
+    scientificContext,
     provider: 'Modo pedagógico',
     model: 'offline'
   };
@@ -904,11 +947,11 @@ async function generateMediatorInsight(body) {
   if (body.mode === 'chat') {
     if (!String(body.message || '').trim()) throw new Error('Escreva uma mensagem para conversar com o agente.');
     const { system, user } = buildChatMessages(body);
-    return callGeminiChat(system, user);
+    return ensureMagoHartmannReference(await callGeminiChat(system, user), body);
   }
 
   const { system, user } = buildMessages(body);
-  return callGemini(system, user);
+  return ensureMagoHartmannReference(await callGemini(system, user), body);
 }
 
 export default async function handler(req: any, res: any) {
