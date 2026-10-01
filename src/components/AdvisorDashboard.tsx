@@ -7,6 +7,7 @@ import { AdminProjectSummary, Classroom, StudentProfile, Project, UserProfile } 
 import { readAuthSession } from '../lib/auth';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
+import { AgendaLauncher } from './Agenda5Is';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -233,6 +234,12 @@ export default function AdvisorDashboard({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <AgendaLauncher
+              currentUser={advisor}
+              className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all shadow-sm"
+              textClassName="text-xs font-mono font-bold tracking-wide"
+              label="Agenda"
+            />
             {onOpenOwnProjects && (
               <button
                 onClick={onOpenOwnProjects}
