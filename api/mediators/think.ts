@@ -419,38 +419,98 @@ FORMATO
 }
 
 function buildInteractiveCodeMessages(body) {
-  const engine = body.engine === 'three' ? 'three' : 'p5';
-  const engineRules = engine === 'three'
-    ? `O código será executado dentro de <script type="module"> após a linha: import * as THREE from 'three.module.js'. Portanto NÃO escreva imports, HTML ou tags <script>. Use a variável THREE já disponível. Crie renderer, scene, camera, animação e resize. O canvas deve preencher window.innerWidth/window.innerHeight e responder a mouse e touch quando pertinente.`
-    : `O código será executado depois de carregar p5.js em modo global. Portanto NÃO escreva HTML, imports ou tags <script>. Declare setup(), draw() e, quando pertinente, mouse/touch handlers e windowResized(). Use createCanvas(windowWidth, windowHeight) e resizeCanvas.`;
-  const system = `Você é Forja em modo laboratório de interação. Gere um pequeno experimento visual executável e performático para ser salvo como camada do canvas da Metodologia 5I’s.
-${engineRules}
-- Responda a desktop e mobile/touch.
-- Evite bibliotecas extras, rede, áudio automático e assets externos não fornecidos.
-- Limite loops/partículas para manter desempenho em celular.
-- Não acesse cookies, localStorage, parent window ou APIs privadas.
-- Preserve a intenção estética e conceitual do prompt.
+  const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
+  const engine = allowedEngines.includes(body.engine) ? body.engine : 'p5';
+  const interactionMode = ['auto', 'pointer', 'hover', 'scroll'].includes(body.interactionMode) ? body.interactionMode : 'pointer';
+  const asset = body.asset && typeof body.asset === 'object' && body.asset.url
+    ? {
+        url: String(body.asset.url),
+        name: String(body.asset.name || 'asset'),
+        contentType: String(body.asset.contentType || ''),
+        kind: body.asset.kind === 'svg' ? 'svg' : 'image',
+      }
+    : null;
 
-IMPORTANTE: NÃO devolva JSON. JavaScript dentro de JSON é frágil por causa de aspas e quebras de linha. Responda exatamente neste protocolo textual:
+  const engineRules = {
+    p5: `p5.js já está carregado em modo global. NÃO escreva HTML, imports ou tags <script>. Declare setup(), draw() e handlers necessários. Use const canvas = createCanvas(windowWidth, windowHeight); canvas.parent(STAGE); e resizeCanvas no resize.`,
+    three: `O código roda em <script type="module"> depois de import * as THREE. NÃO escreva imports adicionais, HTML ou tags <script>. Use THREE, renderer, scene, camera, requestAnimationFrame e resize; anexe renderer.domElement ao STAGE.`,
+    gsap: `GSAP já está carregado globalmente na variável gsap. NÃO escreva imports, HTML ou tags <script>. Crie os elementos DOM/SVG necessários dentro de STAGE e anime com timelines/tweens do gsap.`,
+    anime: `Anime.js 3.x já está carregado globalmente na função anime. NÃO escreva imports, HTML ou tags <script>. Crie os elementos DOM/SVG dentro de STAGE e anime com anime({...}).`,
+    matter: `Matter.js já está carregado globalmente na variável Matter. NÃO escreva imports, HTML ou tags <script>. Use Engine, Runner/Render ou desenho próprio em canvas, mantenha a física leve e dimensione ao STAGE.`,
+    svg: `SVG.js já está carregado globalmente na função SVG e GSAP também está disponível em gsap. NÃO escreva imports, HTML ou tags <script>. Crie o SVG dentro de STAGE. Para um SVG enviado, você pode usar await window.loadInteractiveSvg() dentro de uma função async/IIFE e inserir/manipular seus grupos e paths.`,
+  }[engine];
+
+  const assetRules = asset
+    ? `Há um asset fornecido pelo usuário e ele deve ser tratado como parte central da interação quando o prompt pedir isso.
+ASSET já existe no runtime: ${JSON.stringify(asset)}
+Helpers disponíveis:
+- STAGE: elemento DOM que ocupa 100% da prévia.
+- ASSET: metadados do arquivo enviado (url, name, contentType, kind).
+- window.createInteractiveImage(options): cria uma <img> do asset dentro de STAGE e retorna o elemento.
+- window.loadInteractiveSvg(): retorna o texto do SVG remoto; use somente quando ASSET.kind === 'svg'.
+Não substitua o asset por desenhos inventados se o pedido for animar a marca/imagem enviada.`
+    : `Não há asset enviado. Se o prompt pedir uma marca/imagem específica, trabalhe apenas com formas geradas até que o usuário envie o arquivo; não invente URL externa.`;
+
+  const modeRules = {
+    auto: 'A interação principal deve funcionar automaticamente em loop; ainda respeite resize e prefers-reduced-motion quando viável.',
+    pointer: 'A interação principal deve responder tanto a mouse quanto a toque/pointer, sem depender apenas de hover.',
+    hover: 'A interação deve responder a hover/foco no desktop e oferecer comportamento equivalente por toque no mobile.',
+    scroll: 'A interação deve responder ao scroll quando inserida na página; como a prévia pode não rolar, inclua também fallback por wheel/pointer para ser testável.',
+  }[interactionMode];
+
+  const system = `Você é Forja em modo laboratório de interação da Metodologia 5I’s. Gere um experimento visual executável, expressivo e performático para ser salvo como uma camada reutilizável do canvas.
+
+MOTOR: ${engine}
+${engineRules}
+
+RUNTIME COMUM
+- STAGE ocupa toda a área da prévia e já existe.
+- ASSET contém o arquivo enviado ou null.
+- MODE contém o modo de interação escolhido.
+${assetRules}
+${modeRules}
+
+REGRAS
+- Responda a desktop e mobile/touch.
+- O resultado precisa caber e se adaptar ao container, não a uma resolução fixa.
+- Limite partículas/corpos/objetos para bom desempenho em celular.
+- Não acesse cookies, localStorage, parent window ou APIs privadas.
+- Não faça novas requisições de rede, exceto window.loadInteractiveSvg() para o asset fornecido.
+- Não carregue bibliotecas adicionais: use somente o motor escolhido e os helpers já disponíveis.
+- Evite áudio automático.
+- Respeite a identidade visual e a intenção conceitual descritas no prompt.
+- Se CÓDIGO ATUAL for fornecido, trate o pedido como uma revisão: preserve o que já funciona e devolva o CÓDIGO COMPLETO atualizado, nunca apenas um patch.
+- Evite vazamentos: ao recriar a cena, não acumule listeners, loops ou canvases duplicados desnecessariamente.
+
+IMPORTANTE: NÃO devolva JSON. Responda exatamente neste protocolo textual:
 TITLE: nome curto da interação
 ENGINE: ${engine}
 <<<CODE>>>
 JavaScript puro aqui
 <<<END_CODE>>>
 
-Não escreva explicações fora desse protocolo. Não use cercas Markdown se puder evitá-las.`;
+Não escreva explicações fora desse protocolo. Não use cercas Markdown se puder evitar.`;
+
   const context = Array.isArray(body.existingThoughts)
     ? body.existingThoughts.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n')
     : '';
   const user = `PROJETO: ${body.project?.name || ''}
 PROBLEMA: ${body.project?.problem || ''}
+FASE: ${body.phase || ''}
+MOTOR ESCOLHIDO: ${engine}
+MODO DE INTERAÇÃO: ${interactionMode}
+ASSET: ${asset ? `${asset.name} (${asset.kind}) — ${asset.url}` : 'nenhum'}
+
 CONTEXTO DO CANVAS:
 ${context}
 
-PROMPT DA INTERAÇÃO:
+CÓDIGO ATUAL (se houver, revise a partir dele):
+${String(body.currentCode || '').slice(0, 14000) || 'nenhum'}
+
+PEDIDO / NOVA INSTRUÇÃO:
 ${String(body.prompt || '')}
 
-Gere o experimento em ${engine === 'three' ? 'Three.js' : 'p5.js'}.`;
+Gere o experimento completo usando ${engine}.`;
   return { system, user };
 }
 
@@ -534,6 +594,8 @@ function cleanImplementationFilesJson(text, requestedFiles) {
 function cleanInteractiveResponse(text, fallbackEngine = 'p5') {
   const raw = String(text || '').trim();
   if (!raw) throw new Error('A interação retornou sem conteúdo.');
+  const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
+  const normalizeEngine = (value) => allowedEngines.includes(value) ? value : (allowedEngines.includes(fallbackEngine) ? fallbackEngine : 'p5');
 
   try {
     const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
@@ -544,17 +606,17 @@ function cleanInteractiveResponse(text, fallbackEngine = 'p5') {
       if (data?.interactive?.code) {
         return {
           title: String(data.interactive.title || 'Interação'),
-          engine: data.interactive.engine === 'three' ? 'three' : 'p5',
+          engine: normalizeEngine(data.interactive.engine),
           code: String(data.interactive.code),
         };
       }
     }
   } catch {
-    // Compatibilidade: o novo protocolo não depende de JSON.
+    // Compatibilidade: o protocolo principal não depende de JSON.
   }
 
   const titleMatch = raw.match(/^TITLE:\s*(.+)$/im);
-  const engineMatch = raw.match(/^ENGINE:\s*(p5|three)$/im);
+  const engineMatch = raw.match(/^ENGINE:\s*(p5|three|gsap|anime|matter|svg)$/im);
   const markerStart = raw.indexOf('<<<CODE>>>');
   const markerEnd = raw.lastIndexOf('<<<END_CODE>>>');
   let code = '';
@@ -585,7 +647,7 @@ function cleanInteractiveResponse(text, fallbackEngine = 'p5') {
   if (!code) throw new Error('A interação retornou sem código executável. Tente gerar novamente.');
   return {
     title: String(titleMatch?.[1]?.trim() || 'Interação'),
-    engine: engineMatch?.[1] === 'three' ? 'three' : fallbackEngine,
+    engine: normalizeEngine(engineMatch?.[1]),
     code,
   };
 }
@@ -934,7 +996,8 @@ async function generateMediatorInsight(body) {
   if (body.mode === 'interactive-code') {
     if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
     const { system, user } = buildInteractiveCodeMessages(body);
-    const engine = body.engine === 'three' ? 'three' : 'p5';
+    const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
+    const engine = allowedEngines.includes(body.engine) ? body.engine : 'p5';
     const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
     return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
   }
