@@ -11,7 +11,10 @@ export interface MediatorRequestBody {
   existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
   engine?: 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg' | string;
   interactionMode?: 'auto' | 'pointer' | 'hover' | 'scroll' | string;
-  asset?: { url?: string; name?: string; contentType?: string; kind?: string } | null;
+  effectPreset?: 'network' | 'breathe' | 'draw' | 'wave' | 'explode' | 'drift' | string;
+  intensity?: 'subtle' | 'medium' | 'strong' | string;
+  preserveBrand?: boolean;
+  asset?: { url?: string; name?: string; contentType?: string; kind?: string; profile?: { palette?: string[]; counts?: Record<string, number>; sourceType?: string } } | null;
   currentTitle?: string;
   currentCode?: string;
   prompt?: string;
@@ -231,12 +234,20 @@ function buildInteractiveCodeMessages(body: MediatorRequestBody) {
   type Engine = (typeof allowedEngines)[number];
   const engine: Engine = allowedEngines.includes(body.engine as Engine) ? body.engine as Engine : 'p5';
   const interactionMode = ['auto', 'pointer', 'hover', 'scroll'].includes(String(body.interactionMode)) ? String(body.interactionMode) : 'pointer';
+  const effectPreset = ['network', 'breathe', 'draw', 'wave', 'explode', 'drift'].includes(String(body.effectPreset)) ? String(body.effectPreset) : '';
+  const intensity = ['subtle', 'medium', 'strong'].includes(String(body.intensity)) ? String(body.intensity) : 'subtle';
+  const preserveBrand = body.preserveBrand !== false;
   const asset = body.asset && typeof body.asset === 'object' && body.asset.url
     ? {
         url: String(body.asset.url),
         name: String(body.asset.name || 'asset'),
         contentType: String(body.asset.contentType || ''),
         kind: body.asset.kind === 'svg' ? 'svg' : 'image',
+        profile: body.asset.profile && typeof body.asset.profile === 'object' ? {
+          palette: Array.isArray(body.asset.profile.palette) ? body.asset.profile.palette.slice(0, 12).map(String) : [],
+          counts: body.asset.profile.counts && typeof body.asset.profile.counts === 'object' ? body.asset.profile.counts : {},
+          sourceType: 'svg',
+        } : undefined,
       }
     : null;
 
@@ -257,7 +268,8 @@ Helpers disponíveis:
 - ASSET: metadados do arquivo enviado (url, name, contentType, kind).
 - window.createInteractiveImage(options): cria uma <img> do asset dentro de STAGE e retorna o elemento.
 - window.loadInteractiveSvg(): retorna o texto do SVG remoto; use somente quando ASSET.kind === 'svg'.
-Não substitua o asset por desenhos inventados se o pedido for animar a marca/imagem enviada.`
+Não substitua o asset por desenhos inventados se o pedido for animar a marca/imagem enviada.
+Se ASSET.kind === 'svg', monte e manipule o SVG ORIGINAL usando window.loadInteractiveSvg(); nunca redesenhe uma aproximação da marca.`
     : `Não há asset enviado. Se o prompt pedir uma marca/imagem específica, trabalhe apenas com formas geradas até que o usuário envie o arquivo; não invente URL externa.`;
 
   const modeRules: Record<string, string> = {
@@ -278,6 +290,17 @@ RUNTIME COMUM
 - MODE contém o modo de interação escolhido.
 ${assetRules}
 ${modeRules[interactionMode] || modeRules.pointer}
+
+EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
+INTENSIDADE: ${intensity}
+PROTEÇÃO DA MARCA: ${preserveBrand ? 'ATIVA' : 'desativada'}
+${preserveBrand && asset?.kind === 'svg' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
+- O SVG enviado é a fonte visual final. NÃO recrie, redesenhe ou substitua seus elementos.
+- NÃO altere fill, stroke, gradientes, viewBox, proporções, tipografia ou ordem visual dos elementos.
+- Preserve exatamente as cores detectadas: ${JSON.stringify(asset.profile?.palette || [])}.
+- Para animar, prefira transform, opacity, strokeDasharray/strokeDashoffset e elementos auxiliares sobrepostos que não modifiquem a arte original.
+- Se adicionar linhas de rede, use uma cor já existente na paleta do SVG e baixa opacidade.
+- Ao terminar a animação/interação, os elementos devem poder retornar à composição original.` : ''}
 
 REGRAS
 - Responda a desktop e mobile/touch.
@@ -306,6 +329,10 @@ PROBLEMA: ${body.project.problem}
 FASE: ${body.phase}
 MOTOR ESCOLHIDO: ${engine}
 MODO DE INTERAÇÃO: ${interactionMode}
+EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
+INTENSIDADE: ${intensity}
+PROTEÇÃO DA MARCA: ${preserveBrand ? 'ativa' : 'desativada'}
+PALETA DETECTADA: ${asset?.profile?.palette?.length ? asset.profile.palette.join(', ') : 'não disponível'}
 ASSET: ${asset ? `${asset.name} (${asset.kind}) — ${asset.url}` : 'nenhum'}
 
 CONTEXTO DO CANVAS:
