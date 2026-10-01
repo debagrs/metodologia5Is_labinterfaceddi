@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell, BellRing, CalendarCheck2, CalendarDays, Check, CheckCircle2,
   ChevronRight, Clock3, Download, ExternalLink, Loader2, Pencil, Plus,
@@ -482,46 +483,46 @@ export default function AgendaPanel({ currentUser, project, onClose }: PanelProp
     setNotice('Arquivo de calendário criado com lembrete para 1 dia antes. Abra o arquivo .ics e adicione-o ao Google Agenda.');
   };
 
-  return (
-    <div className="fixed inset-0 z-[180] bg-black/45 backdrop-blur-[2px] flex items-end sm:items-center justify-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="w-full h-[96dvh] sm:h-[92dvh] sm:max-w-6xl bg-[#FDFDFB] sm:rounded-[28px] shadow-2xl border border-black/10 overflow-hidden flex flex-col">
-        <header className="px-4 sm:px-6 py-4 border-b border-[#E8E8E5] bg-white flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-10 h-10 rounded-2xl bg-black text-white flex items-center justify-center shrink-0"><CalendarCheck2 size={20} /></span>
+  return createPortal((
+    <div className="fixed inset-0 z-[9999] bg-black/45 backdrop-blur-[2px] flex items-stretch sm:items-center justify-center sm:p-4 overscroll-none" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="w-full h-[100dvh] sm:h-[92dvh] sm:max-w-6xl bg-[#FDFDFB] sm:rounded-[28px] shadow-2xl border-0 sm:border border-black/10 overflow-hidden flex flex-col">
+        <header className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-[#E8E8E5] bg-white flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-black text-white flex items-center justify-center shrink-0"><CalendarCheck2 size={18} /></span>
             <div className="min-w-0">
-              <span className="text-[9px] uppercase tracking-[0.2em] font-bold text-black/40">Organização do projeto</span>
-              <h2 className="text-lg sm:text-xl font-bold truncate">Agenda 5I’s</h2>
-              <p className="text-[11px] text-neutral-500 truncate">Entregas compartilhadas + tarefas pessoais + Google Agenda</p>
+              <span className="hidden sm:block text-[9px] uppercase tracking-[0.2em] font-bold text-black/40">Organização do projeto</span>
+              <h2 className="text-base sm:text-xl font-bold truncate">Agenda 5I’s</h2>
+              <p className="hidden sm:block text-[11px] text-neutral-500 truncate">Entregas compartilhadas + tarefas pessoais + Google Agenda</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={toggleNotifications} className={`h-10 px-3 rounded-xl border flex items-center gap-2 text-[10px] font-mono font-bold uppercase cursor-pointer ${notifyEnabled ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-white border-[#DDD] text-neutral-600'}`} title="Lembretes neste dispositivo">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button type="button" onClick={toggleNotifications} className={`h-9 sm:h-10 w-9 sm:w-auto sm:px-3 rounded-xl border flex items-center justify-center sm:gap-2 text-[10px] font-mono font-bold uppercase cursor-pointer ${notifyEnabled ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-white border-[#DDD] text-neutral-600'}`} title="Lembretes neste dispositivo">
               {notifyEnabled ? <BellRing size={15} /> : <Bell size={15} />}<span className="hidden md:inline">{notifyEnabled ? 'Lembretes ativos' : 'Ativar lembretes'}</span>
             </button>
-            <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl border border-[#DDD] bg-white flex items-center justify-center cursor-pointer"><X size={18} /></button>
+            <button type="button" onClick={onClose} className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl border border-[#DDD] bg-white flex items-center justify-center cursor-pointer"><X size={18} /></button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <button onClick={() => setFilter('hoje')} className="text-left p-4 rounded-2xl bg-amber-50 border border-amber-200 cursor-pointer"><span className="text-[10px] uppercase font-mono font-bold text-amber-800">Hoje</span><strong className="block text-2xl mt-1">{stats.today}</strong></button>
-              <button onClick={() => setFilter('hoje')} className="text-left p-4 rounded-2xl bg-red-50 border border-red-200 cursor-pointer"><span className="text-[10px] uppercase font-mono font-bold text-red-700">Atrasadas</span><strong className="block text-2xl mt-1">{stats.overdue}</strong></button>
-              <button onClick={() => setFilter('pendentes')} className="text-left p-4 rounded-2xl bg-sky-50 border border-sky-200 cursor-pointer"><span className="text-[10px] uppercase font-mono font-bold text-sky-800">Próximas</span><strong className="block text-2xl mt-1">{stats.upcoming}</strong></button>
-              <button onClick={() => setFilter('concluidas')} className="text-left p-4 rounded-2xl bg-emerald-50 border border-emerald-200 cursor-pointer"><span className="text-[10px] uppercase font-mono font-bold text-emerald-800">Concluídas</span><strong className="block text-2xl mt-1">{stats.completed}</strong></button>
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="max-w-6xl mx-auto p-3 sm:p-6 space-y-3 sm:space-y-5">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
+              <button onClick={() => setFilter('hoje')} className="min-w-0 text-left px-2 py-2 sm:p-4 rounded-xl sm:rounded-2xl bg-amber-50 border border-amber-200 cursor-pointer"><span className="block truncate text-[8px] sm:text-[10px] uppercase font-mono font-bold text-amber-800">Hoje</span><strong className="block text-lg sm:text-2xl leading-none mt-1">{stats.today}</strong></button>
+              <button onClick={() => setFilter('hoje')} className="min-w-0 text-left px-2 py-2 sm:p-4 rounded-xl sm:rounded-2xl bg-red-50 border border-red-200 cursor-pointer"><span className="block truncate text-[8px] sm:text-[10px] uppercase font-mono font-bold text-red-700">Atrasadas</span><strong className="block text-lg sm:text-2xl leading-none mt-1">{stats.overdue}</strong></button>
+              <button onClick={() => setFilter('pendentes')} className="min-w-0 text-left px-2 py-2 sm:p-4 rounded-xl sm:rounded-2xl bg-sky-50 border border-sky-200 cursor-pointer"><span className="block truncate text-[8px] sm:text-[10px] uppercase font-mono font-bold text-sky-800">Próximas</span><strong className="block text-lg sm:text-2xl leading-none mt-1">{stats.upcoming}</strong></button>
+              <button onClick={() => setFilter('concluidas')} className="min-w-0 text-left px-2 py-2 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50 border border-emerald-200 cursor-pointer"><span className="block truncate text-[8px] sm:text-[10px] uppercase font-mono font-bold text-emerald-800">Concluídas</span><strong className="block text-lg sm:text-2xl leading-none mt-1">{stats.completed}</strong></button>
             </div>
 
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-              <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-3">
+              <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-0.5 no-scrollbar">
                 {([
                   ['pendentes', 'Pendentes'], ['hoje', 'Hoje'], ['semana', '7 dias'], ['concluidas', 'Concluídas'], ['todas', 'Todas']
                 ] as [Filter, string][]).map(([value, label]) => (
-                  <button key={value} onClick={() => setFilter(value)} className={`h-10 px-4 whitespace-nowrap rounded-xl border text-xs font-mono font-bold uppercase cursor-pointer ${filter === value ? 'bg-black border-black text-white' : 'bg-white border-[#DDD] text-neutral-600'}`}>{label}</button>
+                  <button key={value} onClick={() => setFilter(value)} className={`h-8 sm:h-10 px-2.5 sm:px-4 whitespace-nowrap rounded-lg sm:rounded-xl border text-[10px] sm:text-xs font-mono font-bold uppercase cursor-pointer ${filter === value ? 'bg-black border-black text-white' : 'bg-white border-[#DDD] text-neutral-600'}`}>{label}</button>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-[40px_1fr] sm:flex gap-2">
                 <button type="button" onClick={() => void load()} className="h-10 w-10 rounded-xl border border-[#DDD] bg-white flex items-center justify-center cursor-pointer" title="Atualizar"><RefreshCw size={15} /></button>
-                <button type="button" onClick={() => { resetForm(); setError(''); setNotice(''); setShowForm(true); }} className="h-10 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-mono font-bold uppercase cursor-pointer"><Plus size={16} /> Nova entrega/tarefa</button>
+                <button type="button" onClick={() => { resetForm(); setError(''); setNotice(''); setShowForm(true); }} className="h-10 w-full sm:w-auto px-3 sm:px-4 rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[10px] sm:text-xs font-mono font-bold uppercase cursor-pointer"><Plus size={16} /> Nova entrega/tarefa</button>
               </div>
             </div>
 
@@ -531,7 +532,7 @@ export default function AgendaPanel({ currentUser, project, onClose }: PanelProp
             {loading ? (
               <div className="py-16 flex items-center justify-center gap-2 text-neutral-500"><Loader2 className="animate-spin" size={18} /> Carregando agenda...</div>
             ) : visibleEvents.length === 0 ? (
-              <div className="py-16 border-2 border-dashed border-[#DDD] rounded-3xl bg-white text-center px-6">
+              <div className="py-8 sm:py-16 border-2 border-dashed border-[#DDD] rounded-3xl bg-white text-center px-6">
                 <CalendarDays size={34} className="mx-auto text-neutral-300 mb-3" />
                 <h3 className="font-bold">Nenhum item neste filtro</h3>
                 <p className="text-sm text-neutral-500 mt-1">Crie uma entrega, tarefa, lembrete ou encontro para começar.</p>
@@ -584,9 +585,9 @@ export default function AgendaPanel({ currentUser, project, onClose }: PanelProp
       </section>
 
       {showForm && (
-        <div className="fixed inset-0 z-[190] bg-black/35 flex items-end sm:items-center justify-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) { setShowForm(false); resetForm(); } }}>
-          <form onSubmit={saveEvent} className="w-full sm:max-w-2xl bg-white sm:rounded-3xl shadow-2xl border border-black/10 p-5 sm:p-6 max-h-[92dvh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-3 mb-5">
+        <div className="fixed inset-0 z-[10010] bg-black/35 flex items-stretch sm:items-center justify-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) { setShowForm(false); resetForm(); } }}>
+          <form onSubmit={saveEvent} className="w-full h-[100dvh] sm:h-auto sm:max-w-2xl bg-white sm:rounded-3xl shadow-2xl border-0 sm:border border-black/10 p-4 sm:p-6 sm:max-h-[92dvh] overflow-y-auto overscroll-contain">
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 sm:mx-0 sm:mt-0 px-4 sm:px-0 pt-3 sm:pt-0 pb-3 sm:pb-0 bg-white flex items-start justify-between gap-3 mb-4 sm:mb-5 border-b sm:border-b-0 border-[#EEE]">
               <div><span className="text-[9px] uppercase tracking-widest font-bold text-black/40">Agenda 5I’s</span><h3 className="text-xl font-bold">{editing ? 'Editar item' : 'Nova entrega ou tarefa'}</h3></div>
               <button type="button" onClick={() => { setShowForm(false); resetForm(); }} className="h-9 w-9 rounded-xl border border-[#DDD] flex items-center justify-center cursor-pointer"><X size={16} /></button>
             </div>
@@ -657,5 +658,5 @@ export default function AgendaPanel({ currentUser, project, onClose }: PanelProp
         </div>
       )}
     </div>
-  );
+  ), document.body);
 }
