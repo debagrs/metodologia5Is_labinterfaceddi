@@ -84,13 +84,24 @@ export type DrawingElementType =
   | 'text';
 
 
-export type InteractiveEngine = 'p5' | 'three';
+export type InteractiveEngine = 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg';
+
+export type InteractiveMode = 'auto' | 'pointer' | 'hover' | 'scroll';
+
+export interface InteractiveAsset {
+  url: string;
+  name: string;
+  contentType: string;
+  kind: 'image' | 'svg';
+}
 
 export interface InteractiveDocument {
   engine: InteractiveEngine;
   title: string;
   prompt: string;
   code: string;
+  asset?: InteractiveAsset;
+  interactionMode?: InteractiveMode;
 }
 
 export interface DrawingPoint {
