@@ -32,7 +32,8 @@ function clean(html: string): string {
 export default function RichNote({ content, onChange, disabled = false }: { content: string; onChange: (content: string) => void; disabled?: boolean }) {
   const editor = useRef<HTMLDivElement>(null);
   const selection = useRef<Range | null>(null);
-  const lastSaved = useRef("__initial__");
+  const lastSaved = useRef('__initial__');
+
   useEffect(() => {
     if (editor.current && content !== lastSaved.current && document.activeElement !== editor.current) {
       if (/^<(?:b|strong|i|em|u|span|div|p|br|font)(?:\s|>|\/)/i.test(content)) editor.current.innerHTML = clean(content);
@@ -40,14 +41,32 @@ export default function RichNote({ content, onChange, disabled = false }: { cont
       lastSaved.current = content;
     }
   }, [content]);
+
   const saveSelection = () => {
-    const range = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0) : null;
-    if (range && editor.current?.contains(range.commonAncestorContainer)) selection.current = range.cloneRange();
+    const currentSelection = window.getSelection();
+    const range = currentSelection?.rangeCount ? currentSelection.getRangeAt(0) : null;
+    if (range && editor.current?.contains(range.commonAncestorContainer)) {
+      selection.current = range.cloneRange();
+    }
   };
+
+  useEffect(() => {
+    if (disabled) return;
+    const handleSelectionChange = () => saveSelection();
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [disabled]);
+
   const restore = () => {
-    editor.current?.focus();
-    if (selection.current) { const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(selection.current); }
+    if (!editor.current) return false;
+    editor.current.focus({ preventScroll: true });
+    if (!selection.current) return false;
+    const currentSelection = window.getSelection();
+    currentSelection?.removeAllRanges();
+    currentSelection?.addRange(selection.current);
+    return true;
   };
+
   const persist = () => {
     if (!editor.current) return;
     const value = clean(editor.current.innerHTML);
@@ -55,13 +74,23 @@ export default function RichNote({ content, onChange, disabled = false }: { cont
     onChange(value);
     saveSelection();
   };
-  const command = (name: string, value?: string) => { restore(); document.execCommand(name, false, value); persist(); };
+
+  const command = (name: 'bold' | 'italic' | 'underline' | 'foreColor', value?: string) => {
+    restore();
+    // Força o navegador a produzir estilos inline, que sobrevivem melhor à sanitização e ao salvamento da nota.
+    document.execCommand('styleWithCSS', false, 'true');
+    document.execCommand(name, false, value);
+    saveSelection();
+    persist();
+  };
+
   const styleSelection = (property: 'fontFamily' | 'fontSize', value: string) => {
     restore();
-    const sel = window.getSelection();
-    if (!sel?.rangeCount) return;
-    const range = sel.getRangeAt(0);
+    const currentSelection = window.getSelection();
+    if (!currentSelection?.rangeCount) return;
+    const range = currentSelection.getRangeAt(0);
     if (!editor.current?.contains(range.commonAncestorContainer)) return;
+
     const span = document.createElement('span');
     span.style[property] = value;
     if (range.collapsed) {
@@ -74,19 +103,49 @@ export default function RichNote({ content, onChange, disabled = false }: { cont
       range.insertNode(span);
       range.selectNodeContents(span);
     }
-    sel.removeAllRanges(); sel.addRange(range);
+
+    currentSelection.removeAllRanges();
+    currentSelection.addRange(range);
+    saveSelection();
     persist();
   };
+
   return <div className="flex flex-1 min-h-0 flex-col gap-1" onPointerDown={e => e.stopPropagation()}>
-    {!disabled && <div className="flex flex-wrap items-center gap-1" onMouseDown={e => { if ((e.target as HTMLElement).closest('button')) e.preventDefault(); }}>
+    {!disabled && <div
+      className="flex flex-wrap items-center gap-1"
+      onPointerDownCapture={saveSelection}
+      onMouseDown={e => {
+        // Botões não podem roubar o foco/seleção do contentEditable.
+        if ((e.target as HTMLElement).closest('button')) e.preventDefault();
+      }}
+    >
       <button type="button" aria-label="Negrito" title="Negrito" className="px-1 font-bold" onClick={() => command('bold')}>B</button>
       <button type="button" aria-label="Itálico" title="Itálico" className="px-1 italic" onClick={() => command('italic')}>I</button>
       <button type="button" aria-label="Sublinhado" title="Sublinhado" className="px-1 underline" onClick={() => command('underline')}>U</button>
-      <select aria-label="Tipografia" title="Tipografia" className="max-w-[95px] bg-transparent text-[10px]" defaultValue="" onPointerDown={saveSelection} onChange={e => styleSelection('fontFamily', e.target.value)}><option value="" disabled>Fonte</option>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select>
-      <select aria-label="Tamanho da fonte" title="Tamanho da fonte" className="bg-transparent text-[10px]" defaultValue="" onPointerDown={saveSelection} onChange={e => styleSelection('fontSize', `${e.target.value}px`)}><option value="" disabled>Tamanho</option>{[12, 14, 16, 18, 20, 24, 28, 32, 36].map(n => <option key={n} value={n}>{n}</option>)}</select>
-      <input type="color" aria-label="Cor do texto" title="Cor do texto" defaultValue="#262626" className="h-5 w-6 cursor-pointer" onPointerDown={saveSelection} onChange={e => command('foreColor', e.target.value)} />
+      <select aria-label="Tipografia" title="Tipografia" className="max-w-[95px] bg-transparent text-[10px]" defaultValue="" onChange={e => { styleSelection('fontFamily', e.target.value); e.currentTarget.value = ''; }}><option value="" disabled>Fonte</option>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select>
+      <select aria-label="Tamanho da fonte" title="Tamanho da fonte" className="bg-transparent text-[10px]" defaultValue="" onChange={e => { styleSelection('fontSize', `${e.target.value}px`); e.currentTarget.value = ''; }}><option value="" disabled>Tamanho</option>{[12, 14, 16, 18, 20, 24, 28, 32, 36].map(n => <option key={n} value={n}>{n}</option>)}</select>
+      <input type="color" aria-label="Cor do texto" title="Cor do texto" defaultValue="#262626" className="h-5 w-6 cursor-pointer" onChange={e => command('foreColor', e.target.value)} />
     </div>}
-    <div ref={editor} contentEditable={!disabled} suppressContentEditableWarning role="textbox" aria-label="Texto da nota" aria-multiline="true" data-placeholder="Escreva uma reflexão livre, insight de campo, ou ideia..." className="w-full flex-1 min-h-[72px] overflow-auto text-xs font-light text-neutral-800 border-none outline-none bg-transparent p-0 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400" onInput={persist} onKeyUp={saveSelection} onMouseUp={saveSelection} onBlur={persist} onPaste={e => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); }} />
+    <div
+      ref={editor}
+      contentEditable={!disabled}
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label="Texto da nota"
+      aria-multiline="true"
+      data-placeholder="Escreva uma reflexão livre, insight de campo, ou ideia..."
+      className="w-full flex-1 min-h-[72px] overflow-auto text-xs font-light text-neutral-800 border-none outline-none bg-transparent p-0 whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
+      onInput={persist}
+      onKeyUp={saveSelection}
+      onPointerUp={saveSelection}
+      onFocus={saveSelection}
+      onBlur={persist}
+      onPaste={e => {
+        e.preventDefault();
+        document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+        saveSelection();
+        persist();
+      }}
+    />
   </div>;
 }
-
