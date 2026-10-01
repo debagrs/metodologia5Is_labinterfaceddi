@@ -1,5 +1,6 @@
 import { ArrowLeft, FolderOpen, Plus, Trash2, CalendarDays, Layers3, Users, RefreshCw } from 'lucide-react';
 import BrandMark from './BrandMark';
+import { AgendaLauncher } from './Agenda5Is';
 import type { ProjectWorkspace, UserProfile, SharedProjectSummary } from '../types';
 
 interface Props {
@@ -70,11 +71,21 @@ export default function StudentProjectsDashboard({
               {classroomName && <p className="text-xs text-neutral-500 truncate">{classroomName}</p>}
             </div>
           </div>
-          {handleHeaderAction && (
-            <button onClick={handleHeaderAction} className="shrink-0 p-2 sm:px-3 sm:py-2 rounded-xl border border-[#DDD] bg-white text-neutral-700 flex items-center gap-2 text-xs font-mono font-bold uppercase cursor-pointer">
-              <ArrowLeft size={15} /><span className="hidden sm:inline">{onBack ? 'Voltar' : 'Sair'}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {!readOnly && (
+              <AgendaLauncher
+                currentUser={user}
+                className="shrink-0 p-2 sm:px-3 sm:py-2 rounded-xl border border-[#DDD] bg-white text-neutral-700"
+                textClassName="hidden sm:inline text-xs font-mono font-bold uppercase"
+                label="Agenda"
+              />
+            )}
+            {handleHeaderAction && (
+              <button onClick={handleHeaderAction} className="shrink-0 p-2 sm:px-3 sm:py-2 rounded-xl border border-[#DDD] bg-white text-neutral-700 flex items-center gap-2 text-xs font-mono font-bold uppercase cursor-pointer">
+                <ArrowLeft size={15} /><span className="hidden sm:inline">{onBack ? 'Voltar' : 'Sair'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
