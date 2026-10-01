@@ -19,6 +19,16 @@ export interface InfiniteCanvasHandle {
 }
 
 
+
+const INTERACTIVE_ENGINE_SHORT_LABEL: Record<InteractiveDocument['engine'], string> = {
+  p5: 'P5.JS',
+  three: 'THREE.JS',
+  gsap: 'GSAP',
+  anime: 'ANIME.JS',
+  matter: 'MATTER.JS',
+  svg: 'SVG.JS',
+};
+
 const PHASE_NOTE_PALETTE: Record<Phase, { body: string; header: string; border: string; dot: string }> = {
   'Ideação': { body: '#FFF9E8', header: '#FFF0B8', border: '#E7C75C', dot: '#E4AC16' },
   'Inambulação': { body: '#EEF5FF', header: '#DCEBFF', border: '#8BB9F6', dot: '#3B82F6' },
@@ -1094,7 +1104,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                   <div className="absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/90 px-2 py-1 shadow-sm pointer-events-none">
                     <Code2 size={11} />
-                    <span className="text-[9px] font-mono font-bold uppercase tracking-wide">{interactiveDocument.engine === 'three' ? 'THREE.JS' : 'P5.JS'}</span>
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-wide">{INTERACTIVE_ENGINE_SHORT_LABEL[interactiveDocument.engine] || 'INTERAÇÃO'}</span>
                   </div>
 
                   {isConnectionTarget && (
@@ -1714,7 +1724,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 type="button"
                 onClick={() => setNewInteractive(blankInteractiveDocument('p5'))}
                 className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
-                title="Criar uma camada interativa com p5.js ou Three.js por prompt"
+                title="Criar uma camada interativa com imagem/SVG, p5.js, Three.js, GSAP, Anime.js, Matter.js ou SVG.js"
               >
                 <Code2 size={14} />
                 <span className="hidden sm:inline">INTERAÇÃO</span>
