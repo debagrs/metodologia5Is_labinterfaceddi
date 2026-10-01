@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { X, Send, Loader2, PlusCircle, Trash2, Sparkles } from 'lucide-react';
+import { X, Send, Loader2, PlusCircle, Trash2, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 import { Mediator, Project, ThoughtNode } from '../types';
 import MediatorSticker from './MediatorSticker';
 import { ensureTursoSession } from '../lib/turso';
@@ -25,6 +25,7 @@ export default function AgentChatPanel({ project, nodes, mediator, onClose, onAd
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
+  const [isExpanded, setIsExpanded] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -135,7 +136,7 @@ export default function AgentChatPanel({ project, nodes, mediator, onClose, onAd
 
   return (
     <div className="fixed inset-0 z-[80] bg-black/35 backdrop-blur-[2px] flex justify-end" role="dialog" aria-modal="true" aria-label={`Conversa com ${mediator.name}`}>
-      <section className="h-full w-full sm:w-[480px] bg-[#FDFDFB] border-l border-black/10 shadow-2xl flex flex-col">
+      <section className={`h-full w-full bg-[#FDFDFB] shadow-2xl flex flex-col transition-[width] duration-200 ${isExpanded ? 'sm:w-full border-l-0' : 'sm:w-[480px] border-l border-black/10'}`}>
         <header className="p-4 border-b border-[#E0E0DE] bg-white flex items-center gap-3">
           <MediatorSticker mediatorId={mediator.id} size={54} state={isSending ? 'thinking' : 'selected'} />
           <div className="min-w-0 flex-1">
@@ -144,6 +145,14 @@ export default function AgentChatPanel({ project, nodes, mediator, onClose, onAd
             <p className="text-[10px] text-neutral-600 truncate">{mediator.role}</p>
           </div>
           <button onClick={clearConversation} className="p-2 rounded-xl hover:bg-red-50 text-neutral-500 hover:text-red-700" title="Apagar conversa"><Trash2 size={17} /></button>
+          <button
+            onClick={() => setIsExpanded((current) => !current)}
+            className="p-2 rounded-xl hover:bg-black/5"
+            title={isExpanded ? 'Voltar ao painel lateral' : 'Expandir conversa para tela inteira'}
+            aria-label={isExpanded ? 'Voltar ao painel lateral' : 'Expandir conversa para tela inteira'}
+          >
+            {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-black/5" title="Fechar"><X size={19} /></button>
         </header>
 
