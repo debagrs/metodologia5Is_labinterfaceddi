@@ -1,7 +1,9 @@
-import { ArrowLeft, FolderOpen, Plus, Trash2, CalendarDays, Layers3, Users, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, FolderOpen, Plus, Trash2, CalendarDays, Layers3, Users, RefreshCw, ExternalLink, BookOpen, MonitorPlay } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { AgendaLauncher } from './Agenda5Is';
 import type { ProjectWorkspace, UserProfile, SharedProjectSummary } from '../types';
+import { readAuthSession } from '../lib/auth';
 
 interface Props {
   user: UserProfile;
@@ -54,6 +56,23 @@ export default function StudentProjectsDashboard({
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
   const handleHeaderAction = onBack || onLogout;
+  const isStudentDashboard = !readOnly && user.role === 'student';
+  const [showInterfaceLessons, setShowInterfaceLessons] = useState(false);
+
+  useEffect(() => {
+    if (!isStudentDashboard) return;
+    const auth = readAuthSession();
+    if (!auth?.token) return;
+    let cancelled = false;
+    fetch('/api/course-resources', { headers: { Authorization: `Bearer ${auth.token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Falha ao carregar materiais.');
+        if (!cancelled) setShowInterfaceLessons(Boolean(data?.showInterfaceLessons));
+      })
+      .catch(() => { if (!cancelled) setShowInterfaceLessons(false); });
+    return () => { cancelled = true; };
+  }, [isStudentDashboard, user.id, user.classroomId]);
 
   return (
     <div className="min-h-[100dvh] bg-[#FDFDFB] text-neutral-950">
@@ -104,6 +123,42 @@ export default function StudentProjectsDashboard({
             </button>
           )}
         </section>
+
+        {isStudentDashboard && (
+          <section className="mb-6 rounded-2xl border border-[#DFDFDC] bg-white p-4 sm:p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Materiais da disciplina</span>
+                <h3 className="text-lg font-bold mt-1">Interfaces para consultar</h3>
+              </div>
+              <BookOpen size={20} className="text-neutral-400 shrink-0 mt-1" />
+            </div>
+            <div className={`grid gap-2 ${showInterfaceLessons ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+              <a
+                href="https://laboratoriointerfacedi.vercel.app/#metodologia-5is"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl border border-[#E1E1DE] bg-[#FAFAF8] p-3.5 flex items-center gap-3 hover:border-black transition-colors"
+              >
+                <span className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0"><BookOpen size={18} /></span>
+                <span className="min-w-0 flex-1"><strong className="block text-sm">Manual do Lab</strong><span className="block text-xs text-neutral-500 mt-0.5">Metodologia 5I’s e orientações do laboratório</span></span>
+                <ExternalLink size={15} className="text-neutral-400 shrink-0" />
+              </a>
+              {showInterfaceLessons && (
+                <a
+                  href="https://2026-1-interface.vercel.app"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl border border-[#E1E1DE] bg-[#FAFAF8] p-3.5 flex items-center gap-3 hover:border-black transition-colors"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-[#FFF0B8] text-black flex items-center justify-center shrink-0"><MonitorPlay size={18} /></span>
+                  <span className="min-w-0 flex-1"><strong className="block text-sm">Aulas 2026/1</strong><span className="block text-xs text-neutral-500 mt-0.5">Conteúdos e materiais das aulas de Interfaces</span></span>
+                  <ExternalLink size={15} className="text-neutral-400 shrink-0" />
+                </a>
+              )}
+            </div>
+          </section>
+        )}
 
         {ordered.length === 0 ? (
           <section className="min-h-[360px] border-2 border-dashed border-[#DDD] rounded-3xl flex flex-col items-center justify-center text-center p-8 bg-white">
