@@ -88,11 +88,22 @@ export type InteractiveEngine = 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | '
 
 export type InteractiveMode = 'auto' | 'pointer' | 'hover' | 'scroll';
 
+export type InteractiveEffect = 'network' | 'breathe' | 'draw' | 'wave' | 'explode' | 'drift';
+
+export type InteractiveIntensity = 'subtle' | 'medium' | 'strong';
+
+export interface InteractiveAssetProfile {
+  palette: string[];
+  counts: Record<string, number>;
+  sourceType: 'svg' | 'image';
+}
+
 export interface InteractiveAsset {
   url: string;
   name: string;
   contentType: string;
   kind: 'image' | 'svg';
+  profile?: InteractiveAssetProfile;
 }
 
 export interface InteractiveDocument {
@@ -102,6 +113,9 @@ export interface InteractiveDocument {
   code: string;
   asset?: InteractiveAsset;
   interactionMode?: InteractiveMode;
+  effectPreset?: InteractiveEffect;
+  intensity?: InteractiveIntensity;
+  preserveBrand?: boolean;
 }
 
 export interface DrawingPoint {
