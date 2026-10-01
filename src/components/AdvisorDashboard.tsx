@@ -57,6 +57,47 @@ export default function AdvisorDashboard({
   const [invitedStudents, setInvitedStudents] = useState<StudentProfile[]>([]);
   const [loadingInvitedStudents, setLoadingInvitedStudents] = useState(false);
   const [inviteLoadError, setInviteLoadError] = useState('');
+  const [showInterfaceLessons, setShowInterfaceLessons] = useState(false);
+  const [loadingCourseResources, setLoadingCourseResources] = useState(true);
+  const [savingCourseResources, setSavingCourseResources] = useState(false);
+  const [courseResourcesError, setCourseResourcesError] = useState('');
+
+  useEffect(() => {
+    const auth = readAuthSession();
+    if (!auth?.token) { setLoadingCourseResources(false); return; }
+    let cancelled = false;
+    fetch('/api/course-resources', { headers: { Authorization: `Bearer ${auth.token}` } })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Não foi possível carregar os materiais das turmas.');
+        if (!cancelled) setShowInterfaceLessons(Boolean(data?.showInterfaceLessons));
+      })
+      .catch((error) => { if (!cancelled) setCourseResourcesError(error?.message || 'Não foi possível carregar os materiais das turmas.'); })
+      .finally(() => { if (!cancelled) setLoadingCourseResources(false); });
+    return () => { cancelled = true; };
+  }, [advisor.id]);
+
+  const toggleInterfaceLessons = async () => {
+    const auth = readAuthSession();
+    if (!auth?.token || savingCourseResources) return;
+    const next = !showInterfaceLessons;
+    setSavingCourseResources(true);
+    setCourseResourcesError('');
+    try {
+      const response = await fetch('/api/course-resources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.token}` },
+        body: JSON.stringify({ showInterfaceLessons: next }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível atualizar os materiais.');
+      setShowInterfaceLessons(Boolean(data?.showInterfaceLessons));
+    } catch (error: any) {
+      setCourseResourcesError(error?.message || 'Não foi possível atualizar os materiais.');
+    } finally {
+      setSavingCourseResources(false);
+    }
+  };
 
   const loadInvitedStudents = async (classroomId: string) => {
     const auth = readAuthSession();
@@ -300,6 +341,27 @@ export default function AdvisorDashboard({
             </div>
           </div>
         </div>
+
+        <section className="bg-white border border-[#E0E0DE] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FFF0B8] flex items-center justify-center shrink-0"><BookOpen size={18} /></div>
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-neutral-400">Materiais nos dashboards dos alunos</span>
+              <h2 className="text-sm font-bold mt-0.5">Manual do Lab para todos · Aulas 2026/1 para minhas turmas</h2>
+              <p className="text-xs text-neutral-500 mt-1">O Manual do Lab aparece para qualquer aluno. Ative abaixo para que os alunos das turmas vinculadas à sua conta também vejam o link das aulas de Interfaces.</p>
+              {courseResourcesError && <p className="text-xs text-red-600 mt-2">{courseResourcesError}</p>}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void toggleInterfaceLessons()}
+            disabled={loadingCourseResources || savingCourseResources}
+            className={`shrink-0 min-w-[190px] h-11 px-4 rounded-xl border text-xs font-mono font-bold uppercase flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${showInterfaceLessons ? 'bg-black border-black text-white' : 'bg-white border-[#CCC] text-neutral-700'}`}
+          >
+            {savingCourseResources ? <RefreshCw size={14} className="animate-spin" /> : <span className={`w-2.5 h-2.5 rounded-full ${showInterfaceLessons ? 'bg-emerald-400' : 'bg-neutral-300'}`} />}
+            {loadingCourseResources ? 'Carregando…' : showInterfaceLessons ? 'Aulas 2026/1 ativas' : 'Ativar Aulas 2026/1'}
+          </button>
+        </section>
 
         {/* MAIN SPLIT GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
