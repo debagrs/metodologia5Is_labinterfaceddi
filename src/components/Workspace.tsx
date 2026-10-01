@@ -13,6 +13,7 @@ import BrandMark from './BrandMark';
 import AllCommentsPanel from './AllCommentsPanel';
 import AgentChatPanel from './AgentChatPanel';
 import ProjectCollaboratorsPanel from './ProjectCollaboratorsPanel';
+import { AgendaLauncher } from './Agenda5Is';
 import { ensureTursoSession } from '../lib/turso';
 
 interface MethodologyTechnique {
@@ -1707,6 +1708,17 @@ export default function Workspace({
     try {
       const conversations = collectProjectConversations(project.id);
       const nodeById = new Map(nodes.map((node) => [node.id, node]));
+      const clipForPublication = (value: unknown, limit: number) => {
+        const text = String(value || '').trim();
+        return text.length > limit ? `${text.slice(0, limit)}\n[… conteúdo abreviado para o PÚBLICA …]` : text;
+      };
+      const publicationConversations = conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.slice(-18).map((message) => ({
+          ...message,
+          text: clipForPublication(message.text, 1000)
+        }))
+      }));
       const session = await ensureTursoSession().catch(() => null);
       const response = await fetch('/api/mediators/think', {
         method: 'POST',
@@ -1733,17 +1745,20 @@ export default function Workspace({
           existingThoughts: nodes.map((node) => ({
             id: node.id,
             type: node.type,
-            title: node.title,
-            content: node.content,
+            title: clipForPublication(node.title, 240),
+            content: clipForPublication(node.content, 1600),
             phase: node.phase,
-            scientificContext: node.scientificContext || '',
-            provocations: node.provocations || [],
-            connections: (node.connections || []).map((id) => nodeById.get(id)?.title || id),
-            imageName: node.imageName || '',
-            drawingName: node.drawingName || '',
-            attachments: (node.attachments || []).map((attachment) => ({ name: attachment.name, type: attachment.type }))
+            scientificContext: clipForPublication(node.scientificContext || '', 700),
+            provocations: (node.provocations || []).slice(0, 5).map((value) => clipForPublication(value, 320)),
+            connections: (node.connections || []).slice(0, 20).map((id) => clipForPublication(nodeById.get(id)?.title || id, 220)),
+            imageName: clipForPublication(node.imageName || '', 220),
+            drawingName: clipForPublication(node.drawingName || '', 220),
+            attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
+              name: clipForPublication(attachment.name, 220),
+              type: clipForPublication(attachment.type, 120)
+            }))
           })),
-          conversations
+          conversations: publicationConversations
         })
       });
 
@@ -2155,6 +2170,15 @@ export default function Workspace({
 
         {/* Current status telemetry & Mobile Panel toggles */}
         <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+          {currentUser && ['advisor', 'student'].includes(currentUser.role) && (
+            <AgendaLauncher
+              currentUser={currentUser}
+              project={project}
+              className="p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all"
+              textClassName="hidden xl:inline text-[11px] font-mono font-bold uppercase"
+              label="Agenda"
+            />
+          )}
           {canManageCollaborators && (
             <button
               onClick={() => setIsCollaboratorsOpen(true)}
