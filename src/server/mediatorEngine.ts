@@ -99,12 +99,42 @@ Crie uma reflexão inédita. Título com até seis palavras, uma pergunta centra
 function buildPublicationMessages(body: MediatorRequestBody) {
   const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
   const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+
+  const compactRecords = records.slice(0, 180).map((item: any) => ({
+    id: item.id,
+    type: item.type,
+    phase: item.phase,
+    title: clipProjectText(item.title, 240),
+    content: clipProjectText(item.content, 1600),
+    scientificContext: clipProjectText(item.scientificContext, 700),
+    provocations: Array.isArray(item.provocations) ? item.provocations.slice(0, 5).map((value: unknown) => clipProjectText(value, 320)) : [],
+    connections: Array.isArray(item.connections) ? item.connections.slice(0, 20) : [],
+    imageName: item.imageName || '',
+    drawingName: item.drawingName || '',
+    attachments: Array.isArray(item.attachments) ? item.attachments.slice(0, 12).map((attachment: any) => ({
+      name: clipProjectText(attachment?.name, 220),
+      type: clipProjectText(attachment?.type, 120),
+    })) : [],
+  }));
+
+  const compactConversations = conversations.slice(0, 24).map((conversation: any) => ({
+    mediatorId: conversation.mediatorId,
+    mediatorName: conversation.mediatorName,
+    messages: Array.isArray(conversation.messages)
+      ? conversation.messages.slice(-18).map((message: any) => ({
+          role: message.role,
+          text: clipProjectText(message.text, 1000),
+          createdAt: message.createdAt,
+        }))
+      : [],
+  }));
+
   const system = `Você é Publica, agente editorial da Metodologia 5I’s de Design de Interfaces.
 Sua tarefa é transformar documentação de projeto em um relato científico consistente, rastreável e pronto para revisão/submissão editorial.
 
 REGRAS INEGOCIÁVEIS
 - Leia todos os registros fornecidos das cinco fases: Ideação, Inambulação, Instauração, Inspeção e Implementação.
-- Considere também as conversas completas com os agentes como diário reflexivo do processo.
+- Considere também as conversas com os agentes como diário reflexivo do processo.
 - Não invente número de participantes, dados, resultados, testes, datas, referências bibliográficas, autores ou conclusões não documentadas.
 - Quando faltar uma evidência necessária, escreva a lacuna de modo editorialmente útil e registre-a em editorialNotes.
 - Preserve a autoria humana: a IA organiza, sintetiza e redige, mas não reivindica autoria do projeto.
@@ -112,6 +142,7 @@ REGRAS INEGOCIÁVEIS
 - Produza português acadêmico brasileiro claro, sem inflar o texto com jargão.
 - O artigo é um RELATO DE PROJETO/RELATO DE EXPERIÊNCIA em design, não um experimento inventado.
 - Use a Metodologia 5I’s como eixo metodológico do percurso.
+- Seja completo, mas conciso o suficiente para caber integralmente na resposta: prefira 2 a 4 parágrafos por seção.
 - Retorne somente JSON válido, sem markdown externo.
 
 FORMATO OBRIGATÓRIO
@@ -137,13 +168,13 @@ ${JSON.stringify(body.project, null, 2)}
 FASE ATIVA NO MOMENTO DA EXPORTAÇÃO
 ${body.phase}
 
-CARDS, NOTAS, CONEXÕES E REGISTROS DO CANVAS
-${JSON.stringify(records, null, 2)}
+CARDS, NOTAS, CONEXÕES E REGISTROS DO CANVAS — CONTEÚDO COMPACTADO SEM AS IMAGENS BINÁRIAS
+${JSON.stringify(compactRecords, null, 2)}
 
-CONVERSAS SALVAS COM OS AGENTES
-${JSON.stringify(conversations, null, 2)}
+CONVERSAS SALVAS COM OS AGENTES — TRECHOS MAIS RECENTES
+${JSON.stringify(compactConversations, null, 2)}
 
-Redija um artigo científico de relato de projeto usando todo o material pertinente. A narrativa deve reconstruir decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
+Redija o relato científico usando todo o material pertinente. Reconstrua decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
   return { system, user };
 }
 
@@ -457,29 +488,58 @@ async function callGemini(system: string, user: string): Promise<MediatorInsight
 async function callGeminiPublication(system: string, user: string): Promise<PublicationResult> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY ausente.');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-  const response = await fetchWithTimeout(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
-    {
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const timeoutMs = Number(process.env.AI_PUBLICATION_TIMEOUT_MS || 50_000);
+  const startedAt = Date.now();
+  const totalBudgetMs = Math.min(54_000, Math.max(20_000, timeoutMs));
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+
+  const requestPublication = async (retry = false, attemptTimeoutMs = timeoutMs): Promise<{ text: string; finishReason?: string }> => {
+    const response = await fetchWithTimeout(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: user }] }],
+        contents: [{
+          role: 'user',
+          parts: [{ text: retry
+            ? `${user}\n\nIMPORTANTE: a tentativa anterior foi interrompida ou produziu JSON inválido. Gere novamente em versão mais concisa. Mantenha todas as cinco seções, limite cada seção a no máximo 3 parágrafos e feche obrigatoriamente o objeto JSON.`
+            : user }]
+        }],
         generationConfig: {
-          temperature: 0.25,
+          temperature: retry ? 0.15 : 0.22,
           responseMimeType: 'application/json',
           maxOutputTokens: 7000
         }
       })
-    },
-    Number(process.env.AI_PUBLICATION_TIMEOUT_MS || 45_000)
-  );
-  const data = await parseResponse(response);
-  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
-  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('') || '';
-  if (!text.trim()) throw new Error('O Gemini não devolveu conteúdo para a publicação.');
-  return { article: cleanPublicationJson(text), provider: 'Gemini', model };
+    }, attemptTimeoutMs);
+
+    const data = await parseResponse(response);
+    if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+    const blockReason = data?.promptFeedback?.blockReason;
+    if (blockReason) throw new Error(`O Gemini bloqueou a publicação: ${blockReason}.`);
+
+    const candidate = data?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason && /SAFETY|RECITATION|PROHIBITED/i.test(String(finishReason))) {
+      throw new Error(`O Gemini interrompeu a publicação (${finishReason}).`);
+    }
+    const text = candidate?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+    if (!text) throw new Error(`O Gemini não devolveu conteúdo para a publicação${finishReason ? ` (${finishReason})` : ''}.`);
+    return { text, finishReason };
+  };
+
+  const firstAttemptTimeout = Math.min(42_000, totalBudgetMs - 8_000);
+  const first = await requestPublication(false, firstAttemptTimeout);
+  try {
+    return { article: cleanPublicationJson(first.text), provider: 'Gemini', model };
+  } catch (firstError) {
+    if (first.finishReason && !/MAX_TOKENS|STOP/i.test(String(first.finishReason))) throw firstError;
+    const remainingMs = totalBudgetMs - (Date.now() - startedAt) - 1_500;
+    if (remainingMs < 12_000) throw firstError;
+    const second = await requestPublication(true, Math.min(26_000, remainingMs));
+    return { article: cleanPublicationJson(second.text), provider: 'Gemini', model };
+  }
 }
 
 async function callGeminiStructured(system: string, user: string, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2) {
