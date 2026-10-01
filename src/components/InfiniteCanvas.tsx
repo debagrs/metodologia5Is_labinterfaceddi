@@ -59,6 +59,21 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [panOffset, setPanOffset] = useState({ x: 50, y: 50 });
   const [zoom, setZoom] = useState(0.9);
   const containerRef = useRef<HTMLDivElement>(null);
+  const MIN_ZOOM = 0.35;
+  const MAX_ZOOM = 1.8;
+  const touchPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStateRef = useRef<null | {
+    startDistance: number;
+    startZoom: number;
+    anchorCanvasX: number;
+    anchorCanvasY: number;
+  }>(null);
+  const pinchActiveRef = useRef(false);
+  const panOffsetRef = useRef(panOffset);
+  const zoomRef = useRef(zoom);
+
+  useEffect(() => { panOffsetRef.current = panOffset; }, [panOffset]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [answerTexts, setAnswerTexts] = useState<Record<string, string>>({});
@@ -253,7 +268,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     const move = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
       const dx = (moveEvent.clientX - startX) / zoom;
-      const dy = (moveEvent.clientY - startY) / zoom;
+      const dy = (moveEvent.clientY - startY) / zoomRef.current;
 
       if (lockAspect) {
         if (axis === 'y') {
@@ -539,7 +554,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
   // Handle zooming
   const handleZoom = (factor: number) => {
-    setZoom(prev => Math.min(Math.max(prev + factor, 0.5), 1.5));
+    setZoom(prev => Math.min(Math.max(prev + factor, MIN_ZOOM), MAX_ZOOM));
   };
 
   const handleResetView = () => {
@@ -592,10 +607,72 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     setPanOffset((current) => ({ x: current.x + dx, y: current.y + dy }));
   };
 
+  // Pinça em telas touch: dois dedos aproximam/afastam o canvas mantendo
+  // o ponto central do gesto sob os dedos. O gesto também pode deslocar a mesa.
+  const handleTouchPointerDownCapture = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (touchPointersRef.current.size === 2 && containerRef.current) {
+      const [first, second] = [...touchPointersRef.current.values()];
+      const dx = second.x - first.x;
+      const dy = second.y - first.y;
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const rect = containerRef.current.getBoundingClientRect();
+      const centerX = (first.x + second.x) / 2 - rect.left;
+      const centerY = (first.y + second.y) / 2 - rect.top;
+      const currentZoom = zoomRef.current;
+      const currentPan = panOffsetRef.current;
+
+      pinchStateRef.current = {
+        startDistance: distance,
+        startZoom: currentZoom,
+        anchorCanvasX: (centerX - currentPan.x) / currentZoom,
+        anchorCanvasY: (centerY - currentPan.y) / currentZoom,
+      };
+      pinchActiveRef.current = true;
+    }
+  };
+
+  const handleTouchPointerMoveCapture = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch' || !touchPointersRef.current.has(e.pointerId)) return;
+    touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    const pinch = pinchStateRef.current;
+    if (!pinch || touchPointersRef.current.size < 2 || !containerRef.current) return;
+
+    e.preventDefault();
+    const [first, second] = [...touchPointersRef.current.values()];
+    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const nextZoom = Math.min(Math.max(pinch.startZoom * (distance / pinch.startDistance), MIN_ZOOM), MAX_ZOOM);
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = (first.x + second.x) / 2 - rect.left;
+    const centerY = (first.y + second.y) / 2 - rect.top;
+    const nextPan = {
+      x: centerX - pinch.anchorCanvasX * nextZoom,
+      y: centerY - pinch.anchorCanvasY * nextZoom,
+    };
+
+    zoomRef.current = nextZoom;
+    panOffsetRef.current = nextPan;
+    setZoom(nextZoom);
+    setPanOffset(nextPan);
+  };
+
+  const handleTouchPointerEndCapture = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    touchPointersRef.current.delete(e.pointerId);
+    if (touchPointersRef.current.size < 2) pinchStateRef.current = null;
+    // Mantém o arraste de um dedo suspenso até todos os dedos do gesto saírem,
+    // evitando um salto brusco ao terminar a pinça com um dedo ainda na tela.
+    if (touchPointersRef.current.size === 0) pinchActiveRef.current = false;
+  };
+
   // Pan unificado do canvas com mouse, caneta ou um dedo no celular.
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('.thought-card') || target.closest('.canvas-control')) return;
+    if (e.pointerType === 'touch' && pinchActiveRef.current) return;
     e.preventDefault();
 
     const pointerId = e.pointerId;
@@ -607,6 +684,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
+      if (moveEvent.pointerType === 'touch' && pinchActiveRef.current) return;
       moveEvent.preventDefault();
       setPanOffset({
         x: moveEvent.clientX - startX,
@@ -665,7 +743,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointerId) return;
-      const dx = (moveEvent.clientX - startX) / zoom;
+      if (moveEvent.pointerType === 'touch' && pinchActiveRef.current) return;
+      const dx = (moveEvent.clientX - startX) / zoomRef.current;
       const dy = (moveEvent.clientY - startY) / zoom;
       onUpdateNodeCoords(id, initialX + dx, initialY + dy);
     };
@@ -702,12 +781,16 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     <div 
       id="canvas-viewport"
       ref={containerRef}
+      onPointerDownCapture={handleTouchPointerDownCapture}
+      onPointerMoveCapture={handleTouchPointerMoveCapture}
+      onPointerUpCapture={handleTouchPointerEndCapture}
+      onPointerCancelCapture={handleTouchPointerEndCapture}
       onPointerDown={handleCanvasPointerDown}
       onDoubleClick={handleDoubleClick}
       onWheel={handleCanvasWheel}
       onKeyDown={handleCanvasKeyDown}
       tabIndex={0}
-      aria-label="Canvas de projeto. Arraste o fundo, use a roda ou trackpad e as setas do teclado para navegar."
+      aria-label="Canvas de projeto. Arraste o fundo, use pinça com dois dedos para aproximar ou afastar, roda ou trackpad e as setas do teclado para navegar."
       style={{ touchAction: 'none' }}
       className="relative flex-1 h-full overflow-hidden bg-[#FDFDFB] select-none cursor-grab active:cursor-grabbing outline-none"
     >
