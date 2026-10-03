@@ -65,7 +65,8 @@ const SPECIES: Option<CharacterSpecies>[] = [
   { id: 'amphibian', label: 'Anfíbio' },
   { id: 'fish', label: 'Peixe / aquático' },
   { id: 'arthropod', label: 'Artrópode' },
-  { id: 'fantasy', label: 'Fantástico / híbrido' },
+  { id: 'fantasy', label: 'Fantástico' },
+  { id: 'hybrid', label: 'Híbrido' },
 ];
 
 const BODY_PLANS: Option<CharacterBodyPlan>[] = [
@@ -158,7 +159,7 @@ const ANIMATION_KINDS: Option<SpriteAnimationKind>[] = [
 ];
 
 const DEFAULT_APPEARANCE: CharacterAppearance = {
-  species: 'human', bodyPlan: 'biped', speciesPreset: 'human', headShape: 'oval', faceShape: 'soft', eyeStyle: 'dot', browStyle: 'soft', noseStyle: 'small', mouthStyle: 'line', earStyle: 'simple', hairStyle: 'short',
+  species: 'human', bodyPlan: 'biped', speciesPreset: 'human', hybridPrimaryPreset: 'human', hybridSecondaryPreset: 'cat', hybridBlend: 50, headShape: 'oval', faceShape: 'soft', eyeStyle: 'dot', browStyle: 'soft', noseStyle: 'small', mouthStyle: 'line', earStyle: 'simple', hairStyle: 'short',
   muzzleStyle: 'none', tailStyle: 'none', wingStyle: 'none', hornStyle: 'none', surfaceStyle: 'skin', footStyle: 'feet', whiskers: false,
   bodyShape: 'average', torsoShape: 'rectangle', armStyle: 'regular', legStyle: 'regular', handStyle: 'simple', outfitStyle: 'basic', accessory: 'none',
   headToBodyRatio: 4.8, shoulderWidth: 1, limbLength: 1, bodyWidth: 1,
@@ -185,6 +186,73 @@ const PRESETS: Array<{ id: string; label: string; icon: string; description: str
   { id: 'spider', label: 'Aranha', icon: '🕷️', description: 'Oito membros e corpo segmentado.', patch: { species: 'arthropod', bodyPlan: 'eight-limbed', speciesPreset: 'spider', earStyle: 'none', muzzleStyle: 'none', tailStyle: 'none', hornStyle: 'none', surfaceStyle: 'chitin', footStyle: 'claws', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
   { id: 'dragon', label: 'Dragão', icon: '🐉', description: 'Híbrido fantástico com asas e chifres.', patch: { species: 'fantasy', bodyPlan: 'quadruped', speciesPreset: 'dragon', earStyle: 'pointed', muzzleStyle: 'long', tailStyle: 'reptile', wingStyle: 'bat', hornStyle: 'long', surfaceStyle: 'scales', footStyle: 'claws', browStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
 ];
+
+const HYBRID_BASES = PRESETS.filter((preset) => !['dragon'].includes(preset.id));
+const HYBRID_QUICK = [
+  { label: 'Humano + ave', a: 'human', b: 'bird', blend: 48 },
+  { label: 'Gato + ave', a: 'cat', b: 'bird', blend: 55 },
+  { label: 'Raposa + réptil', a: 'fox', b: 'reptile', blend: 52 },
+  { label: 'Urso + inseto', a: 'bear', b: 'insect', blend: 42 },
+  { label: 'Peixe + ave', a: 'fish', b: 'bird', blend: 50 },
+  { label: 'Humano + raposa', a: 'human', b: 'fox', blend: 45 },
+];
+
+function presetPatch(presetId?: string): Partial<CharacterAppearance> {
+  return PRESETS.find((preset) => preset.id === presetId)?.patch || {};
+}
+
+function nonNone<T extends string | undefined>(a: T, b: T, preferB: boolean, noneValue = 'none'): T {
+  const av = a as string | undefined;
+  const bv = b as string | undefined;
+  if (preferB && bv && bv !== noneValue) return b;
+  if (av && av !== noneValue) return a;
+  return (b || a) as T;
+}
+
+function hybridAppearance(current: CharacterAppearance, primaryId: string, secondaryId: string, blend: number): CharacterAppearance {
+  const primary = { ...DEFAULT_APPEARANCE, ...presetPatch(primaryId) } as CharacterAppearance;
+  const secondary = { ...DEFAULT_APPEARANCE, ...presetPatch(secondaryId) } as CharacterAppearance;
+  const t = clamp(blend / 100, 0, 1);
+  const preferB = t >= .5;
+  const mix = (a: number, b: number) => Number((a + (b - a) * t).toFixed(2));
+  const bodyPlan = t < .68 ? primary.bodyPlan : secondary.bodyPlan;
+  const surfaceStyle = t < .55 ? primary.surfaceStyle : secondary.surfaceStyle;
+  return {
+    ...current,
+    species: 'hybrid',
+    speciesPreset: 'hybrid',
+    hybridPrimaryPreset: primaryId,
+    hybridSecondaryPreset: secondaryId,
+    hybridBlend: Math.round(blend),
+    bodyPlan,
+    headShape: preferB ? secondary.headShape : primary.headShape,
+    faceShape: preferB ? secondary.faceShape : primary.faceShape,
+    eyeStyle: t > .62 ? secondary.eyeStyle : primary.eyeStyle,
+    browStyle: nonNone(primary.browStyle, secondary.browStyle, preferB),
+    noseStyle: nonNone(primary.noseStyle, secondary.noseStyle, preferB),
+    mouthStyle: preferB ? secondary.mouthStyle : primary.mouthStyle,
+    earStyle: nonNone(primary.earStyle, secondary.earStyle, t > .42),
+    hairStyle: nonNone(primary.hairStyle, secondary.hairStyle, t > .62),
+    muzzleStyle: nonNone(primary.muzzleStyle, secondary.muzzleStyle, t > .38),
+    tailStyle: nonNone(primary.tailStyle, secondary.tailStyle, t > .28),
+    wingStyle: nonNone(primary.wingStyle, secondary.wingStyle, t > .25),
+    hornStyle: nonNone(primary.hornStyle, secondary.hornStyle, t > .3),
+    surfaceStyle,
+    footStyle: t < .55 ? primary.footStyle : secondary.footStyle,
+    whiskers: t < .5 ? !!primary.whiskers : !!secondary.whiskers,
+    bodyShape: preferB ? secondary.bodyShape : primary.bodyShape,
+    torsoShape: t > .65 ? secondary.torsoShape : primary.torsoShape,
+    armStyle: preferB ? secondary.armStyle : primary.armStyle,
+    legStyle: preferB ? secondary.legStyle : primary.legStyle,
+    handStyle: t > .6 ? secondary.handStyle : primary.handStyle,
+    outfitStyle: primary.outfitStyle !== 'none' && t < .65 ? primary.outfitStyle : secondary.outfitStyle,
+    accessory: current.accessory,
+    headToBodyRatio: mix(primary.headToBodyRatio, secondary.headToBodyRatio),
+    shoulderWidth: mix(primary.shoulderWidth, secondary.shoulderWidth),
+    limbLength: mix(primary.limbLength, secondary.limbLength),
+    bodyWidth: mix(primary.bodyWidth, secondary.bodyWidth),
+  };
+}
 
 const REFERENCES = [
   'Tom Bancroft — Creating Characters with Personality: silhueta, contraste e apelo.',
@@ -483,7 +551,7 @@ function InfoTip({ children }: { children: string }) {
 }
 
 function SelectField<T extends string>({ label, value, options, onChange, tip }: { label: string; value: T; options: Option<T>[]; onChange: (value: T) => void; tip?: string }) {
-  return <label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">{label}{tip ? <InfoTip>{tip}</InfoTip> : null}</span><select value={value} onChange={(event) => onChange(event.target.value as T)} className="mt-1 h-11 w-full rounded-xl border border-black/25 bg-white px-3 text-sm text-black"><option value={value}>{options.find((item) => item.id === value)?.label || value}</option>{options.filter((item) => item.id !== value).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>;
+  return <div className="min-w-0 text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">{label}{tip ? <InfoTip>{tip}</InfoTip> : null}</span><div className="mt-1 flex gap-1.5 overflow-x-auto pb-1 snap-x">{options.map((item) => <button key={item.id} type="button" aria-pressed={item.id === value} onClick={() => onChange(item.id)} className={`shrink-0 snap-start min-h-10 rounded-xl border px-3 py-2 text-[11px] font-semibold normal-case font-sans transition-colors ${item.id === value ? 'bg-black text-white border-black' : 'bg-white text-black border-black/20 hover:border-black'}`}>{item.label}</button>)}</div></div>;
 }
 
 function RangeField({ label, value, min, max, step, onChange, tip }: { label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void; tip?: string }) {
@@ -537,6 +605,19 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
     const preset = PRESETS.find((item) => item.id === presetId);
     if (!preset) return;
     patchAppearance({ ...preset.patch, speciesPreset: preset.id });
+  };
+
+  const applyHybridMix = (primaryId = appearance.hybridPrimaryPreset || 'human', secondaryId = appearance.hybridSecondaryPreset || 'cat', blend = appearance.hybridBlend ?? 50) => {
+    const next = hybridAppearance(appearance, primaryId, secondaryId, blend);
+    patchAppearance(next);
+  };
+
+  const chooseSpecies = (value: CharacterSpecies) => {
+    if (value === 'hybrid') {
+      applyHybridMix(appearance.hybridPrimaryPreset || 'human', appearance.hybridSecondaryPreset || 'cat', appearance.hybridBlend ?? 50);
+      return;
+    }
+    patchAppearance({ species: value, speciesPreset: value });
   };
 
   const addAnimation = (kind: SpriteAnimationKind) => {
@@ -629,10 +710,19 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
 
     <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[520px_minmax(0,1fr)] overflow-y-auto xl:overflow-hidden">
       <section className="bg-white border-r p-4 sm:p-5 space-y-4 xl:overflow-y-auto">
+        {tab === 'builder' && <div className="xl:hidden sticky top-0 z-30 -mx-4 -mt-4 mb-4 border-b bg-[#F2F1ED]/95 backdrop-blur-md p-3 shadow-sm"><div className="flex items-center justify-between gap-2 mb-2"><div><div className="text-[8px] font-mono uppercase tracking-wider text-neutral-500">Prévia em tempo real</div><b className="text-sm">{draft.characterName}</b></div><div className="flex gap-1">{(['front','three-quarter','side'] as CharacterView[]).map((view) => <button key={view} type="button" onClick={() => setDraft((current) => ({ ...current, activeView: view, generatedSvg: undefined }))} className={`h-8 px-2 rounded-lg border text-[9px] font-bold ${draft.activeView === view ? 'bg-black text-white' : 'bg-white'}`}>{view === 'front' ? 'FRENTE' : view === 'three-quarter' ? '3/4' : 'PERFIL'}</button>)}</div></div><div className="h-[210px] rounded-2xl border bg-white overflow-hidden flex items-center justify-center" style={{background:draft.background}}><motion.div {...animationMotionProps(activeAnimation.motion, playing)} className="h-full w-full flex items-center justify-center"><img src={previewUrl} alt={draft.characterName} className="h-full max-w-full object-contain"/></motion.div></div>{appearance.species === 'hybrid' ? <div className="mt-2 flex items-center justify-center gap-2 text-[9px] font-mono uppercase"><span>{PRESETS.find((p) => p.id === appearance.hybridPrimaryPreset)?.label || 'A'}</span><div className="h-1 flex-1 rounded-full bg-neutral-200 overflow-hidden max-w-28"><div className="h-full bg-black" style={{width:`${appearance.hybridBlend ?? 50}%`}}/></div><span>{PRESETS.find((p) => p.id === appearance.hybridSecondaryPreset)?.label || 'B'}</span></div> : null}</div>}
         {tab === 'builder' && <>
           <div className="rounded-2xl border p-4 space-y-3"><div><b className="text-lg">Identidade visual do ser</b><div className="text-xs text-neutral-500">Comece pelo tipo de ser e pelo plano corporal. Depois refine partes e proporções.</div></div><label className="block text-[10px] font-mono text-neutral-500 uppercase">Nome<input value={draft.characterName} onChange={(event) => setDraft((current) => ({ ...current, characterName: event.target.value }))} className="mt-1 h-11 w-full rounded-xl border px-3 text-sm text-black"/></label><label className="block text-[10px] font-mono text-neutral-500 uppercase">Descrição<textarea value={draft.description || ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className="mt-1 min-h-20 w-full rounded-xl border p-3 text-sm text-black" placeholder="Quem é, universo, referências, comportamento..."/></label></div>
 
-          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between gap-2"><div><b className="text-lg">Tipo de ser</b><div className="text-xs text-neutral-500">Humano, animal, criatura ou híbrido.</div></div><InfoTip>O tipo de ser define quais estruturas anatômicas fazem sentido. O plano corporal pode ser alterado independentemente para criar híbridos.</InfoTip></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Tipo" value={appearance.species || 'human'} options={SPECIES} onChange={(value) => patchAppearance({ species: value })}/><SelectField label="Plano corporal" value={appearance.bodyPlan || 'biped'} options={BODY_PLANS} onChange={(value) => patchAppearance({ bodyPlan: value })}/></div><div className="mt-3 grid grid-cols-3 gap-2">{PRESETS.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset.id)} className={`rounded-xl border p-2 text-left hover:border-black ${appearance.speciesPreset === preset.id ? 'bg-black text-white' : ''}`}><div className="text-xl">{preset.icon}</div><b className="text-[11px]">{preset.label}</b><div className={`text-[9px] leading-tight mt-1 ${appearance.speciesPreset === preset.id ? 'text-white/70' : 'text-neutral-500'}`}>{preset.description}</div></button>)}</div></div>
+          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between gap-2"><div><b className="text-lg">Tipo de ser</b><div className="text-xs text-neutral-500">Humano, animal, criatura ou híbrido.</div></div><InfoTip>O tipo de ser define quais estruturas anatômicas fazem sentido. O plano corporal pode ser alterado independentemente para criar híbridos.</InfoTip></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Tipo" value={appearance.species || 'human'} options={SPECIES} onChange={chooseSpecies}/><SelectField label="Plano corporal" value={appearance.bodyPlan || 'biped'} options={BODY_PLANS} onChange={(value) => patchAppearance({ bodyPlan: value })}/></div>
+            {appearance.species === 'hybrid' ? <div className="mt-4 rounded-2xl border-2 border-black p-3 space-y-3">
+              <div className="flex items-start justify-between gap-2"><div><b className="text-sm">Misturador de híbridos</b><div className="text-[10px] text-neutral-500">Escolha duas bases. A prévia muda imediatamente enquanto você mistura e depois pode refinar cada parte abaixo.</div></div><InfoTip>Híbridos mais legíveis costumam preservar poucos sinais fortes de cada origem: silhueta, cabeça, superfície, cauda, asas ou locomoção. Não é preciso somar todas as partes.</InfoTip></div>
+              <div><div className="text-[9px] font-mono uppercase text-neutral-500 mb-1">BASE A · estrutura</div><div className="flex gap-2 overflow-x-auto pb-1">{HYBRID_BASES.map((preset) => <button key={`a-${preset.id}`} type="button" onClick={() => applyHybridMix(preset.id, appearance.hybridSecondaryPreset || 'cat', appearance.hybridBlend ?? 50)} className={`shrink-0 w-24 rounded-xl border p-2 text-left ${appearance.hybridPrimaryPreset === preset.id ? 'bg-black text-white' : 'bg-white'}`}><div className="text-xl">{preset.icon}</div><div className="text-[10px] font-bold">{preset.label}</div></button>)}</div></div>
+              <div><div className="text-[9px] font-mono uppercase text-neutral-500 mb-1">BASE B · traços adicionados</div><div className="flex gap-2 overflow-x-auto pb-1">{HYBRID_BASES.map((preset) => <button key={`b-${preset.id}`} type="button" onClick={() => applyHybridMix(appearance.hybridPrimaryPreset || 'human', preset.id, appearance.hybridBlend ?? 50)} className={`shrink-0 w-24 rounded-xl border p-2 text-left ${appearance.hybridSecondaryPreset === preset.id ? 'bg-black text-white' : 'bg-white'}`}><div className="text-xl">{preset.icon}</div><div className="text-[10px] font-bold">{preset.label}</div></button>)}</div></div>
+              <label className="block rounded-xl bg-neutral-50 p-3"><div className="flex justify-between gap-2 text-[9px] font-mono uppercase"><span>{PRESETS.find((p) => p.id === appearance.hybridPrimaryPreset)?.label || 'Base A'}</span><b>{appearance.hybridBlend ?? 50}% mistura</b><span>{PRESETS.find((p) => p.id === appearance.hybridSecondaryPreset)?.label || 'Base B'}</span></div><input type="range" min={0} max={100} step={1} value={appearance.hybridBlend ?? 50} onChange={(event) => applyHybridMix(appearance.hybridPrimaryPreset || 'human', appearance.hybridSecondaryPreset || 'cat', Number(event.target.value))} className="mt-2 w-full"/></label>
+              <div className="flex gap-2 overflow-x-auto">{HYBRID_QUICK.map((quick) => <button key={quick.label} type="button" onClick={() => applyHybridMix(quick.a, quick.b, quick.blend)} className="shrink-0 rounded-full border px-3 py-1.5 text-[9px] font-bold">{quick.label}</button>)}</div>
+              <div className="grid grid-cols-3 gap-1 text-[9px]"><div className="rounded-lg bg-neutral-100 p-2"><b>Silhueta</b><div>{BODY_PLANS.find((item) => item.id === appearance.bodyPlan)?.label}</div></div><div className="rounded-lg bg-neutral-100 p-2"><b>Superfície</b><div>{SURFACES.find((item) => item.id === appearance.surfaceStyle)?.label}</div></div><div className="rounded-lg bg-neutral-100 p-2"><b>Traço forte</b><div>{appearance.wingStyle !== 'none' ? 'Asas' : appearance.tailStyle !== 'none' ? 'Cauda' : appearance.hornStyle !== 'none' ? 'Chifres' : appearance.muzzleStyle !== 'none' ? 'Focinho/bico' : 'Forma'}</div></div></div>
+            </div> : <div className="mt-3 grid grid-cols-3 gap-2">{PRESETS.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset.id)} className={`rounded-xl border p-2 text-left hover:border-black ${appearance.speciesPreset === preset.id ? 'bg-black text-white' : ''}`}><div className="text-xl">{preset.icon}</div><b className="text-[11px]">{preset.label}</b><div className={`text-[9px] leading-tight mt-1 ${appearance.speciesPreset === preset.id ? 'text-white/70' : 'text-neutral-500'}`}>{preset.description}</div></button>)}</div>}</div>
 
           <div className="rounded-2xl border p-4"><div className="flex items-center justify-between"><b className="text-lg">Cabeça e rosto</b><span className="text-[9px] font-mono text-neutral-400">FORMA ≠ PERSONALIDADE</span></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Cabeça" value={appearance.headShape} options={HEADS} onChange={(value) => patchAppearance({ headShape: value })}/><SelectField label="Rosto" value={appearance.faceShape} options={FACES} onChange={(value) => patchAppearance({ faceShape: value })}/><SelectField label="Olhos" value={appearance.eyeStyle} options={EYES} onChange={(value) => patchAppearance({ eyeStyle: value })}/><SelectField label="Sobrancelha" value={appearance.browStyle} options={BROWS} onChange={(value) => patchAppearance({ browStyle: value })} tip="Pode ser nenhuma. Em animais, sobrancelha anatômica muitas vezes não faz sentido; a expressão pode vir de pálpebras, orelhas, postura e focinho."/><SelectField label="Nariz" value={appearance.noseStyle} options={NOSES} onChange={(value) => patchAppearance({ noseStyle: value })}/><SelectField label="Boca" value={appearance.mouthStyle} options={MOUTHS} onChange={(value) => patchAppearance({ mouthStyle: value })}/><SelectField label="Orelha" value={appearance.earStyle} options={EARS} onChange={(value) => patchAppearance({ earStyle: value })}/><SelectField label="Cabelo" value={appearance.hairStyle} options={HAIR} onChange={(value) => patchAppearance({ hairStyle: value })}/><SelectField label="Focinho / bico" value={appearance.muzzleStyle || 'none'} options={MUZZLES} onChange={(value) => patchAppearance({ muzzleStyle: value })}/><label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">Bigodes <InfoTip>Bigodes podem ser um traço anatômico ou estilização. Em felinos e roedores ajudam a reconhecer a espécie.</InfoTip></span><button type="button" onClick={() => patchAppearance({ whiskers: !appearance.whiskers })} className={`mt-1 h-11 w-full rounded-xl border text-sm ${appearance.whiskers ? 'bg-black text-white' : 'bg-white'}`}>{appearance.whiskers ? 'SIM' : 'NÃO'}</button></label></div></div>
 
@@ -651,7 +741,7 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
 
         {tab === 'animate' && <><div className="rounded-2xl border p-4"><div className="flex items-start justify-between gap-2"><div><b className="text-lg">Animações locais / sprites</b><div className="text-xs text-neutral-500">Estados para jogos, microinterações e personagens do projeto.</div></div><select defaultValue="" onChange={(event) => { if (event.target.value) addAnimation(event.target.value as SpriteAnimationKind); event.currentTarget.value = ''; }} className="h-9 rounded-xl border px-2 text-xs"><option value="" disabled>+ ESTADO</option>{ANIMATION_KINDS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div><div className="mt-3 flex gap-2 overflow-x-auto">{draft.animations.map((animation) => <button key={animation.id} onClick={() => { setSelectedAnimationId(animation.id); setFrameIndex(0); }} className={`shrink-0 h-9 px-3 rounded-xl border text-[10px] font-bold ${animation.id === activeAnimation.id ? 'bg-black text-white' : ''}`}>{animation.name}</button>)}</div><div className="mt-3 grid grid-cols-3 gap-2"><label className="text-[9px] font-mono uppercase text-neutral-500">FPS<input type="number" min={1} max={30} value={activeAnimation.fps} onChange={(event) => patchAnimation({ fps: Number(event.target.value) })} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"/></label><label className="text-[9px] font-mono uppercase text-neutral-500">Loop<select value={activeAnimation.loop ? 'yes' : 'no'} onChange={(event) => patchAnimation({ loop: event.target.value === 'yes' })} className="mt-1 h-9 w-full rounded-lg border"><option value="yes">Sim</option><option value="no">Não</option></select></label><SelectField label="Motion" value={activeAnimation.motion} options={MOTIONS} onChange={(value) => patchAnimation({ motion: value })}/></div><button onClick={createFrames} className="mt-3 h-11 w-full rounded-xl bg-black text-white font-bold text-xs flex items-center justify-center gap-2"><Sparkles size={14}/> GERAR FRAMES DO ESTADO</button></div><div className="rounded-2xl border p-4"><div className="flex items-center justify-between gap-2"><div><b>Frames próprios</b><div className="text-xs text-neutral-500">Use imagens do projeto ou envie arquivos.</div></div><button onClick={() => fileRef.current?.click()} className="h-9 px-3 rounded-xl border text-[10px] font-bold flex items-center gap-1"><Upload size={13}/> UPLOAD</button></div><input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFrames(event.target.files); }}/><div className="mt-3 grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">{availableAssets.map((asset) => <button key={asset.id} onClick={() => addAssetFrame(asset)} className="rounded-xl border overflow-hidden text-left"><div className="aspect-square bg-neutral-100"><img src={asset.url} className="w-full h-full object-contain"/></div><div className="p-2 text-[9px] font-bold truncate">+ {asset.name}</div></button>)}</div>{uploading ? <div className="mt-2 text-xs">Enviando...</div> : null}</div><div className="rounded-2xl border p-4"><b>Timeline</b><div className="mt-3 space-y-2">{activeAnimation.frames.map((frame, index) => <div key={frame.id} className="flex items-center gap-2 rounded-xl border p-2"><button onClick={() => { setFrameIndex(index); setPlaying(false); }} className={`h-14 w-14 rounded-lg overflow-hidden border ${frameIndex === index ? 'ring-2 ring-black' : ''}`}><img src={frame.url} className="w-full h-full object-contain"/></button><div className="min-w-0 flex-1"><div className="text-[10px] font-bold truncate">{index + 1}. {frame.name}</div><input type="number" min={30} max={5000} value={frame.durationMs || 125} onChange={(event) => patchAnimation({ frames: activeAnimation.frames.map((item) => item.id === frame.id ? { ...item, durationMs: Number(event.target.value) } : item) })} className="mt-1 h-7 w-24 rounded border px-1 text-[10px]"/></div><button onClick={() => patchAnimation({ frames: activeAnimation.frames.filter((item) => item.id !== frame.id) })} className="h-8 w-8 rounded-lg border text-red-600"><Trash2 size={13} className="mx-auto"/></button></div>)}{!activeAnimation.frames.length ? <div className="rounded-xl border border-dashed p-4 text-center text-xs text-neutral-400">Clique em GERAR FRAMES DO ESTADO para testar a animação imediatamente.</div> : null}</div></div></>}
 
-        {tab === 'ai' && <div className="rounded-2xl border-2 border-black p-4 space-y-3"><div className="flex items-center gap-2"><WandSparkles size={16}/><b className="text-lg">IA + SVG</b></div><div className="text-xs text-neutral-500">A IA recebe tipo de ser, plano corporal, partes opcionais, ficha, pose e expressão. Pode gerar humano, animal, criatura ou híbrido em SVG.</div><div className="flex gap-2 items-start"><textarea value={draft.prompt || ''} onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))} className="min-h-32 min-w-0 flex-1 rounded-xl border p-3 text-sm" placeholder="Ex.: crie uma raposa quadrúpede com orelhas pontudas, cauda grande, sem sobrancelhas, desenho vetorial simples e consistente para sprite..."/><VoiceDictationButton onText={(text) => setDraft((current) => ({ ...current, prompt: `${current.prompt || ''}${current.prompt ? ' ' : ''}${text}` }))}/></div><button onClick={() => void generateSvgAi()} disabled={busy} className="h-11 w-full rounded-xl bg-black text-white text-xs font-bold flex items-center justify-center gap-2">{busy ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} GERAR / REFINAR SVG</button>{draft.generatedSvg ? <button onClick={() => setDraft((current) => ({ ...current, generatedSvg: undefined }))} className="h-10 w-full rounded-xl border text-xs font-bold">VOLTAR AO CONSTRUTOR MODULAR</button> : null}{draft.generatedNotes?.length ? <div className="rounded-xl bg-neutral-50 p-3">{draft.generatedNotes.map((note) => <div key={note} className="text-[10px] text-neutral-600">• {note}</div>)}</div> : null}</div>}
+        {tab === 'ai' && <div className="rounded-2xl border-2 border-black p-4 space-y-3"><div className="flex items-center gap-2"><WandSparkles size={16}/><b className="text-lg">IA + SVG</b></div><div className="text-xs text-neutral-500">A IA recebe tipo de ser, plano corporal, partes opcionais, ficha, pose e expressão. Pode gerar humano, animal, criatura ou híbrido em SVG.</div><div className="flex gap-2 items-start"><textarea value={draft.prompt || ''} onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))} className="min-h-32 min-w-0 flex-1 rounded-xl border p-3 text-sm" placeholder="Ex.: crie um híbrido entre raposa e ave: corpo quadrúpede, asas pequenas, cauda volumosa, focinho alongado, sem sobrancelhas e silhueta simples para sprite..."/><VoiceDictationButton onText={(text) => setDraft((current) => ({ ...current, prompt: `${current.prompt || ''}${current.prompt ? ' ' : ''}${text}` }))}/></div><button onClick={() => void generateSvgAi()} disabled={busy} className="h-11 w-full rounded-xl bg-black text-white text-xs font-bold flex items-center justify-center gap-2">{busy ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} GERAR / REFINAR SVG</button>{draft.generatedSvg ? <button onClick={() => setDraft((current) => ({ ...current, generatedSvg: undefined }))} className="h-10 w-full rounded-xl border text-xs font-bold">VOLTAR AO CONSTRUTOR MODULAR</button> : null}{draft.generatedNotes?.length ? <div className="rounded-xl bg-neutral-50 p-3">{draft.generatedNotes.map((note) => <div key={note} className="text-[10px] text-neutral-600">• {note}</div>)}</div> : null}</div>}
 
         {error ? <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div> : null}
       </section>
