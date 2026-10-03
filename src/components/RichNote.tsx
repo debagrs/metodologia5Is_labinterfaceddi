@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Bold, Italic, Underline, Palette } from 'lucide-react';
 
 const fonts = ['Arial', 'Georgia', 'Courier New', 'Verdana', 'Times New Roman'];
 
@@ -112,6 +113,7 @@ export default function RichNote({ content, onChange, disabled = false }: { cont
 
   return <div className="flex flex-1 min-h-0 flex-col gap-1" onPointerDown={e => e.stopPropagation()}>
     {!disabled && <div
+      data-tour="note-formatting"
       className="flex flex-wrap items-center gap-1"
       onPointerDownCapture={saveSelection}
       onMouseDown={e => {
@@ -119,12 +121,12 @@ export default function RichNote({ content, onChange, disabled = false }: { cont
         if ((e.target as HTMLElement).closest('button')) e.preventDefault();
       }}
     >
-      <button type="button" aria-label="Negrito" title="Negrito" className="px-1 font-bold" onClick={() => command('bold')}>B</button>
-      <button type="button" aria-label="Itálico" title="Itálico" className="px-1 italic" onClick={() => command('italic')}>I</button>
-      <button type="button" aria-label="Sublinhado" title="Sublinhado" className="px-1 underline" onClick={() => command('underline')}>U</button>
-      <select aria-label="Tipografia" title="Tipografia" className="max-w-[95px] bg-transparent text-[10px]" defaultValue="" onChange={e => { styleSelection('fontFamily', e.target.value); e.currentTarget.value = ''; }}><option value="" disabled>Fonte</option>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select>
-      <select aria-label="Tamanho da fonte" title="Tamanho da fonte" className="bg-transparent text-[10px]" defaultValue="" onChange={e => { styleSelection('fontSize', `${e.target.value}px`); e.currentTarget.value = ''; }}><option value="" disabled>Tamanho</option>{[12, 14, 16, 18, 20, 24, 28, 32, 36].map(n => <option key={n} value={n}>{n}</option>)}</select>
-      <input type="color" aria-label="Cor do texto" title="Cor do texto" defaultValue="#262626" className="h-5 w-6 cursor-pointer" onChange={e => command('foreColor', e.target.value)} />
+      <button type="button" aria-label="Negrito" title="Negrito" className="w-9 h-9 rounded-lg border border-black/10 bg-white/75 hover:bg-white flex items-center justify-center font-bold cursor-pointer" onClick={() => command('bold')}><Bold size={18} strokeWidth={2.4}/></button>
+      <button type="button" aria-label="Itálico" title="Itálico" className="w-9 h-9 rounded-lg border border-black/10 bg-white/75 hover:bg-white flex items-center justify-center cursor-pointer" onClick={() => command('italic')}><Italic size={18} strokeWidth={2.2}/></button>
+      <button type="button" aria-label="Sublinhado" title="Sublinhado" className="w-9 h-9 rounded-lg border border-black/10 bg-white/75 hover:bg-white flex items-center justify-center cursor-pointer" onClick={() => command('underline')}><Underline size={18} strokeWidth={2.2}/></button>
+      <select aria-label="Tipografia" title="Tipografia" className="h-9 max-w-[110px] rounded-lg border border-black/10 bg-white/75 px-2 text-[11px]" defaultValue="" onChange={e => { styleSelection('fontFamily', e.target.value); e.currentTarget.value = ''; }}><option value="" disabled>Fonte</option>{fonts.map(f => <option key={f} value={f}>{f}</option>)}</select>
+      <select aria-label="Tamanho da fonte" title="Tamanho da fonte" className="h-9 rounded-lg border border-black/10 bg-white/75 px-2 text-[11px]" defaultValue="" onChange={e => { styleSelection('fontSize', `${e.target.value}px`); e.currentTarget.value = ''; }}><option value="" disabled>Tamanho</option>{[12, 14, 16, 18, 20, 24, 28, 32, 36].map(n => <option key={n} value={n}>{n}</option>)}</select>
+      <label className="relative w-9 h-9 rounded-lg border border-black/10 bg-white/75 hover:bg-white flex items-center justify-center cursor-pointer" title="Cor do texto" aria-label="Cor do texto"><Palette size={18}/><input type="color" aria-label="Cor do texto" defaultValue="#262626" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={e => command('foreColor', e.target.value)} /></label>
     </div>}
     <div
       ref={editor}
