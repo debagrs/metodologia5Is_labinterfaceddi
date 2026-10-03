@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'game-design';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design';
 
 export type DrawingElementType =
   | 'brush'
@@ -376,6 +376,42 @@ export interface HardwareDocument {
   updatedAt?: string;
 }
 
+
+export type SpriteAnimationKind = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'custom';
+export type SpriteMotionPreset = 'none' | 'bob' | 'bounce' | 'shake' | 'pulse' | 'squash';
+
+export interface SpriteFrame {
+  id: string;
+  name: string;
+  url: string;
+  sourceNodeId?: string;
+  durationMs?: number;
+}
+
+export interface SpriteAnimation {
+  id: string;
+  name: string;
+  kind: SpriteAnimationKind;
+  fps: number;
+  loop: boolean;
+  motion: SpriteMotionPreset;
+  frames: SpriteFrame[];
+}
+
+export interface CharacterSpriteDocument {
+  title: string;
+  characterName: string;
+  description?: string;
+  width: number;
+  height: number;
+  background: string;
+  pixelated: boolean;
+  animations: SpriteAnimation[];
+  activeAnimationId?: string;
+  palette?: string[];
+  updatedAt?: string;
+}
+
 export type GameSceneType = 'menu' | 'level' | 'boss' | 'cutscene' | 'result';
 export type GameSprintStatus = 'todo' | 'doing' | 'done';
 
@@ -387,6 +423,7 @@ export interface GameScene {
   mechanics: string[];
   background: string;
   nextSceneId?: string;
+  spriteIds?: string[];
 }
 
 export interface GameSprintItem {
@@ -488,6 +525,8 @@ export interface ThoughtNode {
   soundName?: string;
   hardware?: HardwareDocument;
   hardwareName?: string;
+  sprite?: CharacterSpriteDocument;
+  spriteName?: string;
   gameDesign?: GameDesignDocument;
   gameDesignName?: string;
   mediatorId?: string;
