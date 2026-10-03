@@ -22,6 +22,8 @@ export interface MediatorRequestBody {
   requestedFiles?: Array<{ path: string; purpose?: string }>;
   wireframeSource?: { kind?: 'image' | 'drawing' | string; name?: string; url?: string; svg?: string; width?: number; height?: number };
   wireframeOptions?: { device?: 'auto' | 'mobile' | 'tablet' | 'desktop' | string; fidelity?: 'structure' | 'balanced' | 'faithful' | string };
+  uxWriting?: { action?: string; sourceText?: string; originalText?: string; context?: string; screen?: string; tone?: string; sourceLocale?: string; targetLocale?: string; prompt?: string; glossary?: string[] };
+  video?: any;
 }
 
 
@@ -532,6 +534,69 @@ async function callGeminiWireframe(system: string, user: string, source: any, ma
   return { text, provider: 'Gemini', model };
 }
 
+function cleanUXWritingJson(text: string) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('O assistente de UX Writing não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!String(data?.text || '').trim()) throw new Error('O assistente de UX Writing não devolveu texto.');
+  return {
+    text: String(data.text).trim(),
+    alternatives: Array.isArray(data.alternatives) ? data.alternatives.slice(0, 5).map(String) : [],
+    notes: Array.isArray(data.notes) ? data.notes.slice(0, 5).map(String) : []
+  };
+}
+
+function buildUXWritingMessages(body: MediatorRequestBody) {
+  const ux = body.uxWriting || {};
+  const action = String(ux.action || 'rewrite');
+  const tone = String(ux.tone || 'clear');
+  const glossary = Array.isArray(ux.glossary) && ux.glossary.length ? ux.glossary.join('; ') : 'sem glossário adicional';
+  let task = 'reescreva o microtexto segundo o pedido adicional, preservando intenção, fatos e limites';
+  if (action === 'accessible') task = 'reescreva em linguagem simples e acessível: frases curtas, voz ativa, palavras concretas, instrução explícita, sem infantilizar nem perder informação';
+  if (action === 'translate') task = `traduza para ${String(ux.targetLocale || 'en-US')}, preservando tom, significado, nomes próprios, termos de produto e clareza de interface`;
+  if (action === 'libras') task = 'produza um ROTEIRO/GLOSA INDICATIVA de apoio à produção em Libras, organizado de forma visual e concisa. Não afirme que é tradução final; sinalize escolhas que precisam de validação por pessoa tradutora/intérprete de Libras';
+  if (action === 'variants') task = 'crie uma versão principal e até cinco alternativas curtas de microcopy';
+  const system = `Você é especialista em UX Writing, linguagem simples, conteúdo acessível e localização de interfaces. ${task}. Tom desejado: ${tone}. Idioma de origem: ${String(ux.sourceLocale || 'pt-BR')}. Glossário: ${glossary}. Não invente funcionalidades, resultados ou informações ausentes. Para mensagens de erro, explique o problema e a próxima ação quando isso estiver no contexto. Para Libras, trate o resultado apenas como roteiro/glosa de apoio e inclua nota de validação humana. Retorne SOMENTE JSON válido: {"text":"...","alternatives":["..."],"notes":["..."]}.`;
+  const user = `PROJETO: ${body.project?.name || 'Projeto 5I’s'}\nTELA: ${String(ux.screen || 'não informada')}\nCONTEXTO: ${String(ux.context || 'não informado')}\nTEXTO ORIGINAL: ${String(ux.originalText || ux.sourceText || '')}\nTEXTO DE TRABALHO: ${String(ux.sourceText || '')}\nPEDIDO ADICIONAL: ${String(ux.prompt || '')}`;
+  return { system, user };
+}
+
+
+function cleanVideoPlanJson(text: string) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A IA de vídeo não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const allowedFormats = new Set(['reel','story','tiktok','square','feed','youtube','facebook','linkedin','custom']);
+  const allowedTransitions = new Set(['cut','fade','slide','zoom']);
+  const timeline = Array.isArray(data?.timeline) ? data.timeline.slice(0, 24).map((item: any) => ({
+    mediaId: String(item?.mediaId || ''),
+    name: String(item?.name || ''),
+    duration: Math.max(0.5, Math.min(12, Number(item?.duration) || 2.5)),
+    transition: allowedTransitions.has(String(item?.transition)) ? String(item.transition) : 'fade',
+    fit: item?.fit === 'contain' ? 'contain' : 'cover',
+    caption: String(item?.caption || '').slice(0, 240),
+  })).filter((item: any) => item.mediaId || item.name) : [];
+  return {
+    title: String(data?.title || '').slice(0, 160),
+    subtitle: String(data?.subtitle || '').slice(0, 260),
+    format: allowedFormats.has(String(data?.format)) ? String(data.format) : undefined,
+    timeline,
+    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 8).map(String) : [],
+  };
+}
+
+function buildVideoPlanMessages(body: MediatorRequestBody) {
+  const video = (body as any)?.video || {};
+  const media = Array.isArray(video.media) ? video.media.slice(0, 60) : [];
+  const system = `Você é montador(a), diretor(a) de motion e estrategista de conteúdo audiovisual dentro do Ateliê 5I’s. Sua tarefa é transformar a instrução do usuário e a mídia DISPONÍVEL em uma timeline editável — nunca inventar arquivos inexistentes. Priorize ritmo, clareza, legibilidade mobile, acessibilidade e coerência com o formato social escolhido. Use apenas mediaId/name presentes na lista. Retorne SOMENTE JSON válido com este formato: {"title":"...","subtitle":"...","format":"reel|story|tiktok|square|feed|youtube|facebook|linkedin|custom","timeline":[{"mediaId":"id existente","name":"nome existente","duration":2.5,"transition":"cut|fade|slide|zoom","fit":"cover|contain","caption":"texto opcional"}],"notes":["decisão de montagem"]}. Se houver pouca mídia, monte uma versão curta com o que existe em vez de inventar cenas.`;
+  const user = `PEDIDO: ${String((body as any)?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m:any)=>`- ${m.id} | ${m.kind} | ${m.name}`).join('\n') || 'nenhuma mídia'}`;
+  return { system, user };
+}
+
 function cleanPublicationJson(text: string): PublicationArticle {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = stripped.indexOf('{');
@@ -829,6 +894,20 @@ export async function generateMediatorInsight(body: MediatorRequestBody): Promis
     const result = await callGeminiWireframe(system, user, body.wireframeSource, 3600, Number(process.env.AI_WIREFRAME_TIMEOUT_MS || 45000));
     return { wireframeInterpretation: cleanWireframeInterpretationJson(result.text), provider: result.provider, model: result.model };
   }
+  if (body?.mode === 'video-compose') {
+    if (!String(body?.prompt || '').trim()) throw new Error('Descreva o vídeo que deseja montar.');
+    const { system, user } = buildVideoPlanMessages(body);
+    const result = await callGeminiStructured(system, user, 3600, Number(process.env.AI_VIDEO_TIMEOUT_MS || 35000), 0.22);
+    return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body?.mode === 'ux-writing') {
+    if (!String(body?.uxWriting?.sourceText || '').trim()) throw new Error('Escreva o texto que deseja trabalhar.');
+    const { system, user } = buildUXWritingMessages(body);
+    const result = await callGeminiStructured(system, user, 2400, Number(process.env.AI_UX_WRITING_TIMEOUT_MS || 30000), 0.18);
+    return { uxWriting: cleanUXWritingJson(result.text), provider: result.provider, model: result.model };
+  }
+
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
   }
