@@ -4,6 +4,7 @@ import BrandMark from './BrandMark';
 import { AgendaLauncher } from './Agenda5Is';
 import type { ProjectWorkspace, UserProfile, SharedProjectSummary } from '../types';
 import { readAuthSession } from '../lib/auth';
+import TutorialCoach from './TutorialCoach';
 
 interface Props {
   user: UserProfile;
@@ -76,7 +77,8 @@ export default function StudentProjectsDashboard({
 
   return (
     <div className="min-h-[100dvh] bg-[#FDFDFB] text-neutral-950">
-      <header className="sticky top-0 z-20 border-b border-[#E8E8E5] bg-[#FDFDFB]/95 backdrop-blur px-4 sm:px-8 py-3">
+      {!readOnly && <TutorialCoach scope="projects" userId={user.id} />}
+      <header data-tour="projects-header" className="sticky top-0 z-20 border-b border-[#E8E8E5] bg-[#FDFDFB]/95 backdrop-blur px-4 sm:px-8 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <BrandMark compact priority className="w-[38px] h-[33px] shrink-0" />
@@ -118,14 +120,14 @@ export default function StudentProjectsDashboard({
             </p>
           </div>
           {!readOnly && onCreate && (
-            <button onClick={onCreate} className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-black text-white flex items-center justify-center gap-2 font-mono text-sm font-bold uppercase tracking-wider shadow-sm cursor-pointer">
+            <button data-tour="projects-create" onClick={onCreate} className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-black text-white flex items-center justify-center gap-2 font-mono text-sm font-bold uppercase tracking-wider shadow-sm cursor-pointer">
               <Plus size={18} /> Novo projeto
             </button>
           )}
         </section>
 
         {isStudentDashboard && (
-          <section className="mb-6 rounded-2xl border border-[#DFDFDC] bg-white p-4 sm:p-5 shadow-sm">
+          <section data-tour="projects-resources" className="mb-6 rounded-2xl border border-[#DFDFDC] bg-white p-4 sm:p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Materiais da disciplina</span>
@@ -195,7 +197,7 @@ export default function StudentProjectsDashboard({
         )}
 
         {!readOnly && onOpenShared && (
-          <section className="mt-10 pt-8 border-t border-[#E8E8E5]">
+          <section data-tour="projects-shared" className="mt-10 pt-8 border-t border-[#E8E8E5]">
             <div className="flex items-start sm:items-center justify-between gap-3 mb-5">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Colaboração</span>
