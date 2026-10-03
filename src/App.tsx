@@ -868,6 +868,31 @@ export default function App() {
 
   // ADVISOR ROLE VIEW
   if (activeProfile.role === 'advisor') {
+    if (activeSharedProject && project) {
+      const canEditShared = activeSharedProject.permission === 'edit';
+      const noOp: any = () => {};
+      return (
+        <div className="min-h-screen bg-brand-beige">
+          <Workspace
+            project={project}
+            nodes={nodes}
+            onUpdateNodeCoords={canEditShared ? handleUpdateNodeCoords : noOp}
+            onAddCustomThought={canEditShared ? handleAddCustomThought : noOp}
+            onUpdateNodeContent={canEditShared ? handleUpdateNodeContent : noOp}
+            onDeleteNode={canEditShared ? handleDeleteNode : noOp}
+            onUpdateNode={activeSharedProject.permission === 'view' ? noOp : handleUpdateNode}
+            onUpdateNodes={canEditShared ? handleUpdateNodes : noOp}
+            onAddNode={canEditShared ? handleAddNode : noOp}
+            onUpdatePhase={canEditShared ? handleUpdatePhase : noOp}
+            onExit={handleExit}
+            onClearAll={canEditShared ? handleClearAllContent : noOp}
+            currentUser={activeProfile}
+            studentName={`Projeto de ${activeSharedProject.ownerName}`}
+            collaborationPermission={activeSharedProject.permission}
+          />
+        </div>
+      );
+    }
     if (activeAdminProject) {
       const noOp: any = () => {};
       return (
@@ -1012,6 +1037,10 @@ export default function App() {
         onOpenAdminProject={handleOpenAdminProject}
         loadingStudentWorkspace={loadingStudentWorkspace}
         studentWorkspaceError={studentWorkspaceError}
+        sharedProjects={sharedProjects}
+        sharedProjectsLoading={sharedProjectsLoading}
+        onOpenShared={handleOpenSharedProject}
+        onRefreshShared={loadSharedProjects}
       />
     );
   }
