@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board';
 
 export type DrawingElementType =
   | 'brush'
@@ -121,6 +121,10 @@ export interface InteractiveDocument {
 export interface DrawingPoint {
   x: number;
   y: number;
+  /** Pressão normalizada do stylus/ponteiro (0–1). */
+  pressure?: number;
+  /** Timestamp do ponto para suavização e futuras animações. */
+  t?: number;
 }
 
 export interface DrawingElement {
@@ -145,6 +149,90 @@ export interface DrawingDocument {
   height: number;
   background: string;
   elements: DrawingElement[];
+}
+
+
+export type WireframeDevicePreset = 'mobile' | 'tablet' | 'desktop' | 'watch' | 'custom';
+export type WireframeDirection = 'column' | 'row';
+export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
+export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'list-item' | 'spacer';
+
+export interface WireframeBlock {
+  id: string;
+  type: WireframeBlockType;
+  label: string;
+  width?: 'fill' | 'hug' | number;
+  height?: 'hug' | number;
+  padding?: number;
+  radius?: number;
+  background?: string;
+  color?: string;
+  componentName?: string;
+  isComponent?: boolean;
+}
+
+export interface WireframeFrame {
+  id: string;
+  name: string;
+  preset: WireframeDevicePreset;
+  width: number;
+  height: number;
+  direction: WireframeDirection;
+  gap: number;
+  padding: number;
+  align: WireframeAlign;
+  background: string;
+  blocks: WireframeBlock[];
+}
+
+export interface WireframeDocument {
+  frames: WireframeFrame[];
+  activeFrameId?: string;
+  componentLibrary?: WireframeBlock[];
+}
+
+export interface DesignColorToken {
+  id: string;
+  name: string;
+  value: string;
+  role?: 'brand' | 'accent' | 'surface' | 'text' | 'success' | 'warning' | 'danger' | 'custom';
+}
+
+export interface DesignTypeToken {
+  id: string;
+  name: string;
+  family: string;
+  size: number;
+  weight: number;
+  lineHeight: number;
+  letterSpacing?: number;
+}
+
+export interface DesignSystemDocument {
+  name: string;
+  colors: DesignColorToken[];
+  typography: DesignTypeToken[];
+  spacing: number[];
+  radii: number[];
+  primaryFont: string;
+  updatedAt?: string;
+}
+
+export type VideoFormatPreset = 'reel' | 'story' | 'tiktok' | 'square' | 'feed' | 'youtube' | 'facebook' | 'linkedin' | 'custom';
+
+export interface VideoDocument {
+  title: string;
+  subtitle?: string;
+  format: VideoFormatPreset;
+  width: number;
+  height: number;
+  duration: number;
+  background: string;
+  accent: string;
+  sourceUrl?: string;
+  sourceName?: string;
+  generatedUrl?: string;
+  prompt?: string;
 }
 
 export interface NodeComment {
@@ -185,6 +273,12 @@ export interface ThoughtNode {
   drawingName?: string;
   interactive?: InteractiveDocument;
   interactiveName?: string;
+  wireframe?: WireframeDocument;
+  wireframeName?: string;
+  designSystem?: DesignSystemDocument;
+  designSystemName?: string;
+  video?: VideoDocument;
+  videoName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
