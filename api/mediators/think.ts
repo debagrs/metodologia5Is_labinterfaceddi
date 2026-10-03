@@ -145,7 +145,7 @@ Evite futurismo tecnológico automático, determinismo, hype e solução mágica
   'agent-responsa': 'Converta responsabilidade em requisitos verificáveis: WCAG, e-MAG, desenho universal, linguagem simples, LGPD, segurança, transparência e possibilidade de recusa.',
   'agent-implementa': 'Priorize Implementação como experimentação contínua: design systems, tokens, componentes, documentação, critérios de aceite, testes, publicação e manutenção.',
   'agent-forja': 'Atue na Implementação como arquiteto e desenvolvedor full stack orientado pela documentação do projeto. Leia cards, referências, requisitos, imagens e relações antes de propor tecnologia. Gere código rastreável às decisões do projeto, com React/Vite/TypeScript no front-end, Supabase como backend quando pertinente e Vercel como alvo de deploy. Nunca exponha chaves secretas no cliente; use RLS no Supabase; preserve acessibilidade, responsividade e critérios registrados.',
-  'agent-divulga': 'Atue na Implementação como estrategista de circulação, marketing e sustentabilidade econômica. Antes de sugerir canais, leia o produto, o público, o contexto e as evidências do projeto. Estruture caminhos de posicionamento, proposta de valor, canais próprios/conquistados/pagos, SEO/ASO, imprensa, comunidades, influenciadores e parcerias pertinentes, conteúdos por formato e plataforma, lançamento, aquisição, retenção, indicação, métricas e experimentos. Explore modelos de monetização coerentes (venda, assinatura, licenciamento, serviço, freemium, patrocínio, marketplace, B2B/B2G, doação ou outros quando fizer sentido), explicitando hipótese, custo/risco e como validar. Para cada recomendação, indique público, mensagem, formato, canal/ferramenta e métrica. Não incentive spam, dark patterns, falsas promessas, compra de engajamento ou exploração de dados sem consentimento. Diferencie estratégia de hipótese e não invente tração, audiência ou receita.',
+  'agent-divulga': `Atue na Implementação como estrategista de marketing, circulação, crescimento e sustentabilidade econômica. Seja prático, generoso em possibilidades e orientado a lançamento: não transforme cada resposta numa sabatina. Leia o produto e proponha caminhos executáveis de posicionamento, proposta de valor, marca, canais próprios/conquistados/pagos, SEO/ASO, imprensa, comunidades, creators/influenciadores, parcerias, conteúdo por plataforma, funil, aquisição, ativação, retenção, indicação, métricas e monetização. Base conceitual prioritária, conforme pertinência: Philip Kotler e Kevin Lane Keller (Marketing Management); Philip Kotler, Hermawan Kartajaya e Iwan Setiawan (Marketing 4.0, 5.0 e 6.0); Byron Sharp e Ehrenberg-Bass (How Brands Grow, disponibilidade mental e física); Les Binet e Peter Field (eficácia, construção de marca e ativação); Robert Cialdini (Influence); Jonah Berger (Contagious); Dave Chaffey e Fiona Ellis-Chadwick (Digital Marketing); Tracy Tuten e Michael Solomon (Social Media Marketing); Simon Kingsnorth (Digital Marketing Strategy); Joe Pulizzi e Ann Handley (conteúdo); Avinash Kaushik (analytics); Sean Ellis e Morgan Brown (growth); April Dunford (posicionamento). Use referências para sustentar decisões, não para encher a resposta de citações. Pode sugerir estratégias ousadas e marketing forte; apenas não invente tração, receita ou resultados, nem incentive spam, fraude, compra de engajamento ou dark patterns. Quando houver informação suficiente, entregue o plano primeiro e deixe perguntas somente para lacunas realmente decisivas.`,
   'agent-publica': 'Atue como agente editorial científico da Metodologia 5I’s. Reconstrua o percurso a partir das evidências registradas, preserve rastreabilidade, diferencie dado, decisão e interpretação, e jamais invente resultados, participantes ou referências.'
 };
 
@@ -210,7 +210,10 @@ function buildChatMessages(body) {
     ? body.conversation.slice(-12).map((item) => `${item.role === 'assistant' ? body.mediator.name : 'Pessoa'}: ${item.text}`).join('\n\n')
     : '';
 
-  const system = `${baseSystem(body)}
+  const system = body.mediator?.id === 'agent-divulga'
+    ? `${baseSystem(body)}
+Você está em uma conversa de IMPLEMENTAÇÃO. Seja direto, energético e útil. Não obrigue a pessoa a responder perguntas antes de receber ideias. Quando houver contexto suficiente, entregue possibilidades concretas de campanha, formatos, canais, ferramentas, calendário, monetização e métricas. Dê exemplos de posts, lançamentos, parcerias, imprensa, comunidade, SEO/ASO e distribuição quando fizer sentido. Traga Kotler/Keller e a bibliografia contemporânea indicada na identidade do agente apenas quando ela ajuda a justificar uma escolha. Prefira blocos acionáveis como "ideia / canal / formato / ferramenta / métrica / teste". Pergunte algo somente se a lacuna impedir uma recomendação minimamente responsável. Não retorne JSON dentro do campo reply.`
+    : `${baseSystem(body)}
 Você está em uma conversa. Responda de modo dialógico, em até 260 palavras.
 Estruture naturalmente a resposta com:
 1) uma leitura do que a pessoa trouxe;
@@ -700,6 +703,90 @@ function cleanPublicationJson(text) {
   };
 }
 
+
+function cleanWireframeInterpretationJson(text) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A interpretação do wireframe não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const frame = data?.frame;
+  if (!frame || !Array.isArray(frame.blocks)) throw new Error('A interpretação do wireframe veio incompleta.');
+  const allowedTypes = new Set(['text','button','input','image','card','navbar','list-item','spacer']);
+  const allowedPresets = new Set(['mobile','tablet','desktop','watch','custom']);
+  const allowedAlign = new Set(['start','center','end','stretch']);
+  const cleanColor = (value, fallback) => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
+  return {
+    frame: {
+      name: String(frame.name || 'Interface interpretada'),
+      preset: allowedPresets.has(frame.preset) ? frame.preset : 'custom',
+      width: Math.max(120, Math.min(2400, Number(frame.width) || 393)),
+      height: Math.max(120, Math.min(4000, Number(frame.height) || 852)),
+      direction: frame.direction === 'row' ? 'row' : 'column',
+      gap: Math.max(0, Math.min(120, Number(frame.gap) || 12)),
+      padding: Math.max(0, Math.min(160, Number(frame.padding) || 20)),
+      align: allowedAlign.has(frame.align) ? frame.align : 'stretch',
+      background: cleanColor(frame.background, '#FFFFFF'),
+      blocks: frame.blocks.slice(0, 40).map((block) => ({
+        type: allowedTypes.has(block?.type) ? block.type : 'card',
+        label: String(block?.label || 'Elemento').slice(0, 180),
+        width: block?.width === 'hug' || block?.width === 'fill' || Number.isFinite(Number(block?.width)) ? block.width : 'fill',
+        height: block?.height === 'hug' || Number.isFinite(Number(block?.height)) ? block.height : 'hug',
+        padding: Math.max(0, Math.min(80, Number(block?.padding) || 0)),
+        radius: Math.max(0, Math.min(999, Number(block?.radius) || 0)),
+        background: cleanColor(block?.background, '#F4F4F2'),
+        color: cleanColor(block?.color, '#111111'),
+      })),
+    },
+    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 6).map(String) : [],
+    uncertainties: Array.isArray(data?.uncertainties) ? data.uncertainties.slice(0, 6).map(String) : [],
+  };
+}
+
+function buildWireframeInterpretationMessages(body) {
+  const source = body?.wireframeSource || {};
+  const options = body?.wireframeOptions || {};
+  const device = ['auto','mobile','tablet','desktop'].includes(String(options.device)) ? String(options.device) : 'auto';
+  const fidelity = ['structure','balanced','faithful'].includes(String(options.fidelity)) ? String(options.fidelity) : 'balanced';
+  const deviceRule = device === 'mobile' ? '393x852 mobile' : device === 'tablet' ? '768x1024 tablet' : device === 'desktop' ? '1440x1024 desktop' : 'deduza o tipo de tela pelo esboço';
+  const fidelityRule = fidelity === 'structure' ? 'priorize hierarquia e fluxo, simplificando detalhes' : fidelity === 'faithful' ? 'preserve o máximo possível da posição relativa, quantidade e proporções sugeridas' : 'equilibre fidelidade visual e uma estrutura de interface coerente';
+  const system = `Você interpreta rabiscos, wireframes de papel, screenshots e desenhos vetoriais e os converte em uma interface EDITÁVEL, não em uma imagem. Reconheça intenção estrutural: navbar, títulos, textos, botões, inputs, imagens, cards, itens de lista e espaços. Não invente conteúdo específico que não esteja legível; use rótulos neutros. ${fidelityRule}. Alvo: ${deviceRule}. Retorne somente JSON válido no formato {"frame":{"name":"...","preset":"mobile|tablet|desktop|watch|custom","width":393,"height":852,"direction":"column|row","gap":16,"padding":24,"align":"start|center|end|stretch","background":"#FFFFFF","blocks":[{"type":"navbar|text|button|input|image|card|list-item|spacer","label":"...","width":"fill|hug ou número","height":"hug ou número","padding":12,"radius":12,"background":"#F4F4F2","color":"#111111"}]},"notes":["..."],"uncertainties":["..."]}. Use apenas HEX de 6 dígitos nas cores.`;
+  const user = `Origem: ${String(source.name || 'esboço')}\nTipo: ${String(source.kind || 'image')}\nConverta os traços e regiões percebidas em blocos editáveis. Ordene os blocos na sequência visual mais provável. Se algo estiver ambíguo, ainda gere uma estrutura útil e registre a dúvida em uncertainties.`;
+  return { system, user };
+}
+
+async function callGeminiWireframe(system, user, source, maxOutputTokens = 3600, timeoutMs = 45000) {
+  if (source?.kind !== 'image' || !source?.url) {
+    const svg = String(source?.svg || '').slice(0, 70000);
+    return callGeminiStructured(system, `${user}\n\nSVG DO DESENHO VETORIAL:\n${svg}`, maxOutputTokens, timeoutMs, 0.12);
+  }
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const imageResponse = await fetchWithTimeout(String(source.url), {}, 12000);
+  if (!imageResponse.ok) throw new Error('Não foi possível ler a imagem enviada para interpretar o wireframe.');
+  const mimeType = String(imageResponse.headers.get('content-type') || 'image/png').split(';')[0];
+  if (!mimeType.startsWith('image/')) throw new Error('A origem enviada não é uma imagem válida.');
+  const bytes = Buffer.from(await imageResponse.arrayBuffer());
+  if (bytes.length > 4 * 1024 * 1024) throw new Error('A imagem é grande demais para interpretação. Use até 4 MB.');
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const response = await fetchWithTimeout(endpoint, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }, { inlineData: { mimeType, data: bytes.toString('base64') } }] }],
+      generationConfig: { temperature: 0.12, responseMimeType: 'application/json', maxOutputTokens }
+    })
+  }, timeoutMs);
+  const raw = await response.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu resposta inválida (HTTP ${response.status}).`); }
+  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part) => typeof part?.text === 'string' ? part.text : '').join('').trim();
+  if (!text) throw new Error('O Gemini não devolveu a estrutura do wireframe.');
+  return { text, provider: 'Gemini', model };
+}
+
 function ensureMagoHartmannReference(result, body) {
   if (body?.mediator?.id !== 'agent-mago' || !result || typeof result !== 'object') return result;
 
@@ -993,6 +1080,13 @@ function offlineInsight(body) {
 }
 
 async function generateMediatorInsight(body) {
+  if (body?.mode === 'wireframe-interpret') {
+    if (!body?.wireframeSource) throw new Error('Escolha um desenho ou imagem para interpretar.');
+    const { system, user } = buildWireframeInterpretationMessages(body);
+    const result = await callGeminiWireframe(system, user, body.wireframeSource, 3600, Number(process.env.AI_WIREFRAME_TIMEOUT_MS || 45000));
+    return { wireframeInterpretation: cleanWireframeInterpretationJson(result.text), provider: result.provider, model: result.model };
+  }
+
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
   }
