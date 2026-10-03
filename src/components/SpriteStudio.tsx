@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { BookOpen, Copy, Download, Info, Loader2, Pause, Play, Plus, RotateCcw, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
-import {
-  CharacterAccessory,
-  CharacterBodyShape,
-  CharacterBuilderConfig,
-  CharacterConceptSheet,
+import { BookOpen, Download, Info, Loader2, Pause, Play, Plus, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
+import type {
+  CharacterAppearance,
+  CharacterBodyPlan,
   CharacterExpression,
-  CharacterEyeStyle,
-  CharacterHairStyle,
-  CharacterHeadShape,
-  CharacterMouthStyle,
-  CharacterNoseStyle,
-  CharacterOutfitStyle,
-  CharacterPose,
+  CharacterFootStyle,
+  CharacterHornStyle,
+  CharacterMuzzleStyle,
+  CharacterPoseKind,
+  CharacterPoseReference,
+  CharacterProfile,
+  CharacterSpecies,
   CharacterSpriteDocument,
+  CharacterSurfaceStyle,
+  CharacterTailStyle,
+  CharacterView,
+  CharacterWingStyle,
   SpriteAnimation,
   SpriteAnimationKind,
   SpriteFrame,
@@ -39,1089 +41,626 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'builder' | 'concept' | 'poses' | 'animation' | 'ai';
+type Tab = 'builder' | 'profile' | 'poses' | 'animate' | 'ai';
 
-const makeId = (prefix = 'sprite') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-const esc = (s: string) => String(s || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
+type Option<T extends string> = { id: T; label: string; tip?: string };
+
+const id = (prefix = 'char') => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const esc = (value: string) => String(value || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m] as string));
 const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const normalizeHex = (value: string, fallback = '#111111') => {
-  const cleaned = String(value || '').trim().replace(/^#/, '').toUpperCase();
-  if (/^[0-9A-F]{3}$/.test(cleaned)) return `#${cleaned.split('').map((x) => x + x).join('')}`;
-  if (/^[0-9A-F]{6}$/.test(cleaned)) return `#${cleaned}`;
+  const clean = String(value || '').trim().replace(/^#/, '').toUpperCase();
+  if (/^[0-9A-F]{3}$/.test(clean)) return `#${clean.split('').map((x) => x + x).join('')}`;
+  if (/^[0-9A-F]{6}$/.test(clean)) return `#${clean}`;
   return fallback;
 };
-const deepClone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
-const KINDS: Array<{ id: SpriteAnimationKind; label: string }> = [
-  { id: 'idle', label: 'Idle' },
-  { id: 'walk', label: 'Andar' },
-  { id: 'run', label: 'Correr' },
-  { id: 'jump', label: 'Pular' },
-  { id: 'attack', label: 'Ação' },
-  { id: 'hurt', label: 'Reação' },
-  { id: 'custom', label: 'Custom' },
+const SPECIES: Option<CharacterSpecies>[] = [
+  { id: 'human', label: 'Humano' },
+  { id: 'anthropomorphic', label: 'Antropomorfo' },
+  { id: 'quadruped', label: 'Animal quadrúpede' },
+  { id: 'bird', label: 'Ave' },
+  { id: 'reptile', label: 'Réptil' },
+  { id: 'amphibian', label: 'Anfíbio' },
+  { id: 'fish', label: 'Peixe / aquático' },
+  { id: 'arthropod', label: 'Artrópode' },
+  { id: 'fantasy', label: 'Fantástico / híbrido' },
 ];
 
-const MOTIONS: Array<{ id: SpriteMotionPreset; label: string }> = [
-  { id: 'none', label: 'Sem movimento extra' },
-  { id: 'bob', label: 'Flutuar' },
-  { id: 'bounce', label: 'Bounce' },
-  { id: 'shake', label: 'Tremer' },
-  { id: 'pulse', label: 'Pulsar' },
-  { id: 'squash', label: 'Squash & stretch' },
+const BODY_PLANS: Option<CharacterBodyPlan>[] = [
+  { id: 'biped', label: 'Bípede' },
+  { id: 'quadruped', label: 'Quadrúpede' },
+  { id: 'avian', label: 'Alado / ave' },
+  { id: 'serpentine', label: 'Serpentino' },
+  { id: 'aquatic', label: 'Aquático' },
+  { id: 'six-limbed', label: '6 membros' },
+  { id: 'eight-limbed', label: '8 membros' },
+  { id: 'custom', label: 'Personalizado' },
 ];
 
-const BODY: Array<{ id: CharacterBodyShape; label: string; tip: string }> = [
-  { id: 'slim', label: 'Esguio', tip: 'Silhueta estreita pode sugerir leveza ou agilidade em algumas convenções gráficas.' },
-  { id: 'average', label: 'Equilibrado', tip: 'Boa base neutra para deixar pose, rosto e figurino assumirem mais protagonismo.' },
-  { id: 'athletic', label: 'Atlético', tip: 'Membros mais marcados podem reforçar energia, potência ou aventura.' },
-  { id: 'round', label: 'Arredondado', tip: 'Formas circulares costumam passar acolhimento e suavidade visual.' },
-  { id: 'triangle', label: 'Triangular', tip: 'Triângulos criam direção e tensão visual, úteis em personagens inquietos ou rápidos.' },
-  { id: 'square', label: 'Quadrado', tip: 'Retângulos e quadrados costumam comunicar estabilidade, robustez e peso.' },
+const HEADS = [
+  { id: 'round', label: 'Redonda' }, { id: 'oval', label: 'Oval' }, { id: 'square', label: 'Quadrada' },
+  { id: 'heart', label: 'Coração' }, { id: 'triangle', label: 'Triangular' }, { id: 'wide', label: 'Larga' },
+] as Option<CharacterAppearance['headShape']>[];
+const FACES = [
+  { id: 'soft', label: 'Suave' }, { id: 'angular', label: 'Angular' }, { id: 'long', label: 'Longo' }, { id: 'wide', label: 'Largo' },
+] as Option<CharacterAppearance['faceShape']>[];
+const EYES = [
+  { id: 'round', label: 'Redondos' }, { id: 'almond', label: 'Amendoados' }, { id: 'narrow', label: 'Estreitos' }, { id: 'dot', label: 'Pontos' }, { id: 'large', label: 'Grandes' },
+] as Option<CharacterAppearance['eyeStyle']>[];
+const BROWS = [
+  { id: 'none', label: 'Nenhuma' }, { id: 'soft', label: 'Suave' }, { id: 'straight', label: 'Reta' }, { id: 'arched', label: 'Arqueada' }, { id: 'bold', label: 'Marcada' },
+] as Option<CharacterAppearance['browStyle']>[];
+const NOSES = [
+  { id: 'none', label: 'Nenhum' }, { id: 'small', label: 'Pequeno' }, { id: 'straight', label: 'Reto' }, { id: 'wide', label: 'Largo' },
+] as Option<CharacterAppearance['noseStyle']>[];
+const MOUTHS = [
+  { id: 'line', label: 'Linha' }, { id: 'smile', label: 'Sorriso' }, { id: 'full', label: 'Cheia' }, { id: 'small', label: 'Pequena' },
+] as Option<CharacterAppearance['mouthStyle']>[];
+const EARS = [
+  { id: 'none', label: 'Nenhuma' }, { id: 'simple', label: 'Simples' }, { id: 'round', label: 'Redonda' }, { id: 'pointed', label: 'Pontuda' },
+  { id: 'long', label: 'Longa' }, { id: 'floppy', label: 'Caída' }, { id: 'large', label: 'Grande' }, { id: 'fin', label: 'Barbatana' },
+] as Option<CharacterAppearance['earStyle']>[];
+const HAIR = [
+  { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Curto' }, { id: 'bob', label: 'Bob' }, { id: 'long', label: 'Longo' },
+  { id: 'curly', label: 'Cacheado' }, { id: 'spiky', label: 'Espetado' }, { id: 'bun', label: 'Coque' },
+] as Option<CharacterAppearance['hairStyle']>[];
+const MUZZLES: Option<CharacterMuzzleStyle>[] = [
+  { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Focinho curto' }, { id: 'round', label: 'Focinho redondo' }, { id: 'long', label: 'Focinho longo' },
+  { id: 'beak-small', label: 'Bico curto' }, { id: 'beak-long', label: 'Bico longo' }, { id: 'beak-hooked', label: 'Bico curvo' },
+];
+const TAILS: Option<CharacterTailStyle>[] = [
+  { id: 'none', label: 'Nenhuma' }, { id: 'short', label: 'Curta' }, { id: 'long', label: 'Longa' }, { id: 'fluffy', label: 'Peluda' },
+  { id: 'curled', label: 'Enrolada' }, { id: 'reptile', label: 'Réptil' }, { id: 'fish', label: 'Cauda de peixe' },
+];
+const WINGS: Option<CharacterWingStyle>[] = [
+  { id: 'none', label: 'Nenhuma' }, { id: 'feather', label: 'Penas' }, { id: 'bat', label: 'Membrana' }, { id: 'fin', label: 'Barbatana' },
+];
+const HORNS: Option<CharacterHornStyle>[] = [
+  { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Curtos' }, { id: 'long', label: 'Longos' }, { id: 'antlers', label: 'Galhadas' }, { id: 'antennae', label: 'Antenas' },
+];
+const SURFACES: Option<CharacterSurfaceStyle>[] = [
+  { id: 'skin', label: 'Pele' }, { id: 'fur-short', label: 'Pelo curto' }, { id: 'fur-long', label: 'Pelo longo' }, { id: 'feathers', label: 'Plumas' },
+  { id: 'scales', label: 'Escamas' }, { id: 'shell', label: 'Casco / carapaça' }, { id: 'chitin', label: 'Quitina' },
+];
+const FEET: Option<CharacterFootStyle>[] = [
+  { id: 'feet', label: 'Pés' }, { id: 'paws', label: 'Patas' }, { id: 'hooves', label: 'Cascos' }, { id: 'claws', label: 'Garras' }, { id: 'talons', label: 'Talões' }, { id: 'fins', label: 'Nadadeiras' },
+];
+const BODY_SHAPES = [
+  { id: 'slim', label: 'Esguio' }, { id: 'average', label: 'Equilibrado' }, { id: 'athletic', label: 'Atlético' }, { id: 'stocky', label: 'Robusto' }, { id: 'chibi', label: 'Chibi / compacto' },
+] as Option<CharacterAppearance['bodyShape']>[];
+const TORSOS = [
+  { id: 'rectangle', label: 'Retângulo' }, { id: 'trapezoid', label: 'Trapézio' }, { id: 'round', label: 'Redondo' }, { id: 'triangle', label: 'Triângulo' },
+] as Option<CharacterAppearance['torsoShape']>[];
+const ARMS = [{ id: 'thin', label: 'Finos' }, { id: 'regular', label: 'Regulares' }, { id: 'strong', label: 'Fortes' }] as Option<CharacterAppearance['armStyle']>[];
+const LEGS = [{ id: 'short', label: 'Curtas' }, { id: 'regular', label: 'Regulares' }, { id: 'long', label: 'Longas' }] as Option<CharacterAppearance['legStyle']>[];
+const HANDS = [{ id: 'mitten', label: 'Luva / simples' }, { id: 'simple', label: 'Simples' }, { id: 'defined', label: 'Definidas' }] as Option<CharacterAppearance['handStyle']>[];
+const OUTFITS = [
+  { id: 'none', label: 'Nenhum' }, { id: 'basic', label: 'Básico' }, { id: 'sport', label: 'Esportivo' }, { id: 'formal', label: 'Formal' },
+  { id: 'fantasy', label: 'Fantasia' }, { id: 'tech', label: 'Tech' }, { id: 'street', label: 'Street' },
+] as Option<CharacterAppearance['outfitStyle']>[];
+const ACCESSORIES = [
+  { id: 'none', label: 'Nenhum' }, { id: 'glasses', label: 'Óculos' }, { id: 'hat', label: 'Chapéu' }, { id: 'scarf', label: 'Cachecol' }, { id: 'backpack', label: 'Mochila' }, { id: 'headphones', label: 'Fones' },
+] as Option<CharacterAppearance['accessory']>[];
+
+const EXPRESSIONS: CharacterExpression[] = ['neutral', 'happy', 'sad', 'angry', 'surprised', 'determined'];
+const VIEWS: CharacterView[] = ['front', 'three-quarter', 'side', 'back'];
+const POSES: Array<{ kind: CharacterPoseKind; label: string }> = [
+  { kind: 'neutral', label: 'Neutra' }, { kind: 'wave', label: 'Aceno' }, { kind: 'walk', label: 'Caminhada' }, { kind: 'run', label: 'Corrida' },
+  { kind: 'jump', label: 'Salto' }, { kind: 'sit', label: 'Sentado' }, { kind: 'action', label: 'Ação' },
+];
+const MOTIONS: Option<SpriteMotionPreset>[] = [
+  { id: 'none', label: 'Sem motion' }, { id: 'bob', label: 'Flutuar' }, { id: 'bounce', label: 'Bounce' }, { id: 'shake', label: 'Tremer' }, { id: 'pulse', label: 'Pulsar' }, { id: 'squash', label: 'Squash & stretch' },
+];
+const ANIMATION_KINDS: Option<SpriteAnimationKind>[] = [
+  { id: 'idle', label: 'Idle' }, { id: 'walk', label: 'Andar' }, { id: 'run', label: 'Correr' }, { id: 'jump', label: 'Pular' }, { id: 'attack', label: 'Ação' }, { id: 'hurt', label: 'Reação' }, { id: 'custom', label: 'Custom' },
 ];
 
-const HEAD: Array<{ id: CharacterHeadShape; label: string; tip: string }> = [
-  { id: 'round', label: 'Redonda', tip: 'Muito usada para personagens amigáveis, jovens ou mascotes.' },
-  { id: 'oval', label: 'Oval', tip: 'Versátil para estilos entre cartoon e semirrealista.' },
-  { id: 'square', label: 'Quadrada', tip: 'Valoriza planos, estrutura e leitura mais firme.' },
-  { id: 'heart', label: 'Coração', tip: 'Cria foco no rosto com leitura mais delicada.' },
-  { id: 'triangle', label: 'Triangular', tip: 'Acentua direção e contraste; pode ficar mais excêntrica.' },
-  { id: 'long', label: 'Alongada', tip: 'Ajuda a diferenciar idade, ritmo e caráter visual.' },
-];
+const DEFAULT_APPEARANCE: CharacterAppearance = {
+  species: 'human', bodyPlan: 'biped', speciesPreset: 'human', headShape: 'oval', faceShape: 'soft', eyeStyle: 'dot', browStyle: 'soft', noseStyle: 'small', mouthStyle: 'line', earStyle: 'simple', hairStyle: 'short',
+  muzzleStyle: 'none', tailStyle: 'none', wingStyle: 'none', hornStyle: 'none', surfaceStyle: 'skin', footStyle: 'feet', whiskers: false,
+  bodyShape: 'average', torsoShape: 'rectangle', armStyle: 'regular', legStyle: 'regular', handStyle: 'simple', outfitStyle: 'basic', accessory: 'none',
+  headToBodyRatio: 4.8, shoulderWidth: 1, limbLength: 1, bodyWidth: 1,
+  skinColor: '#F1C7A5', surfaceColor: '#F1C7A5', hairColor: '#2B2118', eyeColor: '#111111', outfitPrimary: '#4FD9D3', outfitSecondary: '#FFFFFF', lineColor: '#111111',
+};
 
-const EYES: Array<{ id: CharacterEyeStyle; label: string }> = [
-  { id: 'dot', label: 'Pontos' },
-  { id: 'round', label: 'Redondos' },
-  { id: 'almond', label: 'Amendoados' },
-  { id: 'large', label: 'Grandes' },
-  { id: 'narrow', label: 'Estreitos' },
-  { id: 'closed', label: 'Fechados' },
-];
+const DEFAULT_PROFILE: CharacterProfile = {
+  role: '', ageBand: '', personality: '', motivation: '', backstory: '', keywords: [], silhouetteIntent: '', shapeLanguageRationale: '', proportionRationale: '', colorRationale: '', costumeRationale: '',
+};
 
-const NOSES: Array<{ id: CharacterNoseStyle; label: string }> = [
-  { id: 'dot', label: 'Ponto' },
-  { id: 'small', label: 'Pequeno' },
-  { id: 'straight', label: 'Reto' },
-  { id: 'round', label: 'Arredondado' },
-  { id: 'none', label: 'Sem nariz' },
-];
+const DEFAULT_POSES: CharacterPoseReference[] = POSES.map((pose) => ({ id: `pose-${pose.kind}`, name: pose.label, kind: pose.kind, view: pose.kind === 'walk' || pose.kind === 'run' ? 'side' : 'three-quarter' }));
 
-const MOUTHS: Array<{ id: CharacterMouthStyle; label: string }> = [
-  { id: 'smile', label: 'Sorriso' },
-  { id: 'neutral', label: 'Neutra' },
-  { id: 'open', label: 'Aberta' },
-  { id: 'small', label: 'Pequena' },
-  { id: 'frown', label: 'Tensa' },
-];
-
-const HAIR: Array<{ id: CharacterHairStyle; label: string }> = [
-  { id: 'none', label: 'Sem cabelo' },
-  { id: 'short', label: 'Curto' },
-  { id: 'bob', label: 'Bob' },
-  { id: 'curly', label: 'Cacheado' },
-  { id: 'long', label: 'Longo' },
-  { id: 'mohawk', label: 'Moicano' },
-];
-
-const OUTFITS: Array<{ id: CharacterOutfitStyle; label: string }> = [
-  { id: 'basic', label: 'Básico' },
-  { id: 'shirt', label: 'Camiseta' },
-  { id: 'jacket', label: 'Jaqueta' },
-  { id: 'dress', label: 'Vestido' },
-  { id: 'overalls', label: 'Jardineira' },
-  { id: 'armor', label: 'Armadura' },
-];
-
-const ACCESSORIES: Array<{ id: CharacterAccessory; label: string }> = [
-  { id: 'none', label: 'Nenhum' },
-  { id: 'glasses', label: 'Óculos' },
-  { id: 'hat', label: 'Chapéu' },
-  { id: 'cap', label: 'Boné' },
-  { id: 'scarf', label: 'Cachecol' },
-  { id: 'bag', label: 'Bolsa' },
+const PRESETS: Array<{ id: string; label: string; icon: string; description: string; patch: Partial<CharacterAppearance> }> = [
+  { id: 'human', label: 'Humano', icon: '🙂', description: 'Base bípede humana.', patch: { species: 'human', bodyPlan: 'biped', speciesPreset: 'human', earStyle: 'simple', muzzleStyle: 'none', tailStyle: 'none', wingStyle: 'none', hornStyle: 'none', surfaceStyle: 'skin', footStyle: 'feet', browStyle: 'soft', whiskers: false } },
+  { id: 'cat', label: 'Gato', icon: '🐈', description: 'Quadrúpede felino.', patch: { species: 'quadruped', bodyPlan: 'quadruped', speciesPreset: 'cat', earStyle: 'pointed', muzzleStyle: 'short', tailStyle: 'long', surfaceStyle: 'fur-short', footStyle: 'paws', browStyle: 'none', noseStyle: 'small', hairStyle: 'none', whiskers: true, bodyShape: 'slim' } },
+  { id: 'dog', label: 'Cão', icon: '🐕', description: 'Quadrúpede canino.', patch: { species: 'quadruped', bodyPlan: 'quadruped', speciesPreset: 'dog', earStyle: 'floppy', muzzleStyle: 'long', tailStyle: 'curled', surfaceStyle: 'fur-short', footStyle: 'paws', browStyle: 'none', hairStyle: 'none', whiskers: false, bodyShape: 'average' } },
+  { id: 'rabbit', label: 'Coelho', icon: '🐇', description: 'Orelhas longas e corpo compacto.', patch: { species: 'quadruped', bodyPlan: 'quadruped', speciesPreset: 'rabbit', earStyle: 'long', muzzleStyle: 'short', tailStyle: 'short', surfaceStyle: 'fur-short', footStyle: 'paws', browStyle: 'none', hairStyle: 'none', whiskers: true, bodyShape: 'chibi', headToBodyRatio: 3.6 } },
+  { id: 'fox', label: 'Raposa', icon: '🦊', description: 'Silhueta triangular e cauda forte.', patch: { species: 'quadruped', bodyPlan: 'quadruped', speciesPreset: 'fox', earStyle: 'pointed', muzzleStyle: 'long', tailStyle: 'fluffy', surfaceStyle: 'fur-long', footStyle: 'paws', browStyle: 'none', hairStyle: 'none', whiskers: true, bodyShape: 'slim' } },
+  { id: 'bear', label: 'Urso', icon: '🐻', description: 'Massas redondas e corpo robusto.', patch: { species: 'quadruped', bodyPlan: 'quadruped', speciesPreset: 'bear', earStyle: 'round', muzzleStyle: 'round', tailStyle: 'short', surfaceStyle: 'fur-long', footStyle: 'paws', browStyle: 'none', hairStyle: 'none', whiskers: false, bodyShape: 'stocky', bodyWidth: 1.2 } },
+  { id: 'bird', label: 'Ave', icon: '🐦', description: 'Bico, asas e plumagem.', patch: { species: 'bird', bodyPlan: 'avian', speciesPreset: 'bird', earStyle: 'none', muzzleStyle: 'beak-small', tailStyle: 'long', wingStyle: 'feather', surfaceStyle: 'feathers', footStyle: 'talons', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
+  { id: 'reptile', label: 'Lagarto', icon: '🦎', description: 'Escamas, garras e cauda reptiliana.', patch: { species: 'reptile', bodyPlan: 'quadruped', speciesPreset: 'lizard', earStyle: 'none', muzzleStyle: 'long', tailStyle: 'reptile', surfaceStyle: 'scales', footStyle: 'claws', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
+  { id: 'fish', label: 'Peixe', icon: '🐟', description: 'Plano aquático e nadadeiras.', patch: { species: 'fish', bodyPlan: 'aquatic', speciesPreset: 'fish', earStyle: 'none', muzzleStyle: 'none', tailStyle: 'fish', wingStyle: 'fin', surfaceStyle: 'scales', footStyle: 'fins', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
+  { id: 'insect', label: 'Inseto', icon: '🪲', description: 'Seis membros e antenas.', patch: { species: 'arthropod', bodyPlan: 'six-limbed', speciesPreset: 'insect', earStyle: 'none', muzzleStyle: 'none', tailStyle: 'none', hornStyle: 'antennae', surfaceStyle: 'chitin', footStyle: 'claws', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
+  { id: 'spider', label: 'Aranha', icon: '🕷️', description: 'Oito membros e corpo segmentado.', patch: { species: 'arthropod', bodyPlan: 'eight-limbed', speciesPreset: 'spider', earStyle: 'none', muzzleStyle: 'none', tailStyle: 'none', hornStyle: 'none', surfaceStyle: 'chitin', footStyle: 'claws', browStyle: 'none', noseStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
+  { id: 'dragon', label: 'Dragão', icon: '🐉', description: 'Híbrido fantástico com asas e chifres.', patch: { species: 'fantasy', bodyPlan: 'quadruped', speciesPreset: 'dragon', earStyle: 'pointed', muzzleStyle: 'long', tailStyle: 'reptile', wingStyle: 'bat', hornStyle: 'long', surfaceStyle: 'scales', footStyle: 'claws', browStyle: 'none', hairStyle: 'none', outfitStyle: 'none' } },
 ];
 
 const REFERENCES = [
-  'Tom Bancroft — Creating Characters with Personality.',
-  'Stephen Silver — The Silver Way.',
-  'Bryan Tillman — Creative Character Design.',
-  'Preston Blair — Cartoon Animation.',
-  'Richard Williams — The Animator’s Survival Kit.',
-  'Andrew Loomis — construção e proporção de figura.',
-  'Model sheet / turnaround / expression sheet / pose sheet como convenções de concept art e animação.',
-];
-
-const defaultBuilder: CharacterBuilderConfig = {
-  bodyShape: 'average',
-  headShape: 'round',
-  eyeStyle: 'dot',
-  noseStyle: 'small',
-  mouthStyle: 'smile',
-  hairStyle: 'short',
-  outfitStyle: 'shirt',
-  accessory: 'none',
-  headToBodyRatio: 4.5,
-  shoulderWidth: 1,
-  torsoLength: 1,
-  limbLength: 1,
-  handScale: 1,
-  footScale: 1,
-  skinColor: '#F1C7A5',
-  hairColor: '#2B2118',
-  outfitColor: '#4FD9D3',
-  accentColor: '#FF13F0',
-  strokeColor: '#111111',
-  strokeWidth: 3,
-};
-
-const defaultConcept: CharacterConceptSheet = {
-  role: '',
-  archetype: '',
-  ageImpression: '',
-  personality: [],
-  keywords: [],
-  backstory: '',
-  silhouetteIntent: '',
-  shapeLanguage: '',
-  colorIntent: '',
-  movementNotes: '',
-  accessibilityNotes: '',
-  designRationale: '',
-};
-
-const defaultExpressions: CharacterExpression[] = [
-  { id: 'exp-neutral', name: 'Neutro', mouth: 'neutral', eyes: 'dot' },
-  { id: 'exp-happy', name: 'Alegria', mouth: 'smile', eyes: 'round' },
-  { id: 'exp-surprise', name: 'Surpresa', mouth: 'open', eyes: 'large' },
-  { id: 'exp-tension', name: 'Tensão', mouth: 'frown', eyes: 'narrow' },
-];
-
-const defaultPoses: CharacterPose[] = [
-  { id: 'pose-front', name: 'Frente', kind: 'front' },
-  { id: 'pose-side', name: 'Perfil', kind: 'side' },
-  { id: 'pose-back', name: 'Costas', kind: 'back' },
-  { id: 'pose-three', name: '3/4', kind: 'three-quarter' },
-  { id: 'pose-idle', name: 'Idle', kind: 'idle' },
-  { id: 'pose-walk', name: 'Caminhada', kind: 'walk' },
-  { id: 'pose-run', name: 'Corrida', kind: 'run' },
-  { id: 'pose-action', name: 'Ação', kind: 'action' },
+  'Tom Bancroft — Creating Characters with Personality: silhueta, contraste e apelo.',
+  'Stephen Silver — The Silver Way: iteração, clareza e consistência de model sheet.',
+  'Bryan Tillman — Creative Character Design: shape language contextualizada.',
+  'Preston Blair — Cartoon Animation: pose, line of action e leitura de movimento.',
+  'Richard Williams — The Animator’s Survival Kit: timing, spacing e ciclos.',
+  'Model sheet, turnaround, expression sheet e pose sheet: documentação visual para manter consistência.',
+  'Para animais e criaturas, observar anatomia, locomoção e centro de massa reais antes de estilizar.',
 ];
 
 const blankAnimation = (kind: SpriteAnimationKind = 'idle'): SpriteAnimation => ({
-  id: makeId('anim'),
-  name: kind === 'custom' ? 'Animação' : KINDS.find((item) => item.id === kind)?.label || 'Animação',
-  kind,
-  fps: kind === 'run' ? 12 : 8,
-  loop: kind !== 'jump' && kind !== 'attack' && kind !== 'hurt',
-  motion: kind === 'idle' ? 'bob' : 'none',
-  frames: [],
+  id: id('anim'), name: ANIMATION_KINDS.find((item) => item.id === kind)?.label || 'Animação', kind, fps: kind === 'run' ? 12 : 8, loop: !['jump', 'attack', 'hurt'].includes(kind), motion: kind === 'idle' ? 'bob' : 'none', frames: [],
 });
-
-const PRESETS: Array<{ id: string; label: string; description: string; builder: Partial<CharacterBuilderConfig>; concept: Partial<CharacterConceptSheet> }> = [
-  {
-    id: 'kid-explorer',
-    label: 'Exploradora',
-    description: 'Cabeça maior, corpo curto e leitura acolhedora.',
-    builder: { headShape: 'round', bodyShape: 'average', outfitStyle: 'overalls', hairStyle: 'bob', headToBodyRatio: 3.9, limbLength: 0.9, shoulderWidth: 0.92, outfitColor: '#5FA7FF', accentColor: '#F7D46E' },
-    concept: { archetype: 'curiosa', silhouetteIntent: 'compacta e amigável', shapeLanguage: 'círculos e ovais', movementNotes: 'saltitante e curiosa' },
-  },
-  {
-    id: 'wizard-companion',
-    label: 'Mago',
-    description: 'Leitura de companion fantástico, inspirado em model sheets.',
-    builder: { headShape: 'oval', bodyShape: 'triangle', outfitStyle: 'armor', accessory: 'hat', hairStyle: 'short', headToBodyRatio: 5.2, torsoLength: 1.1, limbLength: 1.05, outfitColor: '#B55E63', accentColor: '#EAC15A' },
-    concept: { archetype: 'mentor', silhouetteIntent: 'capa + chapéu reconhecíveis', shapeLanguage: 'triângulos suaves', movementNotes: 'calmo, mas expressivo' },
-  },
-  {
-    id: 'sprite-rpg',
-    label: 'Sprite RPG',
-    description: 'Pensado para virar sprite sheet local.',
-    builder: { headShape: 'round', bodyShape: 'athletic', outfitStyle: 'jacket', hairStyle: 'mohawk', headToBodyRatio: 4.2, limbLength: 0.95, strokeWidth: 3.5, outfitColor: '#B8743C', accentColor: '#F6E27A' },
-    concept: { archetype: 'jogável', silhouetteIntent: 'silhueta legível em miniatura', shapeLanguage: 'formas simples com contraste', movementNotes: 'frames claros e repetíveis' },
-  },
-  {
-    id: 'mascot',
-    label: 'Mascote',
-    description: 'Leitura fofa e síntese visual forte.',
-    builder: { headShape: 'round', bodyShape: 'round', eyeStyle: 'large', mouthStyle: 'smile', hairStyle: 'none', accessory: 'scarf', headToBodyRatio: 3.2, handScale: 1.1, footScale: 1.05, outfitColor: '#61DDD7', accentColor: '#FF84C1' },
-    concept: { archetype: 'mascote', silhouetteIntent: 'massas arredondadas e memoráveis', shapeLanguage: 'círculos', movementNotes: 'gestos abertos' },
-  },
-];
 
 export const blankSpriteCharacter = (): CharacterSpriteDocument => ({
-  title: 'Personagem',
-  characterName: 'Novo personagem',
-  description: '',
-  width: 360,
-  height: 520,
-  background: '#F4F4F2',
-  pixelated: false,
-  animations: [blankAnimation('idle')],
-  builder: { ...defaultBuilder },
-  concept: { ...defaultConcept },
-  poses: defaultPoses.map((item) => ({ ...item })),
-  expressions: defaultExpressions.map((item) => ({ ...item })),
-  palette: ['#F1C7A5', '#2B2118', '#4FD9D3', '#FF13F0', '#111111'],
-  updatedAt: new Date().toISOString(),
+  title: 'Personagem', characterName: 'Novo personagem', description: '', width: 360, height: 520, background: '#F4F4F2', pixelated: false,
+  appearance: { ...DEFAULT_APPEARANCE }, profile: { ...DEFAULT_PROFILE }, prompt: '', generatedNotes: [], poses: DEFAULT_POSES.map((pose) => ({ ...pose })), expressions: [...EXPRESSIONS],
+  activeView: 'front', activeExpression: 'neutral', activePose: 'neutral', animations: [blankAnimation('idle')], updatedAt: new Date().toISOString(),
 });
 
-function InfoTip({ children }: { children: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="relative inline-flex ml-1 align-middle">
-      <button
-        type="button"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen((value) => !value);
-        }}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        className="h-6 w-6 rounded-full inline-flex items-center justify-center hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-black"
-        aria-label="Explicar escolha"
-      >
-        <Info size={13} className="text-neutral-500" />
-      </button>
-      {open && (
-        <span className="absolute z-[180] left-1/2 bottom-full mb-2 w-64 max-w-[75vw] -translate-x-1/2 rounded-xl bg-black text-white p-3 text-[10px] leading-relaxed shadow-xl">
-          {children}
-        </span>
-      )}
-    </span>
-  );
+function mergeDocument(document: CharacterSpriteDocument): CharacterSpriteDocument {
+  const base = blankSpriteCharacter();
+  return {
+    ...base,
+    ...document,
+    appearance: { ...DEFAULT_APPEARANCE, ...(document.appearance || {}) },
+    profile: { ...DEFAULT_PROFILE, ...(document.profile || {}) },
+    poses: document.poses?.length ? document.poses.map((pose) => ({ ...pose })) : base.poses,
+    expressions: document.expressions?.length ? [...document.expressions] : base.expressions,
+    animations: document.animations?.length ? document.animations.map((animation) => ({ ...animation, frames: (animation.frames || []).map((frame) => ({ ...frame })) })) : base.animations,
+  };
 }
 
-function headPath(shape: CharacterHeadShape, cx: number, cy: number, w: number, h: number) {
-  if (shape === 'square') return `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="${w * 0.14}"/>`;
-  if (shape === 'heart') return `<path d="M ${cx} ${cy + h * 0.48} C ${cx - w * 0.55} ${cy + h * 0.05}, ${cx - w * 0.58} ${cy - h * 0.42}, ${cx} ${cy - h * 0.18} C ${cx + w * 0.58} ${cy - h * 0.42}, ${cx + w * 0.55} ${cy + h * 0.05}, ${cx} ${cy + h * 0.48} Z"/>`;
-  if (shape === 'triangle') return `<path d="M ${cx} ${cy + h * 0.48} L ${cx - w * 0.44} ${cy - h * 0.32} Q ${cx} ${cy - h * 0.64} ${cx + w * 0.44} ${cy - h * 0.32} Z"/>`;
-  if (shape === 'long') return `<ellipse cx="${cx}" cy="${cy}" rx="${w * 0.38}" ry="${h * 0.6}"/>`;
-  if (shape === 'oval') return `<ellipse cx="${cx}" cy="${cy}" rx="${w * 0.48}" ry="${h * 0.56}"/>`;
-  return `<circle cx="${cx}" cy="${cy}" r="${Math.min(w, h) * 0.5}"/>`;
+function headShapeMarkup(a: CharacterAppearance, cx: number, cy: number, w: number, h: number, fill: string) {
+  const common = `fill="${fill}"`;
+  if (a.headShape === 'square') return `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="${w * 0.12}" ${common}/>`;
+  if (a.headShape === 'heart') return `<path d="M ${cx} ${cy + h * .46} C ${cx - w * .55} ${cy + h * .08}, ${cx - w * .56} ${cy - h * .38}, ${cx} ${cy - h * .2} C ${cx + w * .56} ${cy - h * .38}, ${cx + w * .55} ${cy + h * .08}, ${cx} ${cy + h * .46} Z" ${common}/>`;
+  if (a.headShape === 'triangle') return `<path d="M ${cx} ${cy + h * .48} L ${cx - w * .48} ${cy - h * .34} Q ${cx} ${cy - h * .58} ${cx + w * .48} ${cy - h * .34} Z" ${common}/>`;
+  if (a.headShape === 'wide') return `<ellipse cx="${cx}" cy="${cy}" rx="${w * .58}" ry="${h * .43}" ${common}/>`;
+  if (a.headShape === 'round') return `<circle cx="${cx}" cy="${cy}" r="${Math.min(w, h) * .5}" ${common}/>`;
+  return `<ellipse cx="${cx}" cy="${cy}" rx="${w * .46}" ry="${h * .54}" ${common}/>`;
 }
 
-function hairPath(style: CharacterHairStyle, cx: number, cy: number, w: number, h: number) {
+function earsMarkup(a: CharacterAppearance, cx: number, cy: number, w: number, h: number, fill: string) {
+  if (a.earStyle === 'none') return '';
+  if (a.earStyle === 'pointed') return `<path d="M ${cx - w * .42} ${cy - h * .3} L ${cx - w * .22} ${cy - h * .78} L ${cx - w * .08} ${cy - h * .28} Z" fill="${fill}"/><path d="M ${cx + w * .42} ${cy - h * .3} L ${cx + w * .22} ${cy - h * .78} L ${cx + w * .08} ${cy - h * .28} Z" fill="${fill}"/>`;
+  if (a.earStyle === 'long') return `<ellipse cx="${cx - w * .22}" cy="${cy - h * .64}" rx="${w * .11}" ry="${h * .42}" fill="${fill}" transform="rotate(-8 ${cx - w * .22} ${cy - h * .64})"/><ellipse cx="${cx + w * .22}" cy="${cy - h * .64}" rx="${w * .11}" ry="${h * .42}" fill="${fill}" transform="rotate(8 ${cx + w * .22} ${cy - h * .64})"/>`;
+  if (a.earStyle === 'floppy') return `<ellipse cx="${cx - w * .45}" cy="${cy + h * .05}" rx="${w * .16}" ry="${h * .32}" fill="${fill}" transform="rotate(18 ${cx - w * .45} ${cy + h * .05})"/><ellipse cx="${cx + w * .45}" cy="${cy + h * .05}" rx="${w * .16}" ry="${h * .32}" fill="${fill}" transform="rotate(-18 ${cx + w * .45} ${cy + h * .05})"/>`;
+  if (a.earStyle === 'large') return `<ellipse cx="${cx - w * .48}" cy="${cy}" rx="${w * .22}" ry="${h * .32}" fill="${fill}"/><ellipse cx="${cx + w * .48}" cy="${cy}" rx="${w * .22}" ry="${h * .32}" fill="${fill}"/>`;
+  if (a.earStyle === 'fin') return `<path d="M ${cx - w * .45} ${cy - h * .05} L ${cx - w * .8} ${cy - h * .28} L ${cx - w * .68} ${cy + h * .16} Z" fill="${fill}"/><path d="M ${cx + w * .45} ${cy - h * .05} L ${cx + w * .8} ${cy - h * .28} L ${cx + w * .68} ${cy + h * .16} Z" fill="${fill}"/>`;
+  if (a.earStyle === 'round') return `<circle cx="${cx - w * .45}" cy="${cy - h * .05}" r="${w * .16}" fill="${fill}"/><circle cx="${cx + w * .45}" cy="${cy - h * .05}" r="${w * .16}" fill="${fill}"/>`;
+  return `<ellipse cx="${cx - w * .46}" cy="${cy}" rx="${w * .12}" ry="${h * .18}" fill="${fill}"/><ellipse cx="${cx + w * .46}" cy="${cy}" rx="${w * .12}" ry="${h * .18}" fill="${fill}"/>`;
+}
+
+function hornsMarkup(a: CharacterAppearance, cx: number, cy: number, w: number, h: number, line: string) {
+  if (!a.hornStyle || a.hornStyle === 'none') return '';
+  if (a.hornStyle === 'antennae') return `<path d="M ${cx - w * .2} ${cy - h * .42} Q ${cx - w * .42} ${cy - h * .82} ${cx - w * .58} ${cy - h * .92}" fill="none" stroke="${line}"/><circle cx="${cx - w * .58}" cy="${cy - h * .92}" r="5" fill="${line}"/><path d="M ${cx + w * .2} ${cy - h * .42} Q ${cx + w * .42} ${cy - h * .82} ${cx + w * .58} ${cy - h * .92}" fill="none" stroke="${line}"/><circle cx="${cx + w * .58}" cy="${cy - h * .92}" r="5" fill="${line}"/>`;
+  if (a.hornStyle === 'antlers') return `<path d="M ${cx - w * .25} ${cy - h * .42} q -18 -34 -26 -58 m 10 22 l -20 -18 m 28 2 l 12 -24 M ${cx + w * .25} ${cy - h * .42} q 18 -34 26 -58 m -10 22 l 20 -18 m -28 2 l -12 -24" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/>`;
+  const len = a.hornStyle === 'long' ? h * .5 : h * .28;
+  return `<path d="M ${cx - w * .25} ${cy - h * .38} l -${w * .12} -${len} l ${w * .25} ${len * .75} Z" fill="${line}"/><path d="M ${cx + w * .25} ${cy - h * .38} l ${w * .12} -${len} l -${w * .25} ${len * .75} Z" fill="${line}"/>`;
+}
+
+function muzzleMarkup(a: CharacterAppearance, cx: number, cy: number, scale: number, body: string, line: string) {
+  const style = a.muzzleStyle || 'none';
   if (style === 'none') return '';
-  if (style === 'short') return `<path d="M ${cx - w * 0.44} ${cy - h * 0.12} Q ${cx - w * 0.32} ${cy - h * 0.6} ${cx} ${cy - h * 0.58} Q ${cx + w * 0.32} ${cy - h * 0.6} ${cx + w * 0.44} ${cy - h * 0.12} L ${cx + w * 0.32} ${cy + h * 0.12} Q ${cx} ${cy - h * 0.02} ${cx - w * 0.32} ${cy + h * 0.12} Z"/>`;
-  if (style === 'bob') return `<path d="M ${cx - w * 0.46} ${cy - h * 0.1} Q ${cx - w * 0.42} ${cy - h * 0.62} ${cx} ${cy - h * 0.58} Q ${cx + w * 0.42} ${cy - h * 0.62} ${cx + w * 0.46} ${cy - h * 0.1} L ${cx + w * 0.36} ${cy + h * 0.36} Q ${cx} ${cy + h * 0.46} ${cx - w * 0.36} ${cy + h * 0.36} Z"/>`;
-  if (style === 'curly') return `<path d="M ${cx - w * 0.4} ${cy - h * 0.02} C ${cx - w * 0.58} ${cy - h * 0.22}, ${cx - w * 0.52} ${cy - h * 0.6}, ${cx - w * 0.18} ${cy - h * 0.58} C ${cx - w * 0.08} ${cy - h * 0.75}, ${cx + w * 0.16} ${cy - h * 0.75}, ${cx + w * 0.18} ${cy - h * 0.56} C ${cx + w * 0.5} ${cy - h * 0.58}, ${cx + w * 0.58} ${cy - h * 0.2}, ${cx + w * 0.4} ${cy - h * 0.02} C ${cx + w * 0.52} ${cy + h * 0.12}, ${cx + w * 0.3} ${cy + h * 0.4}, ${cx} ${cy + h * 0.42} C ${cx - w * 0.3} ${cy + h * 0.4}, ${cx - w * 0.52} ${cy + h * 0.12}, ${cx - w * 0.4} ${cy - h * 0.02} Z"/>`;
-  if (style === 'long') return `<path d="M ${cx - w * 0.44} ${cy - h * 0.08} Q ${cx - w * 0.38} ${cy - h * 0.62} ${cx} ${cy - h * 0.58} Q ${cx + w * 0.38} ${cy - h * 0.62} ${cx + w * 0.44} ${cy - h * 0.08} L ${cx + w * 0.34} ${cy + h * 0.62} Q ${cx} ${cy + h * 0.52} ${cx - w * 0.34} ${cy + h * 0.62} Z"/>`;
-  return `<path d="M ${cx - w * 0.12} ${cy - h * 0.6} L ${cx + w * 0.12} ${cy - h * 0.6} L ${cx + w * 0.2} ${cy - h * 1.02} L ${cx} ${cy - h * 1.2} L ${cx - w * 0.2} ${cy - h * 1.02} Z"/>`;
+  if (style.startsWith('beak')) {
+    const length = style === 'beak-long' ? 46 : style === 'beak-hooked' ? 34 : 24;
+    const hook = style === 'beak-hooked' ? 12 : 0;
+    return `<path d="M ${cx - 4} ${cy + 7} L ${cx + length} ${cy + 15} L ${cx + 6} ${cy + 27 + hook} Z" fill="${a.outfitSecondary}" stroke="${line}"/>`;
+  }
+  const w = style === 'long' ? 48 : style === 'round' ? 40 : 32;
+  const h = style === 'long' ? 30 : 26;
+  return `<ellipse cx="${cx}" cy="${cy + 24 * scale}" rx="${w * scale}" ry="${h * scale}" fill="${body}" stroke="${line}"/><ellipse cx="${cx}" cy="${cy + 14 * scale}" rx="${8 * scale}" ry="${5 * scale}" fill="${line}"/>`;
 }
 
-function faceElements(builder: CharacterBuilderConfig, cx: number, cy: number, scale: number, expression?: CharacterExpression, facing = 0) {
-  const eye = expression?.eyes || builder.eyeStyle;
-  const mouth = expression?.mouth || builder.mouthStyle;
-  const s = scale;
-  const eyeY = cy - 8 * s;
-  const ex = 18 * s;
-  const facingOffset = facing * 5 * s;
-
+function faceMarkup(a: CharacterAppearance, cx: number, cy: number, scale: number, expression: CharacterExpression, body: string, line: string) {
+  const eyeY = cy - 5 * scale;
+  const spread = 17 * scale;
+  const eyeSize = a.eyeStyle === 'large' ? 8 : a.eyeStyle === 'round' ? 6 : a.eyeStyle === 'dot' ? 2.5 : 5;
   let eyes = '';
-  if (eye === 'closed') eyes = `<path d="M ${cx - ex - 6 * s + facingOffset} ${eyeY} q ${6 * s} ${5 * s} ${12 * s} 0 M ${cx + ex - 6 * s + facingOffset} ${eyeY} q ${6 * s} ${5 * s} ${12 * s} 0" fill="none"/>`;
-  else if (eye === 'dot') eyes = `<circle cx="${cx - ex + facingOffset}" cy="${eyeY}" r="${2.2 * s}"/><circle cx="${cx + ex + facingOffset}" cy="${eyeY}" r="${2.2 * s}"/>`;
-  else if (eye === 'round') eyes = `<circle cx="${cx - ex + facingOffset}" cy="${eyeY}" r="${5.4 * s}" fill="#fff"/><circle cx="${cx + ex + facingOffset}" cy="${eyeY}" r="${5.4 * s}" fill="#fff"/><circle cx="${cx - ex + facingOffset}" cy="${eyeY}" r="${2.4 * s}"/><circle cx="${cx + ex + facingOffset}" cy="${eyeY}" r="${2.4 * s}"/>`;
-  else if (eye === 'large') eyes = `<ellipse cx="${cx - ex + facingOffset}" cy="${eyeY}" rx="${8.2 * s}" ry="${6.6 * s}" fill="#fff"/><ellipse cx="${cx + ex + facingOffset}" cy="${eyeY}" rx="${8.2 * s}" ry="${6.6 * s}" fill="#fff"/><circle cx="${cx - ex + facingOffset}" cy="${eyeY}" r="${3.2 * s}"/><circle cx="${cx + ex + facingOffset}" cy="${eyeY}" r="${3.2 * s}"/>`;
-  else if (eye === 'narrow') eyes = `<path d="M ${cx - ex - 8 * s + facingOffset} ${eyeY} q ${8 * s} ${-5 * s} ${16 * s} 0 M ${cx + ex - 8 * s + facingOffset} ${eyeY} q ${8 * s} ${-5 * s} ${16 * s} 0" fill="none"/>`;
-  else eyes = `<path d="M ${cx - ex - 8 * s + facingOffset} ${eyeY} q ${8 * s} ${-3 * s} ${16 * s} 0 q ${-8 * s} ${6 * s} ${-16 * s} 0 Z M ${cx + ex - 8 * s + facingOffset} ${eyeY} q ${8 * s} ${-3 * s} ${16 * s} 0 q ${-8 * s} ${6 * s} ${-16 * s} 0 Z" fill="#fff"/><circle cx="${cx - ex + facingOffset}" cy="${eyeY}" r="${2 * s}"/><circle cx="${cx + ex + facingOffset}" cy="${eyeY}" r="${2 * s}"/>`;
+  if (a.eyeStyle === 'narrow') eyes = `<path d="M ${cx - spread - 7} ${eyeY} q 7 -4 14 0 M ${cx + spread - 7} ${eyeY} q 7 -4 14 0" fill="none"/>`;
+  else if (a.eyeStyle === 'almond') eyes = `<path d="M ${cx - spread - 7} ${eyeY} q 7 -6 14 0 q -7 6 -14 0 Z M ${cx + spread - 7} ${eyeY} q 7 -6 14 0 q -7 6 -14 0 Z" fill="#fff"/><circle cx="${cx - spread}" cy="${eyeY}" r="2.5" fill="${a.eyeColor}"/><circle cx="${cx + spread}" cy="${eyeY}" r="2.5" fill="${a.eyeColor}"/>`;
+  else eyes = `<circle cx="${cx - spread}" cy="${eyeY}" r="${eyeSize}" fill="${a.eyeStyle === 'dot' ? a.eyeColor : '#fff'}"/>${a.eyeStyle === 'dot' ? '' : `<circle cx="${cx - spread}" cy="${eyeY}" r="2.5" fill="${a.eyeColor}"/>`}<circle cx="${cx + spread}" cy="${eyeY}" r="${eyeSize}" fill="${a.eyeStyle === 'dot' ? a.eyeColor : '#fff'}"/>${a.eyeStyle === 'dot' ? '' : `<circle cx="${cx + spread}" cy="${eyeY}" r="2.5" fill="${a.eyeColor}"/>`}`;
+
+  let brows = '';
+  if (a.browStyle !== 'none') {
+    const y = eyeY - 13 * scale;
+    const width = a.browStyle === 'bold' ? 5 : 3;
+    const arch = a.browStyle === 'arched' ? -6 : a.browStyle === 'straight' ? 0 : -2;
+    brows = `<path d="M ${cx - spread - 8} ${y} q 8 ${arch} 16 0 M ${cx + spread - 8} ${y} q 8 ${arch} 16 0" fill="none" stroke-width="${width}"/>`;
+  }
 
   let nose = '';
-  if (builder.noseStyle === 'dot') nose = `<circle cx="${cx + facingOffset * 0.5}" cy="${cy + 6 * s}" r="${1.8 * s}"/>`;
-  else if (builder.noseStyle === 'small') nose = `<path d="M ${cx + facingOffset * 0.5} ${cy + 2 * s} q ${3 * s} ${7 * s} 0 ${12 * s}" fill="none"/>`;
-  else if (builder.noseStyle === 'straight') nose = `<path d="M ${cx + facingOffset * 0.2} ${cy - 2 * s} l 0 ${14 * s}" fill="none"/>`;
-  else if (builder.noseStyle === 'round') nose = `<ellipse cx="${cx + facingOffset * 0.3}" cy="${cy + 8 * s}" rx="${4 * s}" ry="${3 * s}" fill="none"/>`;
+  if (a.noseStyle === 'small') nose = `<path d="M ${cx} ${cy + 4} q 3 8 0 12" fill="none"/>`;
+  else if (a.noseStyle === 'straight') nose = `<path d="M ${cx} ${cy + 1} v 16" fill="none"/>`;
+  else if (a.noseStyle === 'wide') nose = `<path d="M ${cx - 8} ${cy + 14} q 8 6 16 0" fill="none"/>`;
 
-  let mouthMarkup = '';
-  if (mouth === 'smile') mouthMarkup = `<path d="M ${cx - 12 * s + facingOffset * 0.4} ${cy + 24 * s} q ${12 * s} ${10 * s} ${24 * s} 0" fill="none"/>`;
-  else if (mouth === 'neutral') mouthMarkup = `<path d="M ${cx - 10 * s + facingOffset * 0.4} ${cy + 24 * s} h ${20 * s}" fill="none"/>`;
-  else if (mouth === 'open') mouthMarkup = `<ellipse cx="${cx + facingOffset * 0.5}" cy="${cy + 24 * s}" rx="${8 * s}" ry="${6 * s}" fill="none"/>`;
-  else if (mouth === 'small') mouthMarkup = `<path d="M ${cx - 6 * s + facingOffset * 0.4} ${cy + 23 * s} q ${6 * s} ${4 * s} ${12 * s} 0" fill="none"/>`;
-  else mouthMarkup = `<path d="M ${cx - 12 * s + facingOffset * 0.4} ${cy + 28 * s} q ${12 * s} ${-8 * s} ${24 * s} 0" fill="none"/>`;
+  const mouthY = cy + 30 * scale;
+  let mouth = `<path d="M ${cx - 10} ${mouthY} h 20" fill="none"/>`;
+  if (expression === 'happy' || a.mouthStyle === 'smile') mouth = `<path d="M ${cx - 12} ${mouthY - 2} q 12 12 24 0" fill="none"/>`;
+  if (expression === 'sad') mouth = `<path d="M ${cx - 12} ${mouthY + 5} q 12 -10 24 0" fill="none"/>`;
+  if (expression === 'surprised') mouth = `<ellipse cx="${cx}" cy="${mouthY}" rx="6" ry="9" fill="none"/>`;
+  if (expression === 'angry' || expression === 'determined') brows += `<path d="M ${cx - spread - 8} ${eyeY - 14} l 16 5 M ${cx + spread - 8} ${eyeY - 9} l 16 -5" fill="none" stroke-width="4"/>`;
 
-  return `<g stroke-linecap="round" stroke-linejoin="round">${eyes}${nose}${mouthMarkup}</g>`;
+  const muzzle = muzzleMarkup(a, cx, cy, scale, body, line);
+  const whiskers = a.whiskers ? `<path d="M ${cx - 14} ${cy + 25} l -42 -8 M ${cx - 14} ${cy + 31} l -44 5 M ${cx + 14} ${cy + 25} l 42 -8 M ${cx + 14} ${cy + 31} l 44 5" fill="none" stroke-width="2"/>` : '';
+  return `${eyes}${brows}${nose}${muzzle}${mouth}${whiskers}`;
 }
 
-function outfitMarkup(kind: CharacterOutfitStyle, x: number, y: number, w: number, h: number, accent: string) {
-  if (kind === 'basic') return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${w * 0.28}"/>`;
-  if (kind === 'shirt') return `<path d="M ${x + w * 0.1} ${y + h * 0.14} L ${x + w * 0.28} ${y} L ${x + w * 0.72} ${y} L ${x + w * 0.9} ${y + h * 0.14} L ${x + w * 0.82} ${y + h} L ${x + w * 0.18} ${y + h} Z"/>`;
-  if (kind === 'jacket') return `<path d="M ${x + w * 0.08} ${y + h * 0.12} L ${x + w * 0.28} ${y} L ${x + w * 0.72} ${y} L ${x + w * 0.92} ${y + h * 0.12} L ${x + w * 0.82} ${y + h} L ${x + w * 0.18} ${y + h} Z"/><path d="M ${x + w * 0.5} ${y + h * 0.1} V ${y + h}" fill="none"/><path d="M ${x + w * 0.36} ${y + h * 0.08} L ${x + w * 0.5} ${y + h * 0.26} L ${x + w * 0.64} ${y + h * 0.08}" fill="none"/>`;
-  if (kind === 'dress') return `<path d="M ${x + w * 0.36} ${y} L ${x + w * 0.64} ${y} L ${x + w * 0.92} ${y + h} L ${x + w * 0.08} ${y + h} Z"/>`;
-  if (kind === 'overalls') return `<path d="M ${x + w * 0.12} ${y + h * 0.14} L ${x + w * 0.88} ${y + h * 0.14} L ${x + w * 0.8} ${y + h} L ${x + w * 0.2} ${y + h} Z"/><rect x="${x + w * 0.34}" y="${y + h * 0.18}" width="${w * 0.32}" height="${h * 0.26}" fill="${accent}" opacity=".2"/><path d="M ${x + w * 0.3} ${y + h * 0.14} L ${x + w * 0.22} ${y - h * 0.08} M ${x + w * 0.7} ${y + h * 0.14} L ${x + w * 0.78} ${y - h * 0.08}" fill="none"/>`;
-  return `<path d="M ${x + w * 0.1} ${y + h * 0.16} L ${x + w * 0.25} ${y} L ${x + w * 0.75} ${y} L ${x + w * 0.9} ${y + h * 0.16} L ${x + w * 0.82} ${y + h} L ${x + w * 0.18} ${y + h} Z"/><path d="M ${x + w * 0.18} ${y + h * 0.28} H ${x + w * 0.82} M ${x + w * 0.2} ${y + h * 0.52} H ${x + w * 0.8}" fill="none"/>`;
+function tailMarkup(a: CharacterAppearance, x: number, y: number, line: string, fill: string) {
+  const style = a.tailStyle || 'none';
+  if (style === 'none') return '';
+  if (style === 'short') return `<path d="M ${x} ${y} q 24 -18 30 2" fill="none" stroke="${line}" stroke-width="12" stroke-linecap="round"/>`;
+  if (style === 'fluffy') return `<path d="M ${x} ${y} C ${x + 28} ${y - 18}, ${x + 68} ${y - 65}, ${x + 88} ${y - 24} C ${x + 105} ${y + 10}, ${x + 57} ${y + 24}, ${x + 24} ${y + 12} Z" fill="${fill}" stroke="${line}"/>`;
+  if (style === 'curled') return `<path d="M ${x} ${y} C ${x + 60} ${y - 10}, ${x + 80} ${y - 80}, ${x + 30} ${y - 88} C ${x - 2} ${y - 92}, ${x + 4} ${y - 56}, ${x + 28} ${y - 60}" fill="none" stroke="${line}" stroke-width="13" stroke-linecap="round"/>`;
+  if (style === 'fish') return `<path d="M ${x} ${y} L ${x + 70} ${y - 45} L ${x + 58} ${y} L ${x + 70} ${y + 45} Z" fill="${fill}" stroke="${line}"/>`;
+  const width = style === 'reptile' ? 18 : 12;
+  return `<path d="M ${x} ${y} q 52 5 82 ${style === 'reptile' ? 42 : 24}" fill="none" stroke="${line}" stroke-width="${width}" stroke-linecap="round"/>`;
 }
 
-function accessoryMarkup(kind: CharacterAccessory, cx: number, cy: number, headW: number, headH: number, accent: string) {
-  if (kind === 'none') return '';
-  if (kind === 'glasses') return `<g fill="none"><circle cx="${cx - headW * 0.18}" cy="${cy - headH * 0.08}" r="${headW * 0.11}"/><circle cx="${cx + headW * 0.18}" cy="${cy - headH * 0.08}" r="${headW * 0.11}"/><path d="M ${cx - headW * 0.07} ${cy - headH * 0.08} H ${cx + headW * 0.07}"/></g>`;
-  if (kind === 'hat') return `<g><path d="M ${cx - headW * 0.2} ${cy - headH * 0.54} L ${cx + headW * 0.2} ${cy - headH * 0.54} L ${cx + headW * 0.3} ${cy - headH * 0.96} L ${cx - headW * 0.08} ${cy - headH * 1.28} L ${cx - headW * 0.28} ${cy - headH * 0.96} Z" fill="${accent}"/><ellipse cx="${cx}" cy="${cy - headH * 0.52}" rx="${headW * 0.42}" ry="${headH * 0.09}" fill="${accent}"/></g>`;
-  if (kind === 'cap') return `<g><path d="M ${cx - headW * 0.22} ${cy - headH * 0.42} Q ${cx} ${cy - headH * 0.72} ${cx + headW * 0.24} ${cy - headH * 0.42} Z" fill="${accent}"/><path d="M ${cx + headW * 0.05} ${cy - headH * 0.38} q ${headW * 0.18} ${headH * 0.04} ${headW * 0.26} ${headH * 0.13}" fill="none"/></g>`;
-  if (kind === 'scarf') return `<g><path d="M ${cx - headW * 0.18} ${cy + headH * 0.62} H ${cx + headW * 0.18} q ${headW * 0.08} 0 ${headW * 0.08} ${headH * 0.08} q 0 ${headH * 0.08} -${headW * 0.08} ${headH * 0.08} H ${cx - headW * 0.18} q -${headW * 0.08} 0 -${headW * 0.08} -${headH * 0.08} q 0 -${headH * 0.08} ${headW * 0.08} -${headH * 0.08} Z" fill="${accent}"/><path d="M ${cx + headW * 0.06} ${cy + headH * 0.77} v ${headH * 0.34}" fill="none"/></g>`;
-  return `<g><path d="M ${cx + headW * 0.22} ${cy + headH * 0.56} q ${headW * 0.18} ${headH * 0.06} ${headW * 0.18} ${headH * 0.26} q 0 ${headH * 0.22} -${headW * 0.18} ${headH * 0.24} q -${headW * 0.18} -${headH * 0.02} -${headW * 0.18} -${headH * 0.24} q 0 -${headH * 0.2} ${headW * 0.18} -${headH * 0.26} Z" fill="${accent}"/></g>`;
+function wingsMarkup(a: CharacterAppearance, cx: number, cy: number, line: string, fill: string) {
+  const style = a.wingStyle || 'none';
+  if (style === 'none') return '';
+  if (style === 'bat') return `<path d="M ${cx - 28} ${cy} C ${cx - 90} ${cy - 60}, ${cx - 125} ${cy - 8}, ${cx - 112} ${cy + 48} L ${cx - 72} ${cy + 20} L ${cx - 44} ${cy + 54} Z" fill="${fill}" stroke="${line}"/><path d="M ${cx + 28} ${cy} C ${cx + 90} ${cy - 60}, ${cx + 125} ${cy - 8}, ${cx + 112} ${cy + 48} L ${cx + 72} ${cy + 20} L ${cx + 44} ${cy + 54} Z" fill="${fill}" stroke="${line}"/>`;
+  if (style === 'fin') return `<path d="M ${cx - 36} ${cy} L ${cx - 92} ${cy - 25} L ${cx - 80} ${cy + 28} Z M ${cx + 36} ${cy} L ${cx + 92} ${cy - 25} L ${cx + 80} ${cy + 28} Z" fill="${fill}" stroke="${line}"/>`;
+  return `<path d="M ${cx - 24} ${cy} C ${cx - 86} ${cy - 66}, ${cx - 128} ${cy - 12}, ${cx - 102} ${cy + 56} C ${cx - 72} ${cy + 30}, ${cx - 52} ${cy + 24}, ${cx - 30} ${cy + 48} Z" fill="${fill}" stroke="${line}"/><path d="M ${cx + 24} ${cy} C ${cx + 86} ${cy - 66}, ${cx + 128} ${cy - 12}, ${cx + 102} ${cy + 56} C ${cx + 72} ${cy + 30}, ${cx + 52} ${cy + 24}, ${cx + 30} ${cy + 48} Z" fill="${fill}" stroke="${line}"/>`;
 }
 
-function bodyMeasurements(bodyShape: CharacterBodyShape) {
-  if (bodyShape === 'slim') return { torsoW: 72, hips: 68, arm: 88, leg: 108 };
-  if (bodyShape === 'athletic') return { torsoW: 96, hips: 78, arm: 94, leg: 116 };
-  if (bodyShape === 'round') return { torsoW: 100, hips: 96, arm: 80, leg: 96 };
-  if (bodyShape === 'triangle') return { torsoW: 96, hips: 62, arm: 92, leg: 110 };
-  if (bodyShape === 'square') return { torsoW: 98, hips: 90, arm: 88, leg: 104 };
-  return { torsoW: 84, hips: 76, arm: 86, leg: 104 };
+function footMarkup(style: CharacterFootStyle | undefined, x: number, y: number, line: string, fill: string) {
+  if (style === 'hooves') return `<path d="M ${x - 9} ${y} q 9 8 18 0 v 10 q -9 7 -18 0 Z" fill="${fill}" stroke="${line}"/>`;
+  if (style === 'claws' || style === 'talons') return `<path d="M ${x - 12} ${y} h 24 M ${x - 8} ${y} l -6 7 M ${x} ${y} l -2 8 M ${x + 8} ${y} l 6 7" fill="none" stroke="${line}" stroke-linecap="round"/>`;
+  if (style === 'fins') return `<path d="M ${x - 18} ${y} L ${x + 20} ${y - 8} L ${x + 8} ${y + 12} Z" fill="${fill}" stroke="${line}"/>`;
+  if (style === 'paws') return `<ellipse cx="${x}" cy="${y + 3}" rx="14" ry="9" fill="${fill}" stroke="${line}"/>`;
+  return `<path d="M ${x - 12} ${y} q 12 8 26 0" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/>`;
 }
 
-function poseConfig(kind: CharacterPose['kind']) {
-  if (kind === 'side') return { facing: 1, headTurn: 1, leftArm: -8, rightArm: 10, leftLeg: 6, rightLeg: -2, bodyTilt: 4 };
-  if (kind === 'back') return { facing: 0, headTurn: 0, leftArm: -10, rightArm: 10, leftLeg: 3, rightLeg: -3, bodyTilt: 0, back: true };
-  if (kind === 'three-quarter') return { facing: 0.55, headTurn: 0.55, leftArm: -16, rightArm: 8, leftLeg: 3, rightLeg: -4, bodyTilt: 2 };
-  if (kind === 'walk') return { facing: 0.25, headTurn: 0.25, leftArm: -28, rightArm: 28, leftLeg: 22, rightLeg: -18, bodyTilt: 3 };
-  if (kind === 'run') return { facing: 0.35, headTurn: 0.35, leftArm: -46, rightArm: 40, leftLeg: 36, rightLeg: -30, bodyTilt: 8 };
-  if (kind === 'jump') return { facing: 0.2, headTurn: 0.2, leftArm: -54, rightArm: 54, leftLeg: 24, rightLeg: -24, bodyTilt: -2, raise: -12 };
-  if (kind === 'action') return { facing: 0.25, headTurn: 0.25, leftArm: -62, rightArm: 22, leftLeg: 12, rightLeg: -20, bodyTilt: -8 };
-  if (kind === 'idle') return { facing: 0.1, headTurn: 0.1, leftArm: -6, rightArm: 6, leftLeg: 2, rightLeg: -2, bodyTilt: 1 };
-  return { facing: 0, headTurn: 0, leftArm: -8, rightArm: 8, leftLeg: 0, rightLeg: 0, bodyTilt: 0 };
+function poseOffsets(pose: CharacterPoseKind) {
+  if (pose === 'walk') return { armL: 22, armR: -22, legL: -18, legR: 18, tilt: 2, lift: 0 };
+  if (pose === 'run') return { armL: 42, armR: -42, legL: -32, legR: 32, tilt: 8, lift: -6 };
+  if (pose === 'jump') return { armL: -55, armR: 55, legL: -20, legR: 20, tilt: 0, lift: -30 };
+  if (pose === 'wave') return { armL: -65, armR: 5, legL: 0, legR: 0, tilt: 0, lift: 0 };
+  if (pose === 'action') return { armL: -48, armR: 34, legL: -18, legR: 22, tilt: -6, lift: 0 };
+  if (pose === 'sit') return { armL: 4, armR: -4, legL: 62, legR: -62, tilt: 0, lift: 22 };
+  return { armL: -5, armR: 5, legL: 0, legR: 0, tilt: 0, lift: 0 };
 }
 
-function limb(x1: number, y1: number, length: number, angleDeg: number, strokeWidth: number) {
-  const a = (angleDeg * Math.PI) / 180;
-  const x2 = x1 + Math.sin(a) * length;
-  const y2 = y1 + Math.cos(a) * length;
-  return { x2, y2, markup: `<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke-width="${strokeWidth}" fill="none" stroke-linecap="round"/>` };
+function surfacePattern(a: CharacterAppearance, line: string) {
+  const surface = a.surfaceStyle || 'skin';
+  if (surface === 'scales') return `<pattern id="surface" width="14" height="12" patternUnits="userSpaceOnUse"><path d="M 0 6 Q 7 0 14 6 Q 7 12 0 6" fill="none" stroke="${line}" stroke-opacity=".16" stroke-width="1"/></pattern>`;
+  if (surface === 'feathers') return `<pattern id="surface" width="14" height="16" patternUnits="userSpaceOnUse"><path d="M 7 0 Q 13 8 7 16 Q 1 8 7 0" fill="none" stroke="${line}" stroke-opacity=".13" stroke-width="1"/></pattern>`;
+  if (surface === 'chitin') return `<pattern id="surface" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M 9 0 L 18 5 L 18 13 L 9 18 L 0 13 L 0 5 Z" fill="none" stroke="${line}" stroke-opacity=".1" stroke-width="1"/></pattern>`;
+  if (surface === 'fur-short' || surface === 'fur-long') return `<pattern id="surface" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M 2 10 l 3 -5 M 7 11 l 3 -6" stroke="${line}" stroke-opacity=".11" stroke-width="1"/></pattern>`;
+  return '';
 }
 
-function buildCharacterSvg(builder: CharacterBuilderConfig, poseKind: CharacterPose['kind'], expression?: CharacterExpression, width = 360, height = 520) {
-  const b = {
-    ...defaultBuilder,
-    ...builder,
-    skinColor: normalizeHex(builder.skinColor, defaultBuilder.skinColor),
-    hairColor: normalizeHex(builder.hairColor, defaultBuilder.hairColor),
-    outfitColor: normalizeHex(builder.outfitColor, defaultBuilder.outfitColor),
-    accentColor: normalizeHex(builder.accentColor, defaultBuilder.accentColor),
-    strokeColor: normalizeHex(builder.strokeColor, defaultBuilder.strokeColor),
-  };
+function buildBiped(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#F1C7A5');
+  const outfit = normalizeHex(a.outfitPrimary, '#4FD9D3');
+  const second = normalizeHex(a.outfitSecondary, '#FFFFFF');
+  const p = poseOffsets(pose);
+  const cx = 180;
+  const headRatio = clamp(a.headToBodyRatio || 4.8, 2.8, 7);
+  const headH = clamp(360 / headRatio, 58, 124);
+  const headW = headH * (a.faceShape === 'wide' ? 1.1 : a.faceShape === 'long' ? .82 : .94);
+  const headY = 94 + p.lift;
+  const torsoY = headY + headH * .52 + 18;
+  const torsoH = a.bodyShape === 'chibi' ? 92 : a.bodyShape === 'stocky' ? 118 : 110;
+  const bodyW = 78 * (a.bodyWidth || 1) * (a.bodyShape === 'stocky' ? 1.18 : a.bodyShape === 'slim' ? .84 : 1);
+  const shoulder = bodyW * .5 * (a.shoulderWidth || 1);
+  const limb = 86 * (a.limbLength || 1);
+  const viewScale = view === 'side' ? .72 : view === 'three-quarter' ? .9 : 1;
+  const faceVisible = view !== 'back';
+  const headCx = cx + (view === 'side' ? 14 : view === 'three-quarter' ? 8 : 0);
 
-  const pose = poseConfig(poseKind);
-  const stroke = Math.max(2, b.strokeWidth || 3);
-  const cx = width / 2;
-  const baseY = height - 74 - (pose.raise || 0);
-  const totalHeight = clamp(height - 110, 260, 430);
-  const headH = clamp(totalHeight / clamp(b.headToBodyRatio, 2.8, 6.4), 58, 132);
-  const headW = headH * (b.headShape === 'long' ? 0.78 : 0.92);
-  const headCx = cx + pose.facing * 12;
-  const headCy = 92;
-  const measures = bodyMeasurements(b.bodyShape);
-  const torsoW = measures.torsoW * b.shoulderWidth;
-  const hipW = measures.hips * Math.max(0.82, b.shoulderWidth * 0.88);
-  const torsoH = 88 * b.torsoLength;
-  const armLength = measures.arm * b.limbLength;
-  const legLength = measures.leg * b.limbLength;
-  const neckY = headCy + headH * 0.55;
-  const torsoY = neckY + 8;
+  const leftArmEnd = { x: cx - shoulder + Math.sin((p.armL * Math.PI) / 180) * limb, y: torsoY + 22 + Math.cos((p.armL * Math.PI) / 180) * limb };
+  const rightArmEnd = { x: cx + shoulder + Math.sin((p.armR * Math.PI) / 180) * limb, y: torsoY + 22 + Math.cos((p.armR * Math.PI) / 180) * limb };
   const pelvisY = torsoY + torsoH;
-  const shoulderY = torsoY + 14;
-  const leftShoulderX = cx - torsoW * 0.38 + pose.facing * 6;
-  const rightShoulderX = cx + torsoW * 0.38 + pose.facing * 6;
-  const leftHipX = cx - hipW * 0.2 + pose.facing * 4;
-  const rightHipX = cx + hipW * 0.2 + pose.facing * 4;
-  const armStroke = stroke * 0.92;
-  const legStroke = stroke * 1.02;
-  const leftArm = limb(leftShoulderX, shoulderY, armLength, 180 + pose.leftArm + pose.bodyTilt, armStroke);
-  const rightArm = limb(rightShoulderX, shoulderY, armLength, pose.rightArm + pose.bodyTilt, armStroke);
-  const leftLeg = limb(leftHipX, pelvisY, legLength, 180 + pose.leftLeg, legStroke);
-  const rightLeg = limb(rightHipX, pelvisY, legLength, pose.rightLeg, legStroke);
-  const handRadius = 6 * b.handScale;
-  const footW = 22 * b.footScale;
-  const bodyFill = b.outfitColor;
-  const accent = b.accentColor;
-  const hair = hairPath(b.hairStyle, headCx, headCy, headW, headH);
-  const accessory = accessoryMarkup(b.accessory, headCx, headCy, headW, headH, accent);
-  const bodyShell = b.bodyShape === 'round'
-    ? `<ellipse cx="${cx}" cy="${torsoY + torsoH * 0.48}" rx="${torsoW * 0.48}" ry="${torsoH * 0.54}"/>`
-    : b.bodyShape === 'triangle'
-      ? `<path d="M ${cx - torsoW * 0.32} ${torsoY} L ${cx + torsoW * 0.32} ${torsoY} L ${cx + hipW * 0.5} ${pelvisY} L ${cx - hipW * 0.5} ${pelvisY} Z"/>`
-      : b.bodyShape === 'square'
-        ? `<rect x="${cx - torsoW * 0.46}" y="${torsoY}" width="${torsoW * 0.92}" height="${torsoH}" rx="${torsoW * 0.08}"/>`
-        : `<path d="M ${cx - torsoW * 0.38} ${torsoY} Q ${cx} ${torsoY - 4} ${cx + torsoW * 0.38} ${torsoY} L ${cx + hipW * 0.42} ${pelvisY} Q ${cx} ${pelvisY + 8} ${cx - hipW * 0.42} ${pelvisY} Z"/>`;
-  const clothing = outfitMarkup(b.outfitStyle, cx - torsoW * 0.46, torsoY + 8, torsoW * 0.92, torsoH * 0.96, accent);
-  const bodyTiltTransform = pose.bodyTilt ? ` transform="rotate(${pose.bodyTilt} ${cx} ${torsoY + torsoH * 0.5})"` : '';
+  const legLength = 108 * (a.legStyle === 'long' ? 1.16 : a.legStyle === 'short' ? .84 : 1) * (a.limbLength || 1);
+  const legSpread = bodyW * .2;
+  const leftFoot = { x: cx - legSpread + Math.sin((p.legL * Math.PI) / 180) * legLength, y: pelvisY + Math.cos((p.legL * Math.PI) / 180) * legLength };
+  const rightFoot = { x: cx + legSpread + Math.sin((p.legR * Math.PI) / 180) * legLength, y: pelvisY + Math.cos((p.legR * Math.PI) / 180) * legLength };
+  const ears = earsMarkup(a, headCx, headY, headW, headH, body);
+  const horns = hornsMarkup(a, headCx, headY, headW, headH, line);
+  const tail = tailMarkup(a, cx + bodyW * .42, torsoY + torsoH * .72, line, body);
+  const wings = wingsMarkup(a, cx, torsoY + torsoH * .35, line, body);
+  const head = headShapeMarkup(a, headCx, headY, headW, headH, body);
+  const face = faceVisible ? faceMarkup(a, headCx, headY, headH / 100, expression, body, line) : '';
+  const clothing = a.outfitStyle === 'none' ? '' : `<path d="M ${cx - bodyW * .46} ${torsoY + 8} Q ${cx} ${torsoY - 6} ${cx + bodyW * .46} ${torsoY + 8} L ${cx + bodyW * .4} ${pelvisY} L ${cx - bodyW * .4} ${pelvisY} Z" fill="${outfit}" stroke="${line}"/><path d="M ${cx - bodyW * .18} ${torsoY + 12} V ${pelvisY - 8} M ${cx + bodyW * .18} ${torsoY + 12} V ${pelvisY - 8}" stroke="${second}" stroke-width="4" opacity=".45"/>`;
+  const torso = a.torsoShape === 'round'
+    ? `<ellipse cx="${cx}" cy="${torsoY + torsoH / 2}" rx="${bodyW * .48}" ry="${torsoH * .52}" fill="${body}"/>`
+    : a.torsoShape === 'triangle'
+      ? `<path d="M ${cx - bodyW * .28} ${torsoY} L ${cx + bodyW * .28} ${torsoY} L ${cx + bodyW * .48} ${pelvisY} L ${cx - bodyW * .48} ${pelvisY} Z" fill="${body}"/>`
+      : a.torsoShape === 'trapezoid'
+        ? `<path d="M ${cx - bodyW * .44} ${torsoY} L ${cx + bodyW * .44} ${torsoY} L ${cx + bodyW * .34} ${pelvisY} L ${cx - bodyW * .34} ${pelvisY} Z" fill="${body}"/>`
+        : `<rect x="${cx - bodyW * .43}" y="${torsoY}" width="${bodyW * .86}" height="${torsoH}" rx="18" fill="${body}"/>`;
 
-  const backDetails = pose.back ? `<path d="M ${cx - torsoW * 0.18} ${torsoY + torsoH * 0.12} V ${torsoY + torsoH * 0.84}" fill="none"/><path d="M ${cx - torsoW * 0.26} ${torsoY + torsoH * 0.18} q ${torsoW * 0.26} ${torsoH * 0.1} ${torsoW * 0.52} 0" fill="none"/>` : '';
-  const headFace = pose.back ? '' : faceElements(b, headCx, headCy, headH / 100, expression, pose.headTurn || 0);
-  const ear = !pose.back ? `<circle cx="${headCx + (pose.headTurn > 0 ? headW * 0.34 : -headW * 0.34)}" cy="${headCy + 2}" r="${headW * 0.08}" fill="${b.skinColor}"/>` : '';
-
-  return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <rect width="100%" height="100%" fill="transparent"/>
-    <g stroke="${b.strokeColor}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round">
-      <g${bodyTiltTransform}>
-        ${leftArm.markup}
-        ${rightArm.markup}
-        <circle cx="${leftArm.x2}" cy="${leftArm.y2}" r="${handRadius}" fill="${b.skinColor}"/>
-        <circle cx="${rightArm.x2}" cy="${rightArm.y2}" r="${handRadius}" fill="${b.skinColor}"/>
-        <g fill="${bodyFill}">${bodyShell}${clothing}</g>
-        ${backDetails}
-      </g>
-      <path d="M ${cx - 8} ${neckY} L ${cx - 4} ${torsoY} M ${cx + 8} ${neckY} L ${cx + 4} ${torsoY}" fill="none"/>
-      ${leftLeg.markup}
-      ${rightLeg.markup}
-      <path d="M ${leftLeg.x2 - footW * 0.46} ${leftLeg.y2} h ${footW}" fill="none"/>
-      <path d="M ${rightLeg.x2 - footW * 0.46} ${rightLeg.y2} h ${footW}" fill="none"/>
-      <g fill="${b.skinColor}">${headPath(b.headShape, headCx, headCy, headW, headH)}${ear}</g>
-      ${hair ? `<g fill="${b.hairColor}">${hair}</g>` : ''}
-      ${accessory}
-      ${headFace}
-    </g>
-  </svg>`;
+  return `${surfacePattern(a, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" transform="scale(${viewScale} 1) translate(${viewScale < 1 ? (180 / viewScale - 180) : 0} 0)">${wings}${tail}<path d="M ${cx - shoulder} ${torsoY + 22} L ${leftArmEnd.x} ${leftArmEnd.y} M ${cx + shoulder} ${torsoY + 22} L ${rightArmEnd.x} ${rightArmEnd.y}" fill="none" stroke-width="${a.armStyle === 'strong' ? 12 : a.armStyle === 'thin' ? 6 : 9}"/><circle cx="${leftArmEnd.x}" cy="${leftArmEnd.y}" r="${a.handStyle === 'defined' ? 8 : 6}" fill="${body}"/><circle cx="${rightArmEnd.x}" cy="${rightArmEnd.y}" r="${a.handStyle === 'defined' ? 8 : 6}" fill="${body}"/>${torso}<rect x="${cx - bodyW * .43}" y="${torsoY}" width="${bodyW * .86}" height="${torsoH}" rx="18" fill="url(#surface)" stroke="none"/>${clothing}<path d="M ${cx - legSpread} ${pelvisY} L ${leftFoot.x} ${leftFoot.y} M ${cx + legSpread} ${pelvisY} L ${rightFoot.x} ${rightFoot.y}" fill="none" stroke-width="10"/>${footMarkup(a.footStyle, leftFoot.x, leftFoot.y, line, body)}${footMarkup(a.footStyle, rightFoot.x, rightFoot.y, line, body)}${ears}${horns}${head}<path d="M ${headCx - headW * .42} ${headY - headH * .3} Q ${headCx} ${headY - headH * .7} ${headCx + headW * .42} ${headY - headH * .3}" fill="${a.hairStyle === 'none' ? 'none' : a.hairColor}" stroke="${a.hairStyle === 'none' ? 'none' : line}"/>${face}</g>`;
 }
 
-function motionProps(motion: SpriteMotionPreset, playing: boolean) {
-  if (!playing || motion === 'none') return { animate: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotate: 0 }, transition: { duration: 0.2 } };
-  if (motion === 'bob') return { animate: { y: [0, -8, 0] }, transition: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } };
-  if (motion === 'bounce') return { animate: { y: [0, -16, 0] }, transition: { duration: 0.8, repeat: Infinity, ease: 'easeInOut' } };
-  if (motion === 'shake') return { animate: { x: [0, -4, 4, -3, 0] }, transition: { duration: 0.35, repeat: Infinity, ease: 'linear' } };
-  if (motion === 'pulse') return { animate: { scale: [1, 1.03, 1] }, transition: { duration: 0.85, repeat: Infinity, ease: 'easeInOut' } };
-  return { animate: { scaleX: [1, 1.06, 1], scaleY: [1, 0.94, 1] }, transition: { duration: 0.7, repeat: Infinity, ease: 'easeInOut' } };
+function buildQuadruped(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#C78D5B');
+  const p = poseOffsets(pose);
+  const side = view === 'side' || view === 'three-quarter';
+  const bodyCx = side ? 195 : 180;
+  const bodyCy = 300 + p.lift;
+  const bodyW = 150 * (a.bodyWidth || 1) * (a.bodyShape === 'stocky' ? 1.18 : a.bodyShape === 'slim' ? .88 : 1);
+  const bodyH = a.bodyShape === 'chibi' ? 80 : 92;
+  const headW = a.headShape === 'wide' ? 100 : 82;
+  const headH = a.faceShape === 'long' ? 98 : 82;
+  const headCx = side ? bodyCx - bodyW * .55 : 180;
+  const headCy = side ? bodyCy - 56 : bodyCy - bodyH * .72;
+  const legY = bodyCy + bodyH * .3;
+  const legLen = 92 * (a.legStyle === 'long' ? 1.15 : a.legStyle === 'short' ? .82 : 1) * (a.limbLength || 1);
+  const legXs = side ? [bodyCx - bodyW * .32, bodyCx - bodyW * .12, bodyCx + bodyW * .2, bodyCx + bodyW * .36] : [140, 166, 194, 220];
+  const gait = pose === 'run' ? [-25, 22, 28, -22] : pose === 'walk' ? [-14, 10, 12, -10] : [0, 0, 0, 0];
+  const legs = legXs.map((x, index) => {
+    const ex = x + Math.sin((gait[index] * Math.PI) / 180) * legLen;
+    const ey = legY + Math.cos((gait[index] * Math.PI) / 180) * legLen;
+    return `<path d="M ${x} ${legY} L ${ex} ${ey}" fill="none" stroke-width="10"/>${footMarkup(a.footStyle, ex, ey, line, body)}`;
+  }).join('');
+  const tail = tailMarkup(a, bodyCx + bodyW * .48, bodyCy - 6, line, body);
+  const wings = wingsMarkup(a, bodyCx, bodyCy - 12, line, body);
+  const ears = earsMarkup(a, headCx, headCy, headW, headH, body);
+  const horns = hornsMarkup(a, headCx, headCy, headW, headH, line);
+  const face = view !== 'back' ? faceMarkup(a, headCx, headCy, .9, expression, body, line) : '';
+  return `${surfacePattern(a, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${tail}${wings}<ellipse cx="${bodyCx}" cy="${bodyCy}" rx="${bodyW / 2}" ry="${bodyH / 2}" fill="${body}"/><ellipse cx="${bodyCx}" cy="${bodyCy}" rx="${bodyW / 2}" ry="${bodyH / 2}" fill="url(#surface)" stroke="none"/>${legs}${ears}${horns}${headShapeMarkup(a, headCx, headCy, headW, headH, body)}${face}</g>`;
+}
+
+function buildAvian(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#73B7D8');
+  const cx = 180, cy = 270;
+  const jump = pose === 'jump' ? -32 : 0;
+  const headY = 150 + jump;
+  const wingOpen = pose === 'action' || pose === 'jump' || pose === 'run';
+  const wings = wingOpen ? wingsMarkup({ ...a, wingStyle: a.wingStyle === 'none' ? 'feather' : a.wingStyle }, cx, cy - 10 + jump, line, body) : `<path d="M 150 ${cy - 20 + jump} q -44 42 0 92 q 22 -36 8 -80 Z M 210 ${cy - 20 + jump} q 44 42 0 92 q -22 -36 -8 -80 Z" fill="${body}" stroke="${line}"/>`;
+  const beakAppearance = { ...a, muzzleStyle: (a.muzzleStyle && a.muzzleStyle !== 'none' ? a.muzzleStyle : 'beak-small') as CharacterMuzzleStyle };
+  return `${surfacePattern({ ...a, surfaceStyle: a.surfaceStyle || 'feathers' }, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="${cx}" cy="${cy + jump}" rx="62" ry="96" fill="${body}"/><ellipse cx="${cx}" cy="${cy + jump}" rx="62" ry="96" fill="url(#surface)" stroke="none"/>${wings}${tailMarkup({ ...a, tailStyle: a.tailStyle === 'none' ? 'long' : a.tailStyle }, cx, cy + 62 + jump, line, body)}${earsMarkup(a, cx, headY, 76, 76, body)}${hornsMarkup(a, cx, headY, 76, 76, line)}${headShapeMarkup(a, cx, headY, 76, 76, body)}${view !== 'back' ? faceMarkup(beakAppearance, cx, headY, .82, expression, body, line) : ''}<path d="M 164 ${cy + 80 + jump} v 65 M 196 ${cy + 80 + jump} v 65" fill="none" stroke-width="7"/>${footMarkup(a.footStyle || 'talons', 164, cy + 148 + jump, line, body)}${footMarkup(a.footStyle || 'talons', 196, cy + 148 + jump, line, body)}</g>`;
+}
+
+function buildAquatic(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#69BFD0');
+  const cx = 180, cy = 270;
+  const tail = tailMarkup({ ...a, tailStyle: 'fish' }, cx + 92, cy, line, body);
+  const headCx = 132;
+  return `${surfacePattern({ ...a, surfaceStyle: a.surfaceStyle || 'scales' }, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${tail}<ellipse cx="${cx}" cy="${cy}" rx="105" ry="62" fill="${body}"/><ellipse cx="${cx}" cy="${cy}" rx="105" ry="62" fill="url(#surface)" stroke="none"/><path d="M 170 220 L 205 174 L 218 224 Z M 170 320 L 205 366 L 218 316 Z" fill="${body}"/>${view !== 'back' ? faceMarkup({ ...a, muzzleStyle: 'none', browStyle: a.browStyle || 'none' }, headCx, cy - 4, .8, expression, body, line) : ''}<path d="M 218 258 L 274 228 L 254 274 Z" fill="${body}" stroke="${line}"/></g>`;
+}
+
+function buildSerpentine(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#6DBA74');
+  const headCx = 132, headCy = 166;
+  return `${surfacePattern({ ...a, surfaceStyle: a.surfaceStyle || 'scales' }, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M 154 205 C 110 250, 120 314, 196 322 C 280 332, 288 395, 214 422 C 160 440, 124 420, 108 400" fill="none" stroke="${body}" stroke-width="42"/><path d="M 154 205 C 110 250, 120 314, 196 322 C 280 332, 288 395, 214 422 C 160 440, 124 420, 108 400" fill="none" stroke="url(#surface)" stroke-width="42"/>${earsMarkup(a, headCx, headCy, 86, 78, body)}${hornsMarkup(a, headCx, headCy, 86, 78, line)}${headShapeMarkup(a, headCx, headCy, 86, 78, body)}${view !== 'back' ? faceMarkup(a, headCx, headCy, .82, expression, body, line) : ''}</g>`;
+}
+
+function buildArthropod(document: CharacterSpriteDocument, a: CharacterAppearance, view: CharacterView, expression: CharacterExpression, pose: CharacterPoseKind) {
+  const line = normalizeHex(a.lineColor, '#111111');
+  const body = normalizeHex(a.surfaceColor || a.skinColor, '#6A645C');
+  const legs = a.bodyPlan === 'eight-limbed' ? 8 : 6;
+  const cx = 180, cy = 280;
+  const legMarkup = Array.from({ length: legs }).map((_, index) => {
+    const side = index % 2 === 0 ? -1 : 1;
+    const row = Math.floor(index / 2);
+    const y = cy - 42 + row * (84 / Math.max(1, Math.ceil(legs / 2) - 1));
+    const outerX = cx + side * (96 + row * 7);
+    return `<path d="M ${cx + side * 36} ${y} Q ${cx + side * 70} ${y - 18} ${outerX} ${y + (row - 1.5) * 22}" fill="none" stroke-width="8"/>`;
+  }).join('');
+  return `${surfacePattern({ ...a, surfaceStyle: 'chitin' }, line)}<g stroke="${line}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${legMarkup}<ellipse cx="${cx}" cy="${cy + 50}" rx="70" ry="82" fill="${body}"/><ellipse cx="${cx}" cy="${cy + 50}" rx="70" ry="82" fill="url(#surface)" stroke="none"/><ellipse cx="${cx}" cy="${cy - 40}" rx="52" ry="50" fill="${body}"/>${hornsMarkup({ ...a, hornStyle: a.hornStyle === 'none' ? 'antennae' : a.hornStyle }, cx, cy - 40, 80, 70, line)}${view !== 'back' ? faceMarkup({ ...a, browStyle: 'none', noseStyle: 'none', muzzleStyle: 'none' }, cx, cy - 40, .76, expression, body, line) : ''}</g>`;
+}
+
+export function buildCharacterSvg(document: CharacterSpriteDocument, view: CharacterView = 'front', expression: CharacterExpression = 'neutral', pose: CharacterPoseKind = 'neutral') {
+  const a: CharacterAppearance = { ...DEFAULT_APPEARANCE, ...(document.appearance || {}) };
+  const bodyPlan = a.bodyPlan || (a.species === 'quadruped' || a.species === 'reptile' ? 'quadruped' : a.species === 'bird' ? 'avian' : a.species === 'fish' ? 'aquatic' : a.species === 'arthropod' ? 'six-limbed' : 'biped');
+  let content = '';
+  if (bodyPlan === 'quadruped') content = buildQuadruped(document, a, view, expression, pose);
+  else if (bodyPlan === 'avian') content = buildAvian(document, a, view, expression, pose);
+  else if (bodyPlan === 'aquatic') content = buildAquatic(document, a, view, expression, pose);
+  else if (bodyPlan === 'serpentine') content = buildSerpentine(document, a, view, expression, pose);
+  else if (bodyPlan === 'six-limbed' || bodyPlan === 'eight-limbed') content = buildArthropod(document, a, view, expression, pose);
+  else content = buildBiped(document, a, view, expression, pose);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="520" viewBox="0 0 360 520"><rect width="360" height="520" fill="transparent"/>${content}</svg>`;
 }
 
 export function SpriteCharacterPreview({ document, className = '' }: { document: CharacterSpriteDocument; className?: string }) {
-  const builder = document.builder || defaultBuilder;
-  const svg = document.aiSvg || buildCharacterSvg(builder, 'idle', document.expressions?.[0], document.width, document.height);
-  return (
-    <div className={`w-full h-full flex items-center justify-center bg-neutral-50 overflow-hidden ${className}`}>
-      <img src={svgDataUrl(svg)} alt={document.characterName} className="max-w-full max-h-full object-contain" style={{ imageRendering: document.pixelated ? 'pixelated' : 'auto' }} />
-    </div>
-  );
+  const svg = document.generatedSvg || buildCharacterSvg(document, document.activeView || 'front', document.activeExpression || 'neutral', document.activePose || 'neutral');
+  return <div className={`w-full h-full flex items-center justify-center overflow-hidden bg-neutral-50 ${className}`}><img src={svgDataUrl(svg)} alt={document.characterName} className="max-w-full max-h-full object-contain" style={{ imageRendering: document.pixelated ? 'pixelated' : 'auto' }} /></div>;
+}
+
+function InfoTip({ children }: { children: string }) {
+  const [open, setOpen] = useState(false);
+  return <span className="relative inline-flex ml-1 align-middle"><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setOpen((value) => !value); }} onBlur={() => setTimeout(() => setOpen(false), 120)} className="h-6 w-6 rounded-full inline-flex items-center justify-center hover:bg-black/5" aria-label="Explicação"><Info size={13} /></button>{open ? <span className="absolute z-[200] left-1/2 bottom-full mb-2 w-64 max-w-[75vw] -translate-x-1/2 rounded-xl bg-black text-white p-3 text-[10px] leading-relaxed shadow-xl">{children}</span> : null}</span>;
+}
+
+function SelectField<T extends string>({ label, value, options, onChange, tip }: { label: string; value: T; options: Option<T>[]; onChange: (value: T) => void; tip?: string }) {
+  return <label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">{label}{tip ? <InfoTip>{tip}</InfoTip> : null}</span><select value={value} onChange={(event) => onChange(event.target.value as T)} className="mt-1 h-11 w-full rounded-xl border border-black/25 bg-white px-3 text-sm text-black"><option value={value}>{options.find((item) => item.id === value)?.label || value}</option>{options.filter((item) => item.id !== value).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>;
+}
+
+function RangeField({ label, value, min, max, step, onChange, tip }: { label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void; tip?: string }) {
+  return <label className="block rounded-xl border p-3"><div className="flex items-center justify-between text-[10px] font-mono uppercase"><span>{label}{tip ? <InfoTip>{tip}</InfoTip> : null}</span><b>{value.toFixed(step < 1 ? 1 : 0)}</b></div><input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full" /></label>;
 }
 
 function HexField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   const safe = normalizeHex(value);
-  return (
-    <label className="text-[9px] font-mono text-neutral-500 uppercase">
-      {label}
-      <div className="mt-1 flex gap-2">
-        <input type="color" value={safe} onChange={(event) => onChange(event.target.value.toUpperCase())} className="h-10 w-11 rounded-lg border bg-white p-1" />
-        <input value={value} onChange={(event) => onChange(event.target.value)} onBlur={(event) => onChange(normalizeHex(event.target.value, safe))} className="h-10 flex-1 rounded-xl border px-3 font-mono text-xs uppercase" />
-      </div>
-    </label>
-  );
+  return <label className="block text-[10px] font-mono text-neutral-500 uppercase">{label}<div className="mt-1 flex gap-2"><input type="color" value={safe} onChange={(event) => onChange(event.target.value.toUpperCase())} className="h-11 w-12 rounded-xl border p-1 bg-white"/><input value={value} onChange={(event) => onChange(event.target.value)} onBlur={(event) => onChange(normalizeHex(event.target.value, safe))} className="h-11 flex-1 rounded-xl border px-3 font-mono text-xs uppercase" /></div></label>;
 }
 
-function Picker<T extends string>({ label, tip, options, value, onChange }: { label: string; tip?: string; options: Array<{ id: T; label: string; tip?: string }>; value: T; onChange: (value: T) => void }) {
-  return (
-    <div className="rounded-2xl border p-3">
-      <div className="flex items-center gap-1.5 text-[10px] font-mono text-neutral-500 uppercase mb-2">
-        <span>{label}</span>
-        {tip ? <InfoTip>{tip}</InfoTip> : null}
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => onChange(option.id)}
-            className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors ${value === option.id ? 'bg-black text-white border-black' : 'bg-white hover:border-black'}`}
-            title={option.tip || option.label}
-          >
-            <div className="font-semibold text-xs sm:text-sm">{option.label}</div>
-            {option.tip ? <div className={`mt-1 text-[10px] leading-relaxed ${value === option.id ? 'text-white/70' : 'text-neutral-500'}`}>{option.tip}</div> : null}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function animationMotionProps(motionPreset: SpriteMotionPreset, playing: boolean) {
+  if (!playing || motionPreset === 'none') return { animate: { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1 }, transition: { duration: .2 } };
+  if (motionPreset === 'bob') return { animate: { y: [0, -9, 0] }, transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } };
+  if (motionPreset === 'bounce') return { animate: { y: [0, -18, 0] }, transition: { duration: .75, repeat: Infinity, ease: 'easeInOut' } };
+  if (motionPreset === 'shake') return { animate: { x: [0, -5, 5, -3, 3, 0] }, transition: { duration: .36, repeat: Infinity } };
+  if (motionPreset === 'pulse') return { animate: { scale: [1, 1.04, 1] }, transition: { duration: .9, repeat: Infinity } };
+  return { animate: { scaleX: [1, 1.07, 1], scaleY: [1, .93, 1] }, transition: { duration: .72, repeat: Infinity } };
 }
 
-function SliderField({ label, value, min, max, step = 0.1, onChange, tip }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void; tip?: string }) {
-  return (
-    <label className="block rounded-2xl border p-3">
-      <div className="flex items-center justify-between gap-2 text-[10px] font-mono uppercase text-neutral-500">
-        <span>{label}</span>
-        {tip ? <InfoTip>{tip}</InfoTip> : null}
-        <span className="text-black">{value.toFixed(step < 1 ? 1 : 0)}</span>
-      </div>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full" />
-    </label>
-  );
-}
-
-function SheetCard({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border bg-white p-3 shadow-sm">
-      <div className="text-[10px] font-mono uppercase tracking-[0.24em] text-neutral-500 mb-2">{label}</div>
-      {children}
-    </div>
-  );
-}
-
-export default function SpriteStudio({ document, title = 'Novo personagem', canEdit = true, availableAssets = [], onSave, onClose }: Props) {
-  const mergedDocument: CharacterSpriteDocument = {
-    ...blankSpriteCharacter(),
-    ...deepClone(document),
-    builder: { ...defaultBuilder, ...(document.builder || {}) },
-    concept: { ...defaultConcept, ...(document.concept || {}) },
-    poses: (document.poses && document.poses.length ? document.poses : defaultPoses).map((item) => ({ ...item })),
-    expressions: (document.expressions && document.expressions.length ? document.expressions : defaultExpressions).map((item) => ({ ...item })),
-    animations: (document.animations && document.animations.length ? document.animations : [blankAnimation('idle')]).map((item) => ({ ...item, frames: (item.frames || []).map((frame) => ({ ...frame })) })),
-  };
-
-  const [draft, setDraft] = useState<CharacterSpriteDocument>(mergedDocument);
+export default function SpriteStudio({ document, title = 'Novo personagem & criaturas', canEdit = true, availableAssets = [], onSave, onClose }: Props) {
+  const [draft, setDraft] = useState<CharacterSpriteDocument>(() => mergeDocument(document));
   const [tab, setTab] = useState<Tab>('builder');
-  const [selectedAnimationId, setSelectedAnimationId] = useState<string>(mergedDocument.activeAnimationId || mergedDocument.animations[0]?.id || '');
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [playing, setPlaying] = useState(true);
-  const [error, setError] = useState('');
-  const [aiBusy, setAiBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sheetBusy, setSheetBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [playing, setPlaying] = useState(true);
+  const [selectedAnimationId, setSelectedAnimationId] = useState(() => document.activeAnimationId || document.animations?.[0]?.id || '');
+  const [frameIndex, setFrameIndex] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const builder = { ...defaultBuilder, ...(draft.builder || {}) };
-  const expressions = draft.expressions?.length ? draft.expressions : defaultExpressions;
-  const activeExpression = expressions[0];
-  const poses = draft.poses?.length ? draft.poses : defaultPoses;
-  const animation = (draft.animations || []).find((item) => item.id === selectedAnimationId) || draft.animations?.[0] || blankAnimation('idle');
-  const manualSvg = useMemo(() => buildCharacterSvg(builder, 'front', activeExpression, draft.width, draft.height), [builder, activeExpression, draft.width, draft.height]);
-  const mainPreviewUrl = useMemo(() => {
-    const frame = animation?.frames?.[frameIndex];
-    if (frame?.url) return frame.url;
-    return svgDataUrl(draft.aiSvg || manualSvg);
-  }, [animation?.frames, frameIndex, draft.aiSvg, manualSvg]);
+  const appearance = { ...DEFAULT_APPEARANCE, ...(draft.appearance || {}) };
+  const profile = { ...DEFAULT_PROFILE, ...(draft.profile || {}) };
+  const activeAnimation = draft.animations.find((animation) => animation.id === selectedAnimationId) || draft.animations[0] || blankAnimation('idle');
+  const manualSvg = useMemo(() => buildCharacterSvg(draft, draft.activeView || 'front', draft.activeExpression || 'neutral', draft.activePose || 'neutral'), [draft]);
+  const previewUrl = activeAnimation.frames?.[frameIndex]?.url || svgDataUrl(draft.generatedSvg || manualSvg);
 
   useEffect(() => {
-    if (!animation?.frames?.length) return;
-    if (frameIndex >= animation.frames.length) setFrameIndex(0);
-  }, [animation?.frames?.length, frameIndex]);
-
-  useEffect(() => {
-    if (!playing || !animation?.frames?.length || animation.frames.length < 2) return;
-    const duration = animation.frames[frameIndex]?.durationMs || Math.max(70, Math.round(1000 / Math.max(1, animation.fps || 8)));
-    const timer = window.setTimeout(() => {
-      setFrameIndex((value) => ((value + 1) % animation.frames.length));
-    }, duration);
+    if (!playing || !activeAnimation.frames?.length || activeAnimation.frames.length < 2) return;
+    const duration = activeAnimation.frames[frameIndex]?.durationMs || Math.max(70, Math.round(1000 / Math.max(1, activeAnimation.fps || 8)));
+    const timer = window.setTimeout(() => setFrameIndex((value) => (value + 1) % activeAnimation.frames.length), duration);
     return () => window.clearTimeout(timer);
-  }, [playing, animation?.id, animation?.frames, animation?.fps, frameIndex]);
+  }, [playing, activeAnimation.id, activeAnimation.frames, activeAnimation.fps, frameIndex]);
 
-  const patchBuilder = (partial: Partial<CharacterBuilderConfig>) => setDraft((current) => ({ ...current, builder: { ...builder, ...partial }, updatedAt: new Date().toISOString() }));
-  const patchConcept = (partial: Partial<CharacterConceptSheet>) => setDraft((current) => ({ ...current, concept: { ...defaultConcept, ...(current.concept || {}), ...partial }, updatedAt: new Date().toISOString() }));
-
-  const patchAnimation = (partial: Partial<SpriteAnimation>) => {
-    setDraft((current) => ({
-      ...current,
-      animations: (current.animations || []).map((item) => (item.id === animation.id ? { ...item, ...partial } : item)),
-      activeAnimationId: animation.id,
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
-  const updateExpressions = (next: CharacterExpression[]) => setDraft((current) => ({ ...current, expressions: next, updatedAt: new Date().toISOString() }));
-  const updatePoses = (next: CharacterPose[]) => setDraft((current) => ({ ...current, poses: next, updatedAt: new Date().toISOString() }));
-
-  const downloadSvg = (svg: string, name: string) => {
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = globalThis.document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${(name || 'personagem').replace(/\s+/g, '-').toLowerCase()}.svg`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const patchAppearance = (partial: Partial<CharacterAppearance>, keepGenerated = false) => setDraft((current) => ({ ...current, appearance: { ...DEFAULT_APPEARANCE, ...(current.appearance || {}), ...partial }, generatedSvg: keepGenerated ? current.generatedSvg : undefined, updatedAt: new Date().toISOString() }));
+  const patchProfile = (partial: Partial<CharacterProfile>) => setDraft((current) => ({ ...current, profile: { ...DEFAULT_PROFILE, ...(current.profile || {}), ...partial }, updatedAt: new Date().toISOString() }));
+  const patchAnimation = (partial: Partial<SpriteAnimation>) => setDraft((current) => ({ ...current, animations: current.animations.map((animation) => animation.id === activeAnimation.id ? { ...animation, ...partial } : animation), activeAnimationId: activeAnimation.id, updatedAt: new Date().toISOString() }));
 
   const applyPreset = (presetId: string) => {
     const preset = PRESETS.find((item) => item.id === presetId);
     if (!preset) return;
-    setDraft((current) => ({
-      ...current,
-      builder: { ...builder, ...preset.builder },
-      concept: { ...defaultConcept, ...(current.concept || {}), ...preset.concept },
-      updatedAt: new Date().toISOString(),
-    }));
-  };
-
-  const randomizeCharacter = () => {
-    const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
-    patchBuilder({
-      bodyShape: pick(BODY).id,
-      headShape: pick(HEAD).id,
-      eyeStyle: pick(EYES).id,
-      noseStyle: pick(NOSES).id,
-      mouthStyle: pick(MOUTHS).id,
-      hairStyle: pick(HAIR).id,
-      outfitStyle: pick(OUTFITS).id,
-      accessory: pick(ACCESSORIES).id,
-      headToBodyRatio: Number((3.2 + Math.random() * 2.4).toFixed(1)),
-      shoulderWidth: Number((0.82 + Math.random() * 0.45).toFixed(2)),
-      torsoLength: Number((0.82 + Math.random() * 0.45).toFixed(2)),
-      limbLength: Number((0.82 + Math.random() * 0.45).toFixed(2)),
-      handScale: Number((0.8 + Math.random() * 0.45).toFixed(2)),
-      footScale: Number((0.8 + Math.random() * 0.45).toFixed(2)),
-    });
-  };
-
-  const generatePose = (pose: CharacterPose) => {
-    const svg = buildCharacterSvg(builder, pose.kind, activeExpression, draft.width, draft.height);
-    updatePoses(poses.map((item) => (item.id === pose.id ? { ...item, svg } : item)));
+    patchAppearance({ ...preset.patch, speciesPreset: preset.id });
   };
 
   const addAnimation = (kind: SpriteAnimationKind) => {
     const next = blankAnimation(kind);
-    setDraft((current) => ({ ...current, animations: [...(current.animations || []), next], activeAnimationId: next.id, updatedAt: new Date().toISOString() }));
+    setDraft((current) => ({ ...current, animations: [...current.animations, next], activeAnimationId: next.id }));
     setSelectedAnimationId(next.id);
     setFrameIndex(0);
   };
 
-  const addAssetFrame = (asset: SpriteAssetOption) => {
-    const next: SpriteFrame = { id: makeId('frame'), name: asset.name, url: asset.url, durationMs: 125 };
-    patchAnimation({ frames: [...(animation.frames || []), next] });
+  const generatedFrameSequence = (kind: SpriteAnimationKind): Array<{ view: CharacterView; pose: CharacterPoseKind; expression: CharacterExpression }> => {
+    if (kind === 'walk') return [{ view: 'side', pose: 'walk', expression: 'neutral' }, { view: 'side', pose: 'neutral', expression: 'neutral' }, { view: 'side', pose: 'walk', expression: 'neutral' }, { view: 'side', pose: 'neutral', expression: 'neutral' }];
+    if (kind === 'run') return [{ view: 'side', pose: 'run', expression: 'determined' }, { view: 'side', pose: 'action', expression: 'determined' }, { view: 'side', pose: 'run', expression: 'determined' }, { view: 'side', pose: 'action', expression: 'determined' }];
+    if (kind === 'jump') return [{ view: 'three-quarter', pose: 'neutral', expression: 'neutral' }, { view: 'three-quarter', pose: 'jump', expression: 'surprised' }, { view: 'three-quarter', pose: 'neutral', expression: 'happy' }];
+    if (kind === 'attack') return [{ view: 'three-quarter', pose: 'neutral', expression: 'determined' }, { view: 'three-quarter', pose: 'action', expression: 'angry' }, { view: 'three-quarter', pose: 'neutral', expression: 'determined' }];
+    if (kind === 'hurt') return [{ view: 'front', pose: 'neutral', expression: 'neutral' }, { view: 'front', pose: 'action', expression: 'sad' }, { view: 'front', pose: 'neutral', expression: 'neutral' }];
+    return [{ view: 'front', pose: 'neutral', expression: 'neutral' }, { view: 'three-quarter', pose: 'neutral', expression: 'happy' }];
   };
 
-  const makeGeneratedFrames = () => {
-    const kindsByAnimation: Record<SpriteAnimationKind, CharacterPose['kind'][]> = {
-      idle: ['idle', 'idle', 'idle', 'idle'],
-      walk: ['walk', 'front', 'walk', 'front'],
-      run: ['run', 'three-quarter', 'run', 'three-quarter'],
-      jump: ['jump', 'jump', 'idle'],
-      attack: ['action', 'three-quarter', 'front'],
-      hurt: ['front', 'idle', 'front'],
-      custom: ['front', 'three-quarter', 'walk'],
-    };
-    const list = kindsByAnimation[animation.kind] || ['front', 'idle'];
-    const nextFrames = list.map((kind, index) => ({
-      id: makeId('frame'),
-      name: `${animation.name} ${index + 1}`,
-      url: svgDataUrl(buildCharacterSvg(builder, kind, activeExpression, draft.width, draft.height)),
-      durationMs: Math.max(70, Math.round(1000 / Math.max(1, animation.fps || 8))),
-    }));
-    patchAnimation({ frames: nextFrames });
+  const createFrames = () => {
+    const sequence = generatedFrameSequence(activeAnimation.kind);
+    const frames: SpriteFrame[] = sequence.map((frame, index) => ({ id: id('frame'), name: `${activeAnimation.name} ${index + 1}`, url: svgDataUrl(buildCharacterSvg(draft, frame.view, frame.expression, frame.pose)), durationMs: Math.max(70, Math.round(1000 / Math.max(1, activeAnimation.fps || 8))) }));
+    patchAnimation({ frames });
     setFrameIndex(0);
+    setPlaying(true);
   };
 
-  const uploadFiles = async (files: FileList) => {
-    setUploading(true);
-    setError('');
+  const addAssetFrame = (asset: SpriteAssetOption) => patchAnimation({ frames: [...activeAnimation.frames, { id: id('frame'), name: asset.name, url: asset.url, sourceNodeId: asset.id, durationMs: 125 }] });
+
+  const uploadFrames = async (files: FileList) => {
+    setUploading(true); setError('');
     try {
       const session = await ensureTursoSession().catch(() => null);
-      const added: SpriteFrame[] = [];
+      const newFrames: SpriteFrame[] = [];
       for (const file of Array.from(files)) {
         if (!file.type.startsWith('image/')) continue;
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': file.type || 'application/octet-stream',
-            'X-File-Name': encodeURIComponent(file.name),
-            ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-          },
-          body: file,
-        });
+        const response = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) }, body: file });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.url) throw new Error(data.error || `Falha no upload de ${file.name}`);
-        added.push({ id: makeId('frame'), name: file.name, url: data.url, durationMs: 125 });
+        newFrames.push({ id: id('frame'), name: file.name, url: data.url, durationMs: 125 });
       }
-      patchAnimation({ frames: [...(animation.frames || []), ...added] });
-    } catch (e: any) {
-      setError(e?.message || 'Falha no upload');
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+      patchAnimation({ frames: [...activeAnimation.frames, ...newFrames] });
+    } catch (e: any) { setError(e?.message || 'Falha no upload.'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const askAi = async () => {
-    if (!String(draft.aiPrompt || '').trim()) {
-      setError('Descreva o personagem que deseja gerar ou refinar.');
-      return;
-    }
-    setAiBusy(true);
-    setError('');
+  const generateSvgAi = async () => {
+    if (!String(draft.prompt || '').trim()) return setError('Descreva o personagem ou criatura que deseja gerar/refinar.');
+    setBusy(true); setError('');
     try {
       const session = await ensureTursoSession().catch(() => null);
-      const response = await fetch('/api/mediators/think', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-        },
-        body: JSON.stringify({
-          mode: 'character-svg',
-          prompt: draft.aiPrompt,
-          character: {
-            name: draft.characterName,
-            description: draft.description,
-            builder: draft.builder,
-            concept: draft.concept,
-            width: draft.width,
-            height: draft.height,
-          },
-        }),
-      });
+      const response = await fetch('/api/mediators/think', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) }, body: JSON.stringify({ mode: 'character-svg', prompt: draft.prompt, character: { name: draft.characterName, description: draft.description, appearance: draft.appearance, profile: draft.profile, view: draft.activeView, expression: draft.activeExpression, pose: draft.activePose } }) });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.character) throw new Error(data.error || 'A IA não conseguiu gerar o personagem.');
-      setDraft((current) => ({
-        ...current,
-        aiSvg: data.character.svg || current.aiSvg,
-        concept: { ...defaultConcept, ...(current.concept || {}), ...(data.character.concept || {}) },
-        description: data.character.description || current.description,
-        updatedAt: new Date().toISOString(),
-      }));
-      setTab('poses');
-    } catch (e: any) {
-      setError(e?.message || 'Falha na geração do personagem');
-    } finally {
-      setAiBusy(false);
-    }
+      const result = data.characterSvg || data.character;
+      if (!response.ok || !result?.svg) throw new Error(data.error || 'A IA não retornou SVG válido.');
+      setDraft((current) => ({ ...current, generatedSvg: result.svg, generatedNotes: Array.isArray(result.notes) ? result.notes : current.generatedNotes, updatedAt: new Date().toISOString() }));
+    } catch (e: any) { setError(e?.message || 'Falha na geração do personagem.'); }
+    finally { setBusy(false); }
   };
 
-  const resetAi = () => setDraft((current) => ({ ...current, aiSvg: undefined }));
-
-  const copyPromptTemplate = () => {
-    const template = `Crie um personagem original em SVG. Papel: ${draft.concept?.role || 'protagonista'}. Arquétipo: ${draft.concept?.archetype || 'curioso'}. Silhueta: ${draft.concept?.silhouetteIntent || 'legível e memorável'}. Shape language: ${draft.concept?.shapeLanguage || 'círculos e triângulos suaves'}. Movimento: ${draft.concept?.movementNotes || 'expressivo'}. Preserve paleta, proporção cabeça/corpo e leitura amigável.`;
-    setDraft((current) => ({ ...current, aiPrompt: template }));
-    navigator.clipboard?.writeText(template).catch(() => null);
+  const generateSheetAi = async () => {
+    setSheetBusy(true); setError('');
+    try {
+      const session = await ensureTursoSession().catch(() => null);
+      const response = await fetch('/api/mediators/think', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) }, body: JSON.stringify({ mode: 'character-sheet', prompt: 'Complete a ficha respeitando as escolhas do autor.', character: { name: draft.characterName, description: draft.description, appearance: draft.appearance, profile: draft.profile } }) });
+      const data = await response.json().catch(() => ({}));
+      const result = data.characterSheet;
+      if (!response.ok || !result?.profile) throw new Error(data.error || 'A IA não retornou a ficha.');
+      setDraft((current) => ({ ...current, description: result.description || current.description, profile: { ...DEFAULT_PROFILE, ...(current.profile || {}), ...result.profile }, generatedNotes: result.notes || current.generatedNotes, updatedAt: new Date().toISOString() }));
+    } catch (e: any) { setError(e?.message || 'Falha na geração da ficha.'); }
+    finally { setSheetBusy(false); }
   };
 
-  const quickPrompts = [
-    'Gere uma folha conceitual com personagem amigável, turnaround claro e expressões fortes.',
-    'Refine para sprite de jogo 2D, simplificando silhueta e contraste para leitura em miniatura.',
-    'Crie uma companheira mágica com adereços reconhecíveis e poses abertas.',
+  const downloadSvg = () => {
+    const svg = draft.generatedSvg || manualSvg;
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = globalThis.document.createElement('a');
+    anchor.href = url; anchor.download = `${(draft.characterName || 'personagem').replace(/\s+/g, '-').toLowerCase()}.svg`; anchor.click(); URL.revokeObjectURL(url);
+  };
+
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'builder', label: 'CONSTRUIR' }, { id: 'profile', label: 'FICHA' }, { id: 'poses', label: 'POSES' }, { id: 'animate', label: 'ANIMAR' }, { id: 'ai', label: 'IA + SVG' },
   ];
 
-  const turnaroundKinds: CharacterPose['kind'][] = ['front', 'three-quarter', 'side', 'back'];
-  const previewExpressions = expressions.slice(0, 4);
-  const previewPoses = poses.slice(4, 8);
+  return <div className="fixed inset-0 z-[126] bg-[#F2F1ED] flex flex-col canvas-control atelier-studio" onPointerDown={(event) => event.stopPropagation()}>
+    <header className="shrink-0 bg-white border-b px-3 sm:px-5 pt-[max(.35rem,env(safe-area-inset-top))]">
+      <div className="min-h-16 flex items-center gap-3"><button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={20}/></button><div className="min-w-0 flex-1"><b className="block truncate text-lg">{title}</b><div className="text-[10px] font-mono tracking-wider text-neutral-500 uppercase">concept art · seres · anatomia modular · ficha · poses · sprites · svg</div></div><button disabled={!canEdit} onClick={() => onSave({ ...draft, activeAnimationId: activeAnimation.id })} className="h-11 px-4 rounded-xl bg-black text-white font-bold flex items-center gap-2 disabled:opacity-40"><Save size={15}/> SALVAR</button></div>
+      <div className="flex gap-2 overflow-x-auto pb-2">{tabs.map((item) => <button key={item.id} onClick={() => setTab(item.id)} className={`shrink-0 h-11 px-4 rounded-xl border-2 border-black text-xs font-bold ${tab === item.id ? 'bg-black text-white' : 'bg-white'}`}>{item.label}</button>)}</div>
+    </header>
 
-  return (
-    <div className="fixed inset-0 z-[126] bg-[#EEEDE9] flex flex-col" onPointerDown={(event) => event.stopPropagation()}>
-      <header className="shrink-0 min-h-16 bg-white border-b px-3 sm:px-5 flex items-center gap-3" style={{ paddingTop: 'max(.35rem, env(safe-area-inset-top))' }}>
-        <button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center">
-          <X size={19} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <b className="block truncate">{title}</b>
-          <div className="text-[10px] font-mono text-neutral-500 uppercase">personagens · concept art · turnaround · expressões · sprites · IA</div>
-        </div>
-        <button disabled={!canEdit} onClick={() => onSave({ ...draft, activeAnimationId: animation.id })} className="h-11 px-4 rounded-xl bg-black text-white text-xs font-bold flex items-center gap-2 disabled:opacity-40">
-          <Save size={15} /> SALVAR
-        </button>
-      </header>
+    <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[520px_minmax(0,1fr)] overflow-y-auto xl:overflow-hidden">
+      <section className="bg-white border-r p-4 sm:p-5 space-y-4 xl:overflow-y-auto">
+        {tab === 'builder' && <>
+          <div className="rounded-2xl border p-4 space-y-3"><div><b className="text-lg">Identidade visual do ser</b><div className="text-xs text-neutral-500">Comece pelo tipo de ser e pelo plano corporal. Depois refine partes e proporções.</div></div><label className="block text-[10px] font-mono text-neutral-500 uppercase">Nome<input value={draft.characterName} onChange={(event) => setDraft((current) => ({ ...current, characterName: event.target.value }))} className="mt-1 h-11 w-full rounded-xl border px-3 text-sm text-black"/></label><label className="block text-[10px] font-mono text-neutral-500 uppercase">Descrição<textarea value={draft.description || ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className="mt-1 min-h-20 w-full rounded-xl border p-3 text-sm text-black" placeholder="Quem é, universo, referências, comportamento..."/></label></div>
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[500px_minmax(0,1fr)] overflow-y-auto xl:overflow-hidden">
-        <section className="bg-white border-r p-4 space-y-4 xl:overflow-y-auto">
-          <div className="rounded-2xl border p-3">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {[
-                ['builder', 'Montagem'],
-                ['concept', 'Ficha'],
-                ['poses', 'Pranchas'],
-                ['animation', 'Sprites'],
-                ['ai', 'IA + SVG'],
-              ].map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setTab(id as Tab)}
-                  className={`rounded-xl border px-3 py-2 text-xs font-semibold ${tab === id ? 'bg-black text-white border-black' : 'hover:border-black'}`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between gap-2"><div><b className="text-lg">Tipo de ser</b><div className="text-xs text-neutral-500">Humano, animal, criatura ou híbrido.</div></div><InfoTip>O tipo de ser define quais estruturas anatômicas fazem sentido. O plano corporal pode ser alterado independentemente para criar híbridos.</InfoTip></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Tipo" value={appearance.species || 'human'} options={SPECIES} onChange={(value) => patchAppearance({ species: value })}/><SelectField label="Plano corporal" value={appearance.bodyPlan || 'biped'} options={BODY_PLANS} onChange={(value) => patchAppearance({ bodyPlan: value })}/></div><div className="mt-3 grid grid-cols-3 gap-2">{PRESETS.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset.id)} className={`rounded-xl border p-2 text-left hover:border-black ${appearance.speciesPreset === preset.id ? 'bg-black text-white' : ''}`}><div className="text-xl">{preset.icon}</div><b className="text-[11px]">{preset.label}</b><div className={`text-[9px] leading-tight mt-1 ${appearance.speciesPreset === preset.id ? 'text-white/70' : 'text-neutral-500'}`}>{preset.description}</div></button>)}</div></div>
 
-          {tab === 'builder' && (
-            <>
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] font-mono uppercase text-neutral-500">Começo rápido</div>
-                    <b className="text-sm">Presets conceituais</b>
-                    <div className="text-[10px] text-neutral-500 mt-1">Uma mistura entre model sheet, gerador modular e base para sprite.</div>
-                  </div>
-                  <button type="button" onClick={randomizeCharacter} className="h-9 px-3 rounded-xl border text-[10px] font-bold">
-                    RANDOMIZAR
-                  </button>
-                </div>
-                <div className="mt-3 grid sm:grid-cols-2 gap-2">
-                  {PRESETS.map((preset) => (
-                    <button key={preset.id} type="button" onClick={() => applyPreset(preset.id)} className="rounded-2xl border p-3 text-left hover:border-black">
-                      <div className="font-semibold text-sm">{preset.label}</div>
-                      <div className="text-[11px] text-neutral-500 mt-1">{preset.description}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
+          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between"><b className="text-lg">Cabeça e rosto</b><span className="text-[9px] font-mono text-neutral-400">FORMA ≠ PERSONALIDADE</span></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Cabeça" value={appearance.headShape} options={HEADS} onChange={(value) => patchAppearance({ headShape: value })}/><SelectField label="Rosto" value={appearance.faceShape} options={FACES} onChange={(value) => patchAppearance({ faceShape: value })}/><SelectField label="Olhos" value={appearance.eyeStyle} options={EYES} onChange={(value) => patchAppearance({ eyeStyle: value })}/><SelectField label="Sobrancelha" value={appearance.browStyle} options={BROWS} onChange={(value) => patchAppearance({ browStyle: value })} tip="Pode ser nenhuma. Em animais, sobrancelha anatômica muitas vezes não faz sentido; a expressão pode vir de pálpebras, orelhas, postura e focinho."/><SelectField label="Nariz" value={appearance.noseStyle} options={NOSES} onChange={(value) => patchAppearance({ noseStyle: value })}/><SelectField label="Boca" value={appearance.mouthStyle} options={MOUTHS} onChange={(value) => patchAppearance({ mouthStyle: value })}/><SelectField label="Orelha" value={appearance.earStyle} options={EARS} onChange={(value) => patchAppearance({ earStyle: value })}/><SelectField label="Cabelo" value={appearance.hairStyle} options={HAIR} onChange={(value) => patchAppearance({ hairStyle: value })}/><SelectField label="Focinho / bico" value={appearance.muzzleStyle || 'none'} options={MUZZLES} onChange={(value) => patchAppearance({ muzzleStyle: value })}/><label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">Bigodes <InfoTip>Bigodes podem ser um traço anatômico ou estilização. Em felinos e roedores ajudam a reconhecer a espécie.</InfoTip></span><button type="button" onClick={() => patchAppearance({ whiskers: !appearance.whiskers })} className={`mt-1 h-11 w-full rounded-xl border text-sm ${appearance.whiskers ? 'bg-black text-white' : 'bg-white'}`}>{appearance.whiskers ? 'SIM' : 'NÃO'}</button></label></div></div>
 
-              <div className="rounded-2xl border p-4 space-y-3">
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Nome do personagem<input value={draft.characterName} onChange={(event) => setDraft((current) => ({ ...current, characterName: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border px-3 text-sm text-black" /></label>
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Descrição curta<textarea value={draft.description || ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className="mt-1 min-h-10 w-full rounded-xl border p-3 text-sm text-black" /></label>
-                </div>
-              </div>
+          <div className="rounded-2xl border p-4"><b className="text-lg">Corpo e proporção</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Corpo" value={appearance.bodyShape} options={BODY_SHAPES} onChange={(value) => patchAppearance({ bodyShape: value })}/><SelectField label="Torso" value={appearance.torsoShape} options={TORSOS} onChange={(value) => patchAppearance({ torsoShape: value })}/><SelectField label="Braços" value={appearance.armStyle} options={ARMS} onChange={(value) => patchAppearance({ armStyle: value })}/><SelectField label="Pernas" value={appearance.legStyle} options={LEGS} onChange={(value) => patchAppearance({ legStyle: value })}/><SelectField label="Mãos" value={appearance.handStyle} options={HANDS} onChange={(value) => patchAppearance({ handStyle: value })}/><SelectField label="Pés / patas" value={appearance.footStyle || 'feet'} options={FEET} onChange={(value) => patchAppearance({ footStyle: value })}/></div><div className="mt-3 grid gap-2"><RangeField label="Proporção cabeça × corpo" value={appearance.headToBodyRatio} min={2.8} max={7} step={.1} onChange={(value) => patchAppearance({ headToBodyRatio: value })} tip="Números menores aumentam a cabeça em relação ao corpo. É uma convenção de estilização, não um indicador de idade ou personalidade por si só."/><RangeField label="Largura corporal" value={appearance.bodyWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ bodyWidth: value })}/><RangeField label="Ombros" value={appearance.shoulderWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ shoulderWidth: value })}/><RangeField label="Comprimento dos membros" value={appearance.limbLength} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ limbLength: value })}/></div></div>
 
-              <Picker label="Cabeça" options={HEAD} value={builder.headShape} onChange={(value) => patchBuilder({ headShape: value })} tip="Formato da cabeça, um dos sinais mais fortes de leitura de personagem." />
-              <Picker label="Corpo" options={BODY} value={builder.bodyShape} onChange={(value) => patchBuilder({ bodyShape: value })} tip="A silhueta ajuda a diferenciar personagens antes mesmo dos detalhes internos." />
-              <Picker label="Olhos" options={EYES} value={builder.eyeStyle} onChange={(value) => patchBuilder({ eyeStyle: value })} />
-              <Picker label="Nariz" options={NOSES} value={builder.noseStyle} onChange={(value) => patchBuilder({ noseStyle: value })} />
-              <Picker label="Boca" options={MOUTHS} value={builder.mouthStyle} onChange={(value) => patchBuilder({ mouthStyle: value })} />
-              <Picker label="Cabelo" options={HAIR} value={builder.hairStyle} onChange={(value) => patchBuilder({ hairStyle: value })} />
-              <Picker label="Roupa" options={OUTFITS} value={builder.outfitStyle} onChange={(value) => patchBuilder({ outfitStyle: value })} />
-              <Picker label="Acessório" options={ACCESSORIES} value={builder.accessory} onChange={(value) => patchBuilder({ accessory: value })} />
+          <div className="rounded-2xl border p-4"><b className="text-lg">Anatomia especial</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Superfície" value={appearance.surfaceStyle || 'skin'} options={SURFACES} onChange={(value) => patchAppearance({ surfaceStyle: value })}/><SelectField label="Cauda" value={appearance.tailStyle || 'none'} options={TAILS} onChange={(value) => patchAppearance({ tailStyle: value })}/><SelectField label="Asas" value={appearance.wingStyle || 'none'} options={WINGS} onChange={(value) => patchAppearance({ wingStyle: value })}/><SelectField label="Chifres / antenas" value={appearance.hornStyle || 'none'} options={HORNS} onChange={(value) => patchAppearance({ hornStyle: value })}/></div></div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <SliderField label="Cabeça × corpo" value={builder.headToBodyRatio} min={3} max={6.5} step={0.1} onChange={(value) => patchBuilder({ headToBodyRatio: value })} tip="Relação menor = cabeça maior e leitura mais cartunesca." />
-                <SliderField label="Ombros" value={builder.shoulderWidth} min={0.7} max={1.35} step={0.01} onChange={(value) => patchBuilder({ shoulderWidth: value })} />
-                <SliderField label="Tronco" value={builder.torsoLength} min={0.7} max={1.35} step={0.01} onChange={(value) => patchBuilder({ torsoLength: value })} />
-                <SliderField label="Braços e pernas" value={builder.limbLength} min={0.7} max={1.35} step={0.01} onChange={(value) => patchBuilder({ limbLength: value })} />
-                <SliderField label="Mãos" value={builder.handScale} min={0.6} max={1.5} step={0.01} onChange={(value) => patchBuilder({ handScale: value })} />
-                <SliderField label="Pés" value={builder.footScale} min={0.6} max={1.5} step={0.01} onChange={(value) => patchBuilder({ footScale: value })} />
-              </div>
+          <div className="rounded-2xl border p-4"><b className="text-lg">Roupa e acessórios</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Roupa" value={appearance.outfitStyle} options={OUTFITS} onChange={(value) => patchAppearance({ outfitStyle: value })}/><SelectField label="Acessório" value={appearance.accessory} options={ACCESSORIES} onChange={(value) => patchAppearance({ accessory: value })}/></div></div>
 
-              <div className="rounded-2xl border p-4">
-                <div className="text-[10px] font-mono uppercase text-neutral-500 mb-3">Paleta do personagem</div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <HexField label="Pele" value={builder.skinColor} onChange={(value) => patchBuilder({ skinColor: value })} />
-                  <HexField label="Cabelo" value={builder.hairColor} onChange={(value) => patchBuilder({ hairColor: value })} />
-                  <HexField label="Roupa" value={builder.outfitColor} onChange={(value) => patchBuilder({ outfitColor: value })} />
-                  <HexField label="Acento" value={builder.accentColor} onChange={(value) => patchBuilder({ accentColor: value })} />
-                  <HexField label="Contorno" value={builder.strokeColor} onChange={(value) => patchBuilder({ strokeColor: value })} />
-                </div>
-              </div>
-            </>
-          )}
+          <div className="rounded-2xl border p-4"><b className="text-lg">Cores</b><div className="mt-3 grid grid-cols-2 gap-3"><HexField label="Pele / base" value={appearance.skinColor} onChange={(value) => patchAppearance({ skinColor: value })}/><HexField label="Superfície" value={appearance.surfaceColor || appearance.skinColor} onChange={(value) => patchAppearance({ surfaceColor: value })}/><HexField label="Cabelo" value={appearance.hairColor} onChange={(value) => patchAppearance({ hairColor: value })}/><HexField label="Olhos" value={appearance.eyeColor} onChange={(value) => patchAppearance({ eyeColor: value })}/><HexField label="Roupa 1" value={appearance.outfitPrimary} onChange={(value) => patchAppearance({ outfitPrimary: value })}/><HexField label="Roupa 2" value={appearance.outfitSecondary} onChange={(value) => patchAppearance({ outfitSecondary: value })}/><HexField label="Linha" value={appearance.lineColor} onChange={(value) => patchAppearance({ lineColor: value })}/></div></div>
+        </>}
 
-          {tab === 'concept' && (
-            <>
-              <div className="rounded-2xl border p-4 space-y-3">
-                <div className="flex items-center gap-2"><BookOpen size={16} /><b className="text-sm">Ficha de personagem</b></div>
-                <div className="grid sm:grid-cols-2 gap-2">
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Papel<input value={draft.concept?.role || ''} onChange={(event) => patchConcept({ role: event.target.value })} className="mt-1 h-10 w-full rounded-xl border px-2 text-sm" /></label>
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Arquétipo<input value={draft.concept?.archetype || ''} onChange={(event) => patchConcept({ archetype: event.target.value })} className="mt-1 h-10 w-full rounded-xl border px-2 text-sm" /></label>
-                </div>
-                {[
-                  ['Backstory', 'backstory'],
-                  ['Intenção de silhueta', 'silhouetteIntent'],
-                  ['Shape language', 'shapeLanguage'],
-                  ['Intenção de cor', 'colorIntent'],
-                  ['Movimento', 'movementNotes'],
-                  ['Acessibilidade / representação', 'accessibilityNotes'],
-                  ['Justificativa visual', 'designRationale'],
-                ].map(([label, key]) => (
-                  <label key={key} className="block text-[9px] font-mono text-neutral-500 uppercase">
-                    {label}
-                    <textarea value={(draft.concept as any)?.[key] || ''} onChange={(event) => patchConcept({ [key]: event.target.value } as any)} className="mt-1 min-h-20 w-full rounded-xl border p-2 text-sm text-black" />
-                  </label>
-                ))}
-              </div>
-              <div className="rounded-2xl border p-4">
-                <b className="text-sm">Referências para aula</b>
-                <div className="mt-2 space-y-2">
-                  {REFERENCES.map((reference) => <div key={reference} className="text-[10px] leading-relaxed text-neutral-600">• {reference}</div>)}
-                </div>
-                <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3 text-[10px]">
-                  As tooltips tratam proporção, shape language e cor como convenções de leitura visual, não como essências psicológicas. A ideia é justificar escolhas com clareza, sem estereótipos.
-                </div>
-              </div>
-            </>
-          )}
+        {tab === 'profile' && <><div className="rounded-2xl border p-4 space-y-3"><div className="flex items-start justify-between gap-3"><div><b className="text-lg">Ficha do personagem</b><div className="text-xs text-neutral-500">Registre intenção e contexto, não “psicologia da forma”.</div></div><button onClick={() => void generateSheetAi()} disabled={sheetBusy} className="h-9 px-3 rounded-xl bg-black text-white text-[10px] font-bold flex items-center gap-2">{sheetBusy ? <Loader2 size={13} className="animate-spin"/> : <Sparkles size={13}/>} COMPLETAR COM IA</button></div>{[['Papel / função','role'],['Faixa etária / estágio de vida','ageBand'],['Personalidade','personality'],['Motivação','motivation'],['História','backstory'],['Intenção de silhueta','silhouetteIntent'],['Justificativa de shape language','shapeLanguageRationale'],['Justificativa das proporções','proportionRationale'],['Justificativa de cor','colorRationale'],['Justificativa de figurino','costumeRationale']].map(([label,key]) => <label key={key} className="block text-[10px] font-mono text-neutral-500 uppercase">{label}<textarea value={(profile as any)[key] || ''} onChange={(event) => patchProfile({ [key]: event.target.value } as Partial<CharacterProfile>)} className="mt-1 min-h-16 w-full rounded-xl border p-3 text-sm text-black"/></label>)}</div><div className="rounded-2xl border p-4"><b>Referências de concept art</b><div className="mt-2 space-y-2">{REFERENCES.map((reference) => <div key={reference} className="text-[10px] leading-relaxed text-neutral-600">• {reference}</div>)}</div></div></>}
 
-          {tab === 'poses' && (
-            <div className="rounded-2xl border p-4 space-y-4">
-              <div>
-                <b className="text-sm">Pranchas</b>
-                <div className="text-[10px] text-neutral-500">Turnaround, expressões e pose sheet, como nos exemplos clássicos de concept art.</div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {poses.map((pose) => {
-                  const svg = pose.svg || buildCharacterSvg(builder, pose.kind, activeExpression, draft.width, draft.height);
-                  return (
-                    <div key={pose.id} className="rounded-xl border p-3">
-                      <div className="aspect-[3/4] bg-neutral-50 rounded-lg overflow-hidden"><img src={svgDataUrl(svg)} className="w-full h-full object-contain" /></div>
-                      <div className="mt-2 flex gap-2">
-                        <input value={pose.name} onChange={(event) => updatePoses(poses.map((item) => item.id === pose.id ? { ...item, name: event.target.value } : item))} className="h-8 flex-1 rounded-lg border px-2 text-xs" />
-                        <button onClick={() => generatePose(pose)} className="h-8 px-3 rounded-lg border text-[9px] font-bold">ATUALIZAR</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <button onClick={() => downloadSvg(draft.aiSvg || manualSvg, draft.characterName)} className="h-10 w-full rounded-xl border flex items-center justify-center gap-2 text-[10px] font-bold"><Download size={13} /> BAIXAR SVG ATUAL</button>
-            </div>
-          )}
+        {tab === 'poses' && <div className="space-y-4"><div className="rounded-2xl border p-4"><b className="text-lg">Turnaround</b><div className="mt-1 text-xs text-neutral-500">Frente, 3/4, perfil e costas. Para animais, a leitura se adapta ao plano corporal.</div><div className="mt-3 grid grid-cols-2 gap-2">{VIEWS.map((view) => <button key={view} onClick={() => setDraft((current) => ({ ...current, activeView: view, generatedSvg: undefined }))} className={`rounded-xl border p-2 ${draft.activeView === view ? 'ring-2 ring-black' : ''}`}><div className="aspect-[3/4] bg-neutral-50 rounded-lg overflow-hidden"><img src={svgDataUrl(buildCharacterSvg(draft, view, draft.activeExpression || 'neutral', 'neutral'))} className="w-full h-full object-contain"/></div><div className="mt-1 text-[10px] font-bold uppercase">{view === 'front' ? 'Frente' : view === 'three-quarter' ? '3/4' : view === 'side' ? 'Perfil' : 'Costas'}</div></button>)}</div></div><div className="rounded-2xl border p-4"><b className="text-lg">Expression sheet</b><div className="mt-3 grid grid-cols-3 gap-2">{EXPRESSIONS.map((expression) => <button key={expression} onClick={() => setDraft((current) => ({ ...current, activeExpression: expression, generatedSvg: undefined }))} className={`rounded-xl border p-2 ${draft.activeExpression === expression ? 'ring-2 ring-black' : ''}`}><div className="aspect-square bg-neutral-50 rounded-full overflow-hidden"><img src={svgDataUrl(buildCharacterSvg(draft, 'front', expression, 'neutral'))} className="w-full h-full object-contain scale-[1.9]"/></div><div className="mt-1 text-[9px] font-bold uppercase">{expression}</div></button>)}</div></div><div className="rounded-2xl border p-4"><b className="text-lg">Pose sheet</b><div className="mt-3 grid grid-cols-2 gap-2">{POSES.map((pose) => <button key={pose.kind} onClick={() => setDraft((current) => ({ ...current, activePose: pose.kind, generatedSvg: undefined }))} className={`rounded-xl border p-2 ${draft.activePose === pose.kind ? 'ring-2 ring-black' : ''}`}><div className="aspect-[4/3] bg-neutral-50 rounded-lg overflow-hidden"><img src={svgDataUrl(buildCharacterSvg(draft, pose.kind === 'walk' || pose.kind === 'run' ? 'side' : 'three-quarter', draft.activeExpression || 'neutral', pose.kind))} className="w-full h-full object-contain"/></div><div className="mt-1 text-[10px] font-bold">{pose.label}</div></button>)}</div></div></div>}
 
-          {tab === 'animation' && (
-            <>
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <b className="text-sm">Sprites e pequenas animações</b>
-                    <div className="text-[10px] text-neutral-500">Monte estados locais, upload de frames e sprite sheet rápida.</div>
-                  </div>
-                  <select onChange={(event) => { if (event.target.value) addAnimation(event.target.value as SpriteAnimationKind); event.currentTarget.value = ''; }} defaultValue="" className="h-9 rounded-xl border px-2 text-[10px]">
-                    <option value="" disabled>+ ESTADO</option>
-                    {KINDS.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
-                  </select>
-                </div>
-                <div className="mt-3 flex gap-2 overflow-x-auto">
-                  {draft.animations.map((item) => (
-                    <button key={item.id} onClick={() => { setSelectedAnimationId(item.id); setFrameIndex(0); }} className={`shrink-0 h-9 px-3 rounded-xl border text-[10px] font-bold ${item.id === animation.id ? 'bg-black text-white' : ''}`}>
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">FPS<input type="number" min={1} max={30} value={animation.fps} onChange={(event) => patchAnimation({ fps: Number(event.target.value) })} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm" /></label>
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Loop<select value={animation.loop ? 'yes' : 'no'} onChange={(event) => patchAnimation({ loop: event.target.value === 'yes' })} className="mt-1 h-9 w-full rounded-lg border text-sm"><option value="yes">Sim</option><option value="no">Não</option></select></label>
-                  <label className="text-[9px] font-mono text-neutral-500 uppercase">Motion<select value={animation.motion} onChange={(event) => patchAnimation({ motion: event.target.value as SpriteMotionPreset })} className="mt-1 h-9 w-full rounded-lg border text-sm">{MOTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-                </div>
-                <button onClick={makeGeneratedFrames} className="mt-3 h-10 w-full rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-2"><Sparkles size={13} /> GERAR FRAMES A PARTIR DO PERSONAGEM</button>
-              </div>
+        {tab === 'animate' && <><div className="rounded-2xl border p-4"><div className="flex items-start justify-between gap-2"><div><b className="text-lg">Animações locais / sprites</b><div className="text-xs text-neutral-500">Estados para jogos, microinterações e personagens do projeto.</div></div><select defaultValue="" onChange={(event) => { if (event.target.value) addAnimation(event.target.value as SpriteAnimationKind); event.currentTarget.value = ''; }} className="h-9 rounded-xl border px-2 text-xs"><option value="" disabled>+ ESTADO</option>{ANIMATION_KINDS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></div><div className="mt-3 flex gap-2 overflow-x-auto">{draft.animations.map((animation) => <button key={animation.id} onClick={() => { setSelectedAnimationId(animation.id); setFrameIndex(0); }} className={`shrink-0 h-9 px-3 rounded-xl border text-[10px] font-bold ${animation.id === activeAnimation.id ? 'bg-black text-white' : ''}`}>{animation.name}</button>)}</div><div className="mt-3 grid grid-cols-3 gap-2"><label className="text-[9px] font-mono uppercase text-neutral-500">FPS<input type="number" min={1} max={30} value={activeAnimation.fps} onChange={(event) => patchAnimation({ fps: Number(event.target.value) })} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"/></label><label className="text-[9px] font-mono uppercase text-neutral-500">Loop<select value={activeAnimation.loop ? 'yes' : 'no'} onChange={(event) => patchAnimation({ loop: event.target.value === 'yes' })} className="mt-1 h-9 w-full rounded-lg border"><option value="yes">Sim</option><option value="no">Não</option></select></label><SelectField label="Motion" value={activeAnimation.motion} options={MOTIONS} onChange={(value) => patchAnimation({ motion: value })}/></div><button onClick={createFrames} className="mt-3 h-11 w-full rounded-xl bg-black text-white font-bold text-xs flex items-center justify-center gap-2"><Sparkles size={14}/> GERAR FRAMES DO ESTADO</button></div><div className="rounded-2xl border p-4"><div className="flex items-center justify-between gap-2"><div><b>Frames próprios</b><div className="text-xs text-neutral-500">Use imagens do projeto ou envie arquivos.</div></div><button onClick={() => fileRef.current?.click()} className="h-9 px-3 rounded-xl border text-[10px] font-bold flex items-center gap-1"><Upload size={13}/> UPLOAD</button></div><input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFrames(event.target.files); }}/><div className="mt-3 grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">{availableAssets.map((asset) => <button key={asset.id} onClick={() => addAssetFrame(asset)} className="rounded-xl border overflow-hidden text-left"><div className="aspect-square bg-neutral-100"><img src={asset.url} className="w-full h-full object-contain"/></div><div className="p-2 text-[9px] font-bold truncate">+ {asset.name}</div></button>)}</div>{uploading ? <div className="mt-2 text-xs">Enviando...</div> : null}</div><div className="rounded-2xl border p-4"><b>Timeline</b><div className="mt-3 space-y-2">{activeAnimation.frames.map((frame, index) => <div key={frame.id} className="flex items-center gap-2 rounded-xl border p-2"><button onClick={() => { setFrameIndex(index); setPlaying(false); }} className={`h-14 w-14 rounded-lg overflow-hidden border ${frameIndex === index ? 'ring-2 ring-black' : ''}`}><img src={frame.url} className="w-full h-full object-contain"/></button><div className="min-w-0 flex-1"><div className="text-[10px] font-bold truncate">{index + 1}. {frame.name}</div><input type="number" min={30} max={5000} value={frame.durationMs || 125} onChange={(event) => patchAnimation({ frames: activeAnimation.frames.map((item) => item.id === frame.id ? { ...item, durationMs: Number(event.target.value) } : item) })} className="mt-1 h-7 w-24 rounded border px-1 text-[10px]"/></div><button onClick={() => patchAnimation({ frames: activeAnimation.frames.filter((item) => item.id !== frame.id) })} className="h-8 w-8 rounded-lg border text-red-600"><Trash2 size={13} className="mx-auto"/></button></div>)}{!activeAnimation.frames.length ? <div className="rounded-xl border border-dashed p-4 text-center text-xs text-neutral-400">Clique em GERAR FRAMES DO ESTADO para testar a animação imediatamente.</div> : null}</div></div></>}
 
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <b className="text-sm">Frames próprios</b>
-                    <div className="text-[10px] text-neutral-500">Use ativos do projeto, desenhos ou uploads externos.</div>
-                  </div>
-                  <button onClick={() => fileRef.current?.click()} className="h-9 px-3 rounded-xl border text-[10px] font-bold"><Upload size={13} className="inline mr-1" />UPLOAD</button>
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); }} />
-                <div className="mt-3 grid grid-cols-2 gap-2 max-h-56 overflow-y-auto">
-                  {availableAssets.map((asset) => (
-                    <button key={asset.id} onClick={() => addAssetFrame(asset)} className="rounded-xl border overflow-hidden text-left hover:border-black">
-                      <div className="aspect-square bg-neutral-100"><img src={asset.url} className="w-full h-full object-contain" /></div>
-                      <div className="p-2 text-[9px] font-bold truncate">+ {asset.name}</div>
-                    </button>
-                  ))}
-                </div>
-                {uploading ? <div className="mt-2 text-[10px]">Enviando...</div> : null}
-              </div>
+        {tab === 'ai' && <div className="rounded-2xl border-2 border-black p-4 space-y-3"><div className="flex items-center gap-2"><WandSparkles size={16}/><b className="text-lg">IA + SVG</b></div><div className="text-xs text-neutral-500">A IA recebe tipo de ser, plano corporal, partes opcionais, ficha, pose e expressão. Pode gerar humano, animal, criatura ou híbrido em SVG.</div><div className="flex gap-2 items-start"><textarea value={draft.prompt || ''} onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))} className="min-h-32 min-w-0 flex-1 rounded-xl border p-3 text-sm" placeholder="Ex.: crie uma raposa quadrúpede com orelhas pontudas, cauda grande, sem sobrancelhas, desenho vetorial simples e consistente para sprite..."/><VoiceDictationButton onText={(text) => setDraft((current) => ({ ...current, prompt: `${current.prompt || ''}${current.prompt ? ' ' : ''}${text}` }))}/></div><button onClick={() => void generateSvgAi()} disabled={busy} className="h-11 w-full rounded-xl bg-black text-white text-xs font-bold flex items-center justify-center gap-2">{busy ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>} GERAR / REFINAR SVG</button>{draft.generatedSvg ? <button onClick={() => setDraft((current) => ({ ...current, generatedSvg: undefined }))} className="h-10 w-full rounded-xl border text-xs font-bold">VOLTAR AO CONSTRUTOR MODULAR</button> : null}{draft.generatedNotes?.length ? <div className="rounded-xl bg-neutral-50 p-3">{draft.generatedNotes.map((note) => <div key={note} className="text-[10px] text-neutral-600">• {note}</div>)}</div> : null}</div>}
 
-              <div className="rounded-2xl border p-4">
-                <b className="text-sm">Timeline do estado</b>
-                <div className="mt-3 space-y-2">
-                  {(animation.frames || []).map((frame, index) => (
-                    <div key={frame.id} className="flex items-center gap-2 rounded-xl border p-2">
-                      <img src={frame.url} className="h-12 w-12 object-contain bg-neutral-50 rounded" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[10px] font-bold truncate">{index + 1}. {frame.name}</div>
-                        <input type="number" min={30} max={5000} value={frame.durationMs || 125} onChange={(event) => patchAnimation({ frames: animation.frames.map((item) => item.id === frame.id ? { ...item, durationMs: Number(event.target.value) } : item) })} className="mt-1 h-7 w-24 border rounded px-1 text-[10px]" />
-                      </div>
-                      <button onClick={() => patchAnimation({ frames: animation.frames.filter((item) => item.id !== frame.id) })} className="h-8 w-8 rounded-lg border text-red-600"><Trash2 size={13} className="mx-auto" /></button>
-                    </div>
-                  ))}
-                  {!animation.frames.length ? <div className="rounded-xl border border-dashed p-4 text-center text-[10px] text-neutral-400">Ainda não há frames neste estado.</div> : null}
-                </div>
-              </div>
-            </>
-          )}
+        {error ? <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div> : null}
+      </section>
 
-          {tab === 'ai' && (
-            <div className="rounded-2xl border-2 border-black p-4 space-y-3">
-              <div className="flex items-center gap-2"><WandSparkles size={16} /><b className="text-sm">Gerar ou refinar por IA</b></div>
-              <div className="text-[10px] text-neutral-500">A IA parte da ficha e do construtor para propor um SVG original. O foco é sair com algo utilizável e consistente para model sheet, sprite ou personagem de interface.</div>
-              <div className="flex flex-wrap gap-2">
-                {quickPrompts.map((prompt) => (
-                  <button key={prompt} type="button" onClick={() => setDraft((current) => ({ ...current, aiPrompt: prompt }))} className="rounded-full border px-3 py-1.5 text-[10px] hover:border-black">
-                    {prompt}
-                  </button>
-                ))}
-                <button type="button" onClick={copyPromptTemplate} className="rounded-full border px-3 py-1.5 text-[10px] hover:border-black flex items-center gap-1"><Copy size={12} /> TEMPLATE</button>
-              </div>
-              <div className="flex gap-2 items-start">
-                <textarea value={draft.aiPrompt || ''} onChange={(event) => setDraft((current) => ({ ...current, aiPrompt: event.target.value }))} placeholder="Ex.: crie uma personagem pesquisadora, modular, amigável, com turnaround legível, pronta para sprite 2D, mantendo cabeça maior, jardineira azul e paleta reduzida..." className="min-h-28 min-w-0 flex-1 rounded-xl border p-3 text-sm" />
-                <VoiceDictationButton onText={(text) => setDraft((current) => ({ ...current, aiPrompt: `${current.aiPrompt || ''}${current.aiPrompt ? ' ' : ''}${text}` }))} />
-              </div>
-              <button onClick={() => void askAi()} disabled={aiBusy} className="h-11 w-full rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-2">{aiBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} GERAR PERSONAGEM SVG + FICHA</button>
-              {draft.aiSvg ? <button onClick={resetAi} className="h-9 w-full rounded-xl border text-[10px] flex items-center justify-center gap-2"><RotateCcw size={12} /> VOLTAR AO CONSTRUTOR MANUAL</button> : null}
-            </div>
-          )}
-
-          {error ? <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div> : null}
-        </section>
-
-        <section className="min-h-[55vh] xl:min-h-0 overflow-auto p-5 sm:p-8 flex flex-col items-center gap-5">
-          <div className="w-full max-w-5xl flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-[9px] font-mono text-neutral-500 uppercase">Prancha viva</div>
-              <b className="text-xl">{draft.characterName}</b>
-              <div className="text-sm text-neutral-500">Mistura entre gerador modular, model sheet e base para sprite.</div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setPlaying((value) => !value)} className="h-10 px-4 rounded-xl bg-black text-white text-[10px] font-bold flex items-center gap-2">{playing ? <Pause size={14} /> : <Play size={14} />} {playing ? 'PAUSAR' : 'REPRODUZIR'}</button>
-              <button onClick={() => downloadSvg(draft.aiSvg || manualSvg, draft.characterName)} className="h-10 px-4 rounded-xl border text-[10px] font-bold flex items-center gap-2"><Download size={14} /> SVG</button>
-            </div>
-          </div>
-
-          <div className="w-full max-w-5xl grid xl:grid-cols-[1.3fr_.95fr] gap-4">
-            <SheetCard label="Prancha principal">
-              <div className="rounded-3xl border bg-white min-h-[540px] flex items-center justify-center p-8" style={{ background: draft.background }}>
-                <motion.div {...motionProps(animation?.motion || 'none', playing)} className="flex items-center justify-center max-w-full max-h-full">
-                  <img src={mainPreviewUrl} alt={draft.characterName} className="max-w-full max-h-[500px] object-contain" style={{ imageRendering: draft.pixelated ? 'pixelated' : 'auto' }} />
-                </motion.div>
-              </div>
-            </SheetCard>
-
-            <div className="grid gap-4">
-              <SheetCard label="Proportion settings">
-                <div className="grid grid-cols-[92px_1fr] gap-3 items-center">
-                  <div className="aspect-[3/4] rounded-xl bg-neutral-50 border overflow-hidden flex items-center justify-center">
-                    <img src={svgDataUrl(buildCharacterSvg(builder, 'front', activeExpression, 160, 220))} className="w-full h-full object-contain" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold">{builder.headToBodyRatio.toFixed(1)} cabeças</div>
-                    <div className="mt-2 h-2 rounded-full bg-neutral-200 overflow-hidden"><div className="h-full bg-black rounded-full" style={{ width: `%` }} /></div>
-                    <div className="mt-2 text-[11px] text-neutral-500">O corpo responde a proporção cabeça × corpo, largura de ombros, tronco e comprimento de membros.</div>
-                  </div>
-                </div>
-              </SheetCard>
-
-              <SheetCard label="Turnarounds">
-                <div className="grid grid-cols-4 gap-2">
-                  {turnaroundKinds.map((kind) => (
-                    <div key={kind} className="rounded-xl border bg-neutral-50 p-2">
-                      <div className="aspect-[3/4] overflow-hidden rounded-lg"><img src={svgDataUrl(buildCharacterSvg(builder, kind, activeExpression, 120, 150))} className="w-full h-full object-contain" /></div>
-                      <div className="mt-1 text-center text-[10px] font-medium text-neutral-600">{kind === 'front' ? 'Frente' : kind === 'three-quarter' ? '3/4' : kind === 'side' ? 'Perfil' : 'Costas'}</div>
-                    </div>
-                  ))}
-                </div>
-              </SheetCard>
-
-              <SheetCard label="Expression sheet">
-                <div className="grid grid-cols-4 gap-2">
-                  {previewExpressions.map((expression) => (
-                    <div key={expression.id} className="rounded-xl border bg-neutral-50 p-2">
-                      <div className="aspect-square rounded-full overflow-hidden border bg-white flex items-center justify-center">
-                        <img src={svgDataUrl(buildCharacterSvg(builder, 'front', expression, 140, 140))} className="w-full h-full object-contain" />
-                      </div>
-                      <input value={expression.name} onChange={(event) => updateExpressions(expressions.map((item) => item.id === expression.id ? { ...item, name: event.target.value } : item))} className="mt-2 h-7 w-full rounded-lg border px-2 text-[10px]" />
-                    </div>
-                  ))}
-                </div>
-              </SheetCard>
-
-              <SheetCard label="Pose sheet">
-                <div className="grid grid-cols-2 gap-2">
-                  {previewPoses.map((pose) => (
-                    <div key={pose.id} className="rounded-xl border bg-neutral-50 p-2">
-                      <div className="aspect-[4/3] overflow-hidden rounded-lg"><img src={svgDataUrl(buildCharacterSvg(builder, pose.kind, activeExpression, 180, 140))} className="w-full h-full object-contain" /></div>
-                      <div className="mt-1 text-center text-[10px] font-medium text-neutral-600">{pose.name}</div>
-                    </div>
-                  ))}
-                </div>
-              </SheetCard>
-            </div>
-          </div>
-
-          {animation && animation.frames.length ? (
-            <div className="w-full max-w-5xl rounded-2xl bg-white border p-4">
-              <div className="flex items-center gap-2"><b className="text-sm">{animation.name}</b><span className="text-[9px] text-neutral-500">· {animation.frames.length} frames · {animation.fps} fps</span></div>
-              <div className="mt-2 flex gap-1 overflow-x-auto">
-                {animation.frames.map((frame, index) => (
-                  <button key={frame.id} onClick={() => { setFrameIndex(index); setPlaying(false); }} className={`shrink-0 h-14 w-14 rounded-lg border overflow-hidden ${index === frameIndex ? 'ring-2 ring-black' : ''}`}>
-                    <img src={frame.url} className="w-full h-full object-contain" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      </main>
-    </div>
-  );
+      <section className="min-h-[55vh] xl:min-h-0 overflow-auto p-4 sm:p-7 flex flex-col items-center gap-4">
+        <div className="w-full max-w-4xl flex items-center justify-between gap-3"><div><div className="text-[9px] font-mono uppercase text-neutral-500">Prévia viva · {SPECIES.find((item) => item.id === appearance.species)?.label || 'Ser'} · {BODY_PLANS.find((item) => item.id === appearance.bodyPlan)?.label || 'plano corporal'}</div><b className="text-xl">{draft.characterName}</b></div><div className="flex gap-2"><button onClick={() => setPlaying((value) => !value)} className="h-10 px-3 rounded-xl bg-black text-white text-[10px] font-bold flex items-center gap-2">{playing ? <Pause size={14}/> : <Play size={14}/>} {playing ? 'PAUSAR' : 'PLAY'}</button><button onClick={downloadSvg} className="h-10 px-3 rounded-xl border bg-white text-[10px] font-bold flex items-center gap-2"><Download size={14}/> SVG</button></div></div>
+        <div className="w-full max-w-4xl rounded-3xl border bg-white min-h-[560px] flex items-center justify-center p-6" style={{ background: draft.background }}><motion.div {...animationMotionProps(activeAnimation.motion, playing)} className="flex items-center justify-center max-w-full max-h-full"><img src={previewUrl} alt={draft.characterName} className="max-w-full max-h-[520px] object-contain" style={{ imageRendering: draft.pixelated ? 'pixelated' : 'auto' }}/></motion.div></div>
+        {activeAnimation.frames.length ? <div className="w-full max-w-4xl rounded-2xl border bg-white p-3"><div className="flex items-center gap-2"><b className="text-sm">{activeAnimation.name}</b><span className="text-[10px] text-neutral-500">· {activeAnimation.frames.length} frames · {activeAnimation.fps} fps</span></div><div className="mt-2 flex gap-1 overflow-x-auto">{activeAnimation.frames.map((frame, index) => <button key={frame.id} onClick={() => { setFrameIndex(index); setPlaying(false); }} className={`shrink-0 h-16 w-16 rounded-lg border overflow-hidden ${index === frameIndex ? 'ring-2 ring-black' : ''}`}><img src={frame.url} className="w-full h-full object-contain"/></button>)}</div></div> : null}
+      </section>
+    </main>
+  </div>;
 }
