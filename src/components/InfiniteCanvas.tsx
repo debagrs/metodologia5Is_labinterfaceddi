@@ -3,9 +3,9 @@ import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
-  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2, ChevronUp, ChevronDown, Plug
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
@@ -17,9 +17,10 @@ import VideoStudio, { VideoPreview, blankVideo } from './VideoStudio';
 import UXWritingStudio, { UXWritingPreview, blankUXWriting } from './UXWritingStudio';
 import SoundStudio, { SoundPreview, blankSound } from './SoundStudio';
 import HardwareStudio, { HardwarePreview, blankHardware } from './HardwareStudio';
-import SpriteStudio, { SpriteCharacterPreview, blankSpriteCharacter } from './SpriteStudio';
+import SpriteStudio, { SpriteCharacterPreview, blankSpriteCharacter, buildCharacterSvg } from './SpriteStudio';
 import type { SpriteAssetOption } from './SpriteStudio';
 import GameDesignStudio, { GameDesignPreview, blankGameDesign } from './GameDesignStudio';
+import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from './ApiConnectionsStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -35,6 +36,29 @@ const PHASE_NOTE_PALETTE: Record<Phase, { body: string; header: string; border: 
   'Inspeção': { body: '#F7F0FF', header: '#EBDDFF', border: '#BE9BE8', dot: '#9A65D6' },
   'Implementação': { body: '#FFF1F2', header: '#FFDDE1', border: '#EE9BA4', dot: '#E85D6A' },
 };
+
+const xmlEscape = (value: any) => String(value ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m] || m));
+const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+function wireframeToSvgString(document: WireframeDocument) {
+  const frame = document.frames.find((item) => item.id === document.activeFrameId) || document.frames[0];
+  if (!frame) return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600"><rect width="400" height="600" fill="#fff"/></svg>';
+  const w = Math.max(240, frame.width || 393), h = Math.max(320, frame.height || 852);
+  const scale = Math.min(1, 720 / h, 520 / w); const outW = w * scale, outH = h * scale;
+  let y = (frame.padding || 20) * scale; const pad = (frame.padding || 20) * scale; const gap = (frame.gap || 12) * scale;
+  const pieces = (frame.blocks || []).map((block) => {
+    const bh = (typeof block.height === 'number' ? block.height : block.type === 'navbar' ? 60 : block.type === 'card' || block.type === 'section' ? 120 : block.type === 'image' ? 140 : 48) * scale;
+    const bw = outW - pad * 2; const x = pad; const r = Math.min(16, Number(block.radius ?? 10)) * scale;
+    const bg = block.background || (block.type === 'button' || block.type === 'navbar' ? '#111111' : '#F1F1EF'); const fg = block.color || (block.type === 'button' || block.type === 'navbar' ? '#FFFFFF' : '#111111');
+    const label = xmlEscape(block.label || block.type);
+    let body = `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${r}" fill="${bg}" stroke="#D8D8D4" stroke-width="1"/>`;
+    if (block.type === 'image') body += `<path d="M ${x+bw*.18} ${y+bh*.68} L ${x+bw*.4} ${y+bh*.42} L ${x+bw*.52} ${y+bh*.56} L ${x+bw*.7} ${y+bh*.32} L ${x+bw*.84} ${y+bh*.68} Z" fill="#CFCFCA"/>`;
+    else if (block.type === 'divider') body = `<line x1="${x}" y1="${y+bh/2}" x2="${x+bw}" y2="${y+bh/2}" stroke="#333"/>`;
+    else body += `<text x="${x+12*scale}" y="${y+bh/2+4*scale}" font-family="Arial,sans-serif" font-size="${Math.max(9,14*scale)}" fill="${fg}">${label}</text>`;
+    y += bh + gap; return body;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outW} ${outH}"><rect width="${outW}" height="${outH}" fill="${frame.background || '#FFFFFF'}"/>${pieces}</svg>`;
+}
+
 
 interface InfiniteCanvasProps {
   project: Project;
@@ -121,13 +145,16 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [newSprite, setNewSprite] = useState<CharacterSpriteDocument | null>(null);
   const [gameEditorNodeId, setGameEditorNodeId] = useState<string | null>(null);
   const [newGame, setNewGame] = useState<GameDesignDocument | null>(null);
+  const [apiEditorNodeId, setApiEditorNodeId] = useState<string | null>(null);
+  const [newApiConnections, setNewApiConnections] = useState<ApiConnectionsDocument | null>(null);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
   const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
 
-  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId);
+  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('atelier-open', atelierOpen);
@@ -137,21 +164,24 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const projectVideoMedia = nodes.flatMap((item) => {
     const media: Array<{ id: string; kind: 'image' | 'video'; url: string; name: string; source: 'project' }> = [];
     if (item.type === 'canvas-image' && item.imageUrl) media.push({ id: item.id, kind: 'image', url: item.imageUrl, name: item.imageName || item.title || 'Imagem do projeto', source: 'project' });
-    if (item.type === 'drawing-sheet' && item.drawing) media.push({ id: item.id, kind: 'image', url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawingToSvgString(item.drawing))}`, name: item.drawingName || item.title || 'Desenho do projeto', source: 'project' });
-    if (item.type === 'video-board' && item.video) { const url = item.video.generatedUrl || item.video.sourceUrl; if (url) media.push({ id: item.id, kind: 'video', url, name: item.videoName || item.video.title || 'Vídeo do projeto', source: 'project' }); }
+    if (item.type === 'drawing-sheet' && item.drawing) media.push({ id: item.id, kind: 'image', url: svgDataUrl(drawingToSvgString(item.drawing)), name: item.drawingName || item.title || 'Desenho do projeto', source: 'project' });
+    if (item.type === 'wireframe-board' && item.wireframe) media.push({ id: item.id, kind: 'image', url: svgDataUrl(wireframeToSvgString(item.wireframe)), name: item.wireframeName || item.title || 'Wireframe do projeto', source: 'project' });
+    if (item.type === 'interactive-lab' && item.interactive?.asset?.url) media.push({ id: item.id, kind: 'image', url: item.interactive.asset.url, name: item.interactiveName || item.title || 'Asset da interação', source: 'project' });
+    if (item.type === 'sprite-character' && item.sprite) media.push({ id: item.id, kind: 'image', url: svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')), name: item.spriteName || item.title || 'Personagem do projeto', source: 'project' });
+    if (item.type === 'video-board' && item.video) { const url = item.video.generatedUrl || item.video.sourceUrl; if (url) media.push({ id: item.id, kind: 'video', url, name: item.videoName || item.video.title || 'Vídeo do projeto', source: 'project' }); (item.video.media || []).forEach((m) => { if (m.url) media.push({ ...m, id: `${item.id}:${m.id}`, source: 'project' }); }); }
     (item.attachments || []).forEach((attachment) => { if (attachment.url && (attachment.type === 'image' || attachment.type === 'video')) media.push({ id: `${item.id}:${attachment.id}`, kind: attachment.type, url: attachment.url, name: attachment.name || `Mídia de ${item.title}`, source: 'project' }); });
     return media;
   });
 
   const projectSpriteAssets: SpriteAssetOption[] = nodes.flatMap((item) => {
     if (item.type === 'canvas-image' && item.imageUrl) return [{ id: item.id, name: item.imageName || item.title || 'Imagem do projeto', url: item.imageUrl, source: 'project' as const }];
-    if (item.type === 'drawing-sheet' && item.drawing) return [{ id: item.id, name: item.drawingName || item.title || 'Desenho do projeto', url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawingToSvgString(item.drawing))}`, source: 'project' as const }];
+    if (item.type === 'drawing-sheet' && item.drawing) return [{ id: item.id, name: item.drawingName || item.title || 'Desenho do projeto', url: svgDataUrl(drawingToSvgString(item.drawing)), source: 'project' as const }];
     return [];
   });
 
   const projectGameAssets = nodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type)).map((item) => {
     const spriteAnimation = item.sprite?.animations?.find((animation) => animation.id === item.sprite?.activeAnimationId) || item.sprite?.animations?.[0];
-    const spriteUrl = spriteAnimation?.frames?.[0]?.url;
+    const spriteUrl = spriteAnimation?.frames?.[0]?.url || (item.sprite ? svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')) : undefined);
     return {
       id: item.id,
       name: item.imageName || item.drawingName || item.interactiveName || item.wireframeName || item.soundName || item.videoName || item.designSystemName || item.spriteName || item.title,
@@ -194,6 +224,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
     if (node.type === 'game-design') {
       return { width: node.width || (compactCanvas ? 320 : 420), height: node.height || (compactCanvas ? 260 : 320) };
+    }
+    if (node.type === 'api-connections') {
+      return { width: node.width || (compactCanvas ? 320 : 410), height: node.height || (compactCanvas ? 240 : 290) };
     }
     if (node.type === 'core') {
       return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
@@ -341,7 +374,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design';
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design' || node.type === 'api-connections';
     const minWidth = isVisualNode ? 100 : 240;
     const minHeight = isVisualNode ? 80 : 150;
     const maxWidth = isVisualNode ? 1400 : 820;
@@ -1050,6 +1083,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isHardwareBoard = node.type === 'hardware-board';
             const isSpriteCharacter = node.type === 'sprite-character';
             const isGameDesign = node.type === 'game-design';
+            const isApiConnections = node.type === 'api-connections';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
             const phasePalette = PHASE_NOTE_PALETTE[node.phase];
@@ -1398,7 +1432,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             }
 
 
-            if (isWireframeBoard || isDesignSystem || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign) {
+            if (isWireframeBoard || isDesignSystem || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign || isApiConnections) {
               const label = isWireframeBoard ? (node.wireframeName || 'Wireframes')
                 : isDesignSystem ? (node.designSystemName || 'Design System')
                 : isVideoBoard ? (node.videoName || 'Vídeo')
@@ -1406,7 +1440,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 : isSoundBoard ? (node.soundName || 'Sonoridade')
                 : isHardwareBoard ? (node.hardwareName || 'Hardware')
                 : isSpriteCharacter ? (node.spriteName || 'Personagem')
-                : (node.gameDesignName || 'Game Design');
+                : isGameDesign ? (node.gameDesignName || 'Game Design')
+                : (node.apiConnectionsName || 'APIs & Conexões');
               const edit = () => {
                 if (isWireframeBoard) setWireframeEditorNodeId(node.id);
                 else if (isDesignSystem) setDesignSystemEditorNodeId(node.id);
@@ -1415,7 +1450,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 else if (isSoundBoard) setSoundEditorNodeId(node.id);
                 else if (isHardwareBoard) setHardwareEditorNodeId(node.id);
                 else if (isSpriteCharacter) setSpriteEditorNodeId(node.id);
-                else setGameEditorNodeId(node.id);
+                else if (isGameDesign) setGameEditorNodeId(node.id);
+                else setApiEditorNodeId(node.id);
               };
               return (
                 <motion.div
@@ -1444,6 +1480,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     {isHardwareBoard && node.hardware && <HardwarePreview document={node.hardware} className="h-full w-full" />}
                     {isSpriteCharacter && node.sprite && <SpriteCharacterPreview document={node.sprite} className="h-full w-full" />}
                     {isGameDesign && node.gameDesign && <GameDesignPreview document={node.gameDesign} className="h-full w-full" />}
+                    {isApiConnections && node.apiConnections && <ApiConnectionsPreview document={node.apiConnections} className="h-full w-full" />}
                   </div>
                   <div className="absolute left-2 bottom-2 rounded-lg bg-black/75 text-white px-2 py-1 text-[9px] font-mono pointer-events-none">{label}</div>
                   {isConnectionTarget && <button type="button" onClick={(event)=>{event.stopPropagation();toggleConnection(node.id)}} className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair" aria-label={`Conectar com ${label}`} />}
@@ -1830,8 +1867,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           </div>
         )}
 
+        {/* Mobile: collapsed by default. One arrow opens the complete Ateliê. */}
+        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="sm:hidden self-center h-11 w-14 rounded-2xl border border-[#E0E0DE] bg-white/95 shadow-lg flex items-center justify-center" aria-label={mobileToolsOpen ? 'Fechar ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={22}/> : <ChevronUp size={22}/>}</button>
+
         {/* Action button bar */}
-        <div className="flex flex-wrap items-center justify-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#E0E0DE] rounded-xl p-1.5 shadow-lg">
+        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} sm:flex flex-wrap items-center justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl p-1.5 shadow-lg max-h-[46vh] sm:max-h-none overflow-y-auto sm:overflow-visible`}>
           <button 
             onClick={() => handleZoom(0.1)} 
             className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
@@ -1903,6 +1943,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               <button type="button" data-tour="atelier-hardware" onClick={() => setNewHardware(blankHardware())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · giroscópio, sensores e microcontroladores"><Cpu size={14}/><span className="hidden sm:inline">HARDWARE</span></button>
               <button type="button" data-tour="atelier-sprite" onClick={() => setNewSprite(blankSpriteCharacter())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · personagens, sprites, estados e pequenas animações locais"><User size={14}/><span className="hidden sm:inline">PERSONAGENS</span></button>
               <button type="button" data-tour="atelier-game" onClick={() => setNewGame(blankGameDesign())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · GDD, fases, sprites, mecânicas e playtest"><Gamepad2 size={14}/><span className="hidden sm:inline">GAME DESIGN</span></button>
+              <button type="button" data-tour="atelier-api" onClick={() => setNewApiConnections(blankApiConnections())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · explorar, incorporar e criar APIs"><Plug size={14}/><span className="hidden sm:inline">APIs</span></button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -2108,6 +2149,14 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       }} onClose={()=>setNewGame(null)}/>}
 
       {gameEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===gameEditorNodeId&&item.type==='game-design'); if(!node)return null; return <GameDesignStudio key={node.id} document={node.gameDesign||blankGameDesign()} availableAssets={projectGameAssets.filter((a)=>a.id!==node.id)} title={node.gameDesignName||'Game Design'} canEdit={canEditCanvas} onSave={(gameDesign)=>onUpdateNode({...node,gameDesign,gameDesignName:gameDesign.title||node.gameDesignName,title:gameDesign.title||node.title,content:`${gameDesign.scenes.length} cenas · ${new Set(gameDesign.scenes.flatMap((scene)=>scene.spriteIds||[])).size} sprites`})} onClose={()=>setGameEditorNodeId(null)}/>})()}
+
+      {newApiConnections && <ApiConnectionsStudio document={newApiConnections} title="APIs & Conexões" canEdit={canEditCanvas} onSave={(apiConnections)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:410; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?240:290; const position=getCenteredPosition(startWidth,startHeight);
+        const summary=apiConnections.connections.map((c)=>`${c.name} [${c.status}]${c.envVars.length?` env:${c.envVars.join(',')}`:''}`).join(' · ');
+        onAddNode({type:'api-connections',title:apiConnections.title||'APIs & Conexões',apiConnectionsName:apiConnections.title||'APIs & Conexões',content:summary||'Catálogo e integrações de API do projeto',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,apiConnections,connections:[]}); setNewApiConnections(null);
+      }} onClose={()=>setNewApiConnections(null)}/>} 
+
+      {apiEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===apiEditorNodeId&&item.type==='api-connections'); if(!node)return null; return <ApiConnectionsStudio key={node.id} document={node.apiConnections||blankApiConnections()} title={node.apiConnectionsName||'APIs & Conexões'} canEdit={canEditCanvas} onSave={(apiConnections)=>onUpdateNode({...node,apiConnections,apiConnectionsName:apiConnections.title||node.apiConnectionsName,title:apiConnections.title||node.title,content:apiConnections.connections.map((c)=>`${c.name} [${c.status}]${c.envVars.length?` env:${c.envVars.join(',')}`:''}`).join(' · ')||node.content})} onClose={()=>setApiEditorNodeId(null)}/>})()}
 
     </div>
   );
