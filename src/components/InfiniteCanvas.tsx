@@ -11,7 +11,7 @@ import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
 import DrawingStudio, { DrawingPreview, drawingToSvgString } from './DrawingStudio';
 import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
-import WireframeStudio, { WireframePreview, blankWireframe } from './WireframeStudio';
+import WireframeStudio, { WireframePreview, blankWireframe, WireframeImportSource } from './WireframeStudio';
 import DesignSystemStudio, { DesignSystemPreview, blankDesignSystem } from './DesignSystemStudio';
 import VideoStudio, { VideoPreview, blankVideo } from './VideoStudio';
 import { readStoredTursoSession } from '../lib/turso';
@@ -100,6 +100,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [activeInteractiveNodeId, setActiveInteractiveNodeId] = useState<string | null>(null);
   const [wireframeEditorNodeId, setWireframeEditorNodeId] = useState<string | null>(null);
   const [newWireframe, setNewWireframe] = useState<WireframeDocument | null>(null);
+  const [newWireframeSource, setNewWireframeSource] = useState<WireframeImportSource | null>(null);
   const [designSystemEditorNodeId, setDesignSystemEditorNodeId] = useState<string | null>(null);
   const [newDesignSystem, setNewDesignSystem] = useState<DesignSystemDocument | null>(null);
   const [videoEditorNodeId, setVideoEditorNodeId] = useState<string | null>(null);
@@ -1808,7 +1809,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 <Code2 size={14} />
                 <span className="hidden sm:inline">INTERAÇÃO</span>
               </button>
-              <button type="button" onClick={() => setNewWireframe(blankWireframe(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="hidden sm:inline">WIREFRAME</span></button>
+              <button type="button" onClick={() => { setNewWireframeSource(null); setNewWireframe(blankWireframe(projectDesignSystem)); }} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="hidden sm:inline">WIREFRAME</span></button>
               <button type="button" onClick={() => setNewDesignSystem(blankDesignSystem())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · tipografia, paleta, tokens e acessibilidade"><Palette size={14}/><span className="hidden sm:inline">DESIGN SYSTEM</span></button>
               <button type="button" onClick={() => setNewVideo(blankVideo(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · inserir e gerar motion para vídeo e redes"><Film size={14}/><span className="hidden sm:inline">VÍDEO</span></button>
               <button 
@@ -1845,6 +1846,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
             drawing: item.drawing!,
           }))}
+          onWireframe={(drawing) => { setNewWireframeSource({ kind: 'drawing', name: 'Desenho do canvas', drawing }); setNewWireframe(blankWireframe(projectDesignSystem)); setNewDrawing(null); }}
           onAnimate={(drawing) => { setNewInteractive(interactiveFromDrawing(drawing, 'Desenho animado')); setNewDrawing(null); }}
           onSave={(drawing) => {
             const startWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 300 : 420;
@@ -1884,6 +1886,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
               drawing: item.drawing!,
             }))}
+            onWireframe={(drawing) => { setNewWireframeSource({ kind: 'drawing', name: drawingNode.drawingName || drawingNode.title || 'Desenho do canvas', drawing }); setNewWireframe(blankWireframe(projectDesignSystem)); setDrawingEditorNodeId(null); }}
             onAnimate={(drawing) => { setNewInteractive(interactiveFromDrawing(drawing, `${drawingNode.drawingName || 'Desenho'} · animação`)); setDrawingEditorNodeId(null); }}
             onSave={(drawing) => onUpdateNode({
               ...drawingNode,
@@ -1950,12 +1953,21 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         );
       })()}
 
-      {newWireframe && <WireframeStudio document={newWireframe} designSystem={projectDesignSystem} title="Novo wireframe" canEdit={canEditCanvas} onSave={(wireframe)=>{
-        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:420; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:320; const position=getCenteredPosition(startWidth,startHeight);
-        onAddNode({type:'wireframe-board',title:'Wireframes',wireframeName:`Wireframes ${nodes.filter((item)=>item.type==='wireframe-board').length+1}`,content:'Frames, auto layout e componentes do projeto.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,wireframe,connections:[]}); setNewWireframe(null);
-      }} onClose={()=>setNewWireframe(null)}/>} 
+      {newWireframe && <WireframeStudio
+        document={newWireframe}
+        designSystem={projectDesignSystem}
+        title="Novo wireframe"
+        canEdit={canEditCanvas}
+        initialSource={newWireframeSource}
+        availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))}
+        onSave={(wireframe)=>{
+          const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:420; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:320; const position=getCenteredPosition(startWidth,startHeight);
+          onAddNode({type:'wireframe-board',title:'Wireframes',wireframeName:`Wireframes ${nodes.filter((item)=>item.type==='wireframe-board').length+1}`,content:'Frames, auto layout e componentes do projeto.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,wireframe,connections:[]}); setNewWireframe(null); setNewWireframeSource(null);
+        }}
+        onClose={()=>{setNewWireframe(null);setNewWireframeSource(null)}}
+      />} 
 
-      {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
+      {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
 
       {newDesignSystem && <DesignSystemStudio document={newDesignSystem} title="Novo Design System" canEdit={canEditCanvas} onSave={(designSystem)=>{
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:400; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?250:300; const position=getCenteredPosition(startWidth,startHeight);
