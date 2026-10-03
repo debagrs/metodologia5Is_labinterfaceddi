@@ -59,6 +59,7 @@ const REFERENCES: Record<string, string> = {
   documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
   heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
   implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
+  divulgacao: 'Marketing orientado por evidências; proposta de valor; posicionamento; canais próprios, conquistados e pagos; conteúdo e formatos; SEO/ASO; comunidades; imprensa; parcerias; funil; aquisição, ativação, retenção e indicação; métricas; experimentos; modelos de receita; acessibilidade, privacidade e prevenção de dark patterns.',
   cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.',
   futuros: 'Referência prioritária: HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. Tese (Doutorado em Design), UFRGS, 2022. Conceitos centrais: projetar por cenários como prática dinâmica, social, participativa e iterativa; deslocamento do problema para possibilidades; memórias do futuro; construção retrospectiva; cenários articulando atores, trama, trajetória, evidências e espaço-tempo. Referências mobilizadas na tese, conforme pertinência: Nigel Cross; Herbert Simon; Donald Schön; Rittel e Webber; Richard Buchanan; Sanders e Stappers; Kensing e Blomberg; Krippendorff; Ezio Manzini; François Jégou; Celaschi e Deserti; Paulo Reyes; Manuela Celi; Carlo Franzato; Herman Kahn e Anthony Wiener; Michel Godet; Peter Schwartz; Kees van der Heijden; Ute von Reibnitz; Pieter Desmet; Marc Hassenzahl; Anna Pohlmeyer; Roberto Verganti; David Ingvar; Michel Thiollent; Laurence Bardin. Complementares do Mago: André Coutinho e Anderson Penha; Anthony Dunne e Fiona Raby; speculative design; futures thinking; sinais e tendências; contratendências; futuros prováveis, possíveis e desejáveis; design fiction; props; narrativas; participatory futures; backcasting.'
 };
@@ -73,6 +74,7 @@ function referenceFor(role: string): string {
   if (value.includes('heur')) return REFERENCES.heuristicas;
   if (value.includes('futuro') || value.includes('cenario') || value.includes('especul') || value.includes('foresight')) return REFERENCES.futuros;
   if (value.includes('cosmot') || value.includes('tecnolog') || value.includes('hi-low') || value.includes('hi low')) return REFERENCES.cosmotecnica;
+  if (value.includes('marketing') || value.includes('divul') || value.includes('monetiza') || value.includes('circul')) return REFERENCES.divulgacao;
   if (value.includes('implement')) return REFERENCES.implementacao;
   return REFERENCES.ux;
 }
@@ -82,10 +84,13 @@ function buildMessages(body: MediatorRequestBody) {
     ? body.existingThoughts.slice(-18).map((item) => `- [${item.phase}] ${item.title}: ${item.content}`).join('\n')
     : 'Ainda não há registros no canvas.';
 
+  const divulgaRule = body.mediator.id === 'agent-divulga'
+    ? ' Para DIVULGA: proponha estratégias fortes, mas verificáveis. Relacione cada ideia a público, mensagem, formato, canal/ferramenta, métrica e hipótese de monetização quando pertinente. Não invente audiência, receita ou resultados e não use spam/dark patterns.'
+    : '';
   const system = `Você integra a Metodologia 5I’s: Ideação, Inambulação, Instauração, Inspeção e Implementação.
 Você é ${body.mediator.name}, agente de ${body.mediator.role}. ${body.mediator.bio}
 Base conceitual: ${referenceFor(body.mediator.role)}
-Regras: não substitua a autoria; não entregue solução acabada; questione premissas; relacione à fase ${body.phase}; não invente autores, normas ou dados; use português do Brasil; retorne somente JSON válido no formato {"title":"...","question":"...","provocations":["...","..."],"scientificContext":"..."}.`;
+Regras: não substitua a autoria; não entregue solução acabada; questione premissas; relacione à fase ${body.phase}; não invente autores, normas ou dados; use português do Brasil; retorne somente JSON válido no formato {"title":"...","question":"...","provocations":["...","..."],"scientificContext":"..."}.${divulgaRule}`;
 
   const user = `PROJETO
 Nome: ${body.project.name}
