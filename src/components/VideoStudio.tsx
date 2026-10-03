@@ -32,6 +32,7 @@ export const blankVideo = (designSystem?: DesignSystemDocument): VideoDocument =
   duration: 6,
   background: designSystem?.colors.find((item)=>item.role==='brand')?.value || '#111111',
   accent: designSystem?.colors.find((item)=>item.role==='accent')?.value || '#FF13F0',
+  textColor: designSystem?.colors.find((item)=>item.role==='text')?.value || '#FFFFFF',
   prompt: '',
 });
 
@@ -41,10 +42,38 @@ export function VideoPreview({ document, className = '' }: { document: VideoDocu
   const url = document.generatedUrl || document.sourceUrl;
   if (url) return <video src={url} controls playsInline className={`bg-black object-contain ${className}`} />;
   return (
-    <div className={`flex items-center justify-center text-white p-4 ${className}`} style={{background:document.background}}>
+    <div className={`flex items-center justify-center p-4 ${className}`} style={{background:normalizeHex(document.background, '#111111'),color:normalizeHex(document.textColor || '#FFFFFF', '#FFFFFF')}}>
       <div className="text-center max-w-[85%]"><div className="text-xl font-bold">{document.title}</div><div className="mt-2 text-xs opacity-70">{document.subtitle}</div><div className="mt-4 h-1 w-16 mx-auto rounded-full" style={{background:document.accent}}/></div>
     </div>
   );
+}
+
+
+const normalizeHex = (value: string, fallback: string) => {
+  const clean = String(value || '').trim().replace(/^#/, '').toUpperCase();
+  if (/^[0-9A-F]{3}$/.test(clean)) return `#${clean.split('').map((c)=>c+c).join('')}`;
+  if (/^[0-9A-F]{6}$/.test(clean)) return `#${clean}`;
+  return fallback;
+};
+
+function HexColorField({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const safe = normalizeHex(value, '#000000');
+  return <label className="text-[9px] font-mono text-neutral-500 block">
+    {label}
+    <div className="mt-1 flex items-center gap-2">
+      <input type="color" value={safe} disabled={disabled} onChange={(e)=>onChange(e.target.value.toUpperCase())} className="h-11 w-12 shrink-0 rounded-lg border border-black/10 bg-white p-1"/>
+      <input
+        value={value}
+        disabled={disabled}
+        onChange={(e)=>onChange(e.target.value)}
+        onBlur={(e)=>onChange(normalizeHex(e.target.value, safe))}
+        placeholder="#FF13F0"
+        className="h-11 min-w-0 flex-1 rounded-xl border border-black/10 px-3 text-xs font-mono uppercase text-black"
+        inputMode="text"
+        spellCheck={false}
+      />
+    </div>
+  </label>;
 }
 
 export default function VideoStudio({ document, designSystem, title = 'Vídeo', canEdit = true, onSave, onClose }: VideoStudioProps) {
@@ -107,21 +136,21 @@ export default function VideoStudio({ document, designSystem, title = 'Vídeo', 
       const family = designSystem?.primaryFont || 'Inter';
       const draw = (now:number) => {
         const t = Math.min(1,(now-started)/durationMs);
-        ctx.fillStyle=draft.background; ctx.fillRect(0,0,outW,outH);
+        ctx.fillStyle=normalizeHex(draft.background, '#111111'); ctx.fillRect(0,0,outW,outH);
         const pulse = 0.5 + 0.5*Math.sin(t*Math.PI*4);
         const cx=outW*.5, cy=outH*.52;
         for(let i=0;i<18;i++){
           const angle=(Math.PI*2*i/18)+t*Math.PI*.8;
           const radius=Math.min(outW,outH)*(.18+.055*Math.sin(t*Math.PI*2+i));
           const x=cx+Math.cos(angle)*radius, y=cy+Math.sin(angle)*radius;
-          ctx.globalAlpha=.12+.18*pulse; ctx.fillStyle=draft.accent; ctx.beginPath(); ctx.arc(x,y,6+(i%3)*4,0,Math.PI*2); ctx.fill();
+          ctx.globalAlpha=.12+.18*pulse; ctx.fillStyle=normalizeHex(draft.accent, '#FF13F0'); ctx.beginPath(); ctx.arc(x,y,6+(i%3)*4,0,Math.PI*2); ctx.fill();
         }
         ctx.globalAlpha=1;
         const enter=Math.min(1,t/.22); const exit=Math.min(1,(1-t)/.16); const alpha=Math.min(enter,exit);
-        ctx.globalAlpha=alpha; ctx.fillStyle='#FFFFFF'; ctx.textAlign='center';
+        ctx.globalAlpha=alpha; ctx.fillStyle=normalizeHex(draft.textColor || '#FFFFFF', '#FFFFFF'); ctx.textAlign='center';
         ctx.font=`700 ${Math.round(outW*.075)}px ${family}, Arial, sans-serif`; wrapText(ctx,draft.title,cx,cy-outH*.05,outW*.78,outW*.085);
         ctx.font=`400 ${Math.round(outW*.032)}px ${family}, Arial, sans-serif`; ctx.globalAlpha=alpha*.75; wrapText(ctx,draft.subtitle||'',cx,cy+outH*.10,outW*.72,outW*.045);
-        ctx.globalAlpha=1; ctx.fillStyle=draft.accent; ctx.fillRect(cx-outW*.12,cy+outH*.18,outW*.24,Math.max(5,outH*.004));
+        ctx.globalAlpha=1; ctx.fillStyle=normalizeHex(draft.accent, '#FF13F0'); ctx.fillRect(cx-outW*.12,cy+outH*.18,outW*.24,Math.max(5,outH*.004));
         if(t<1) requestAnimationFrame(draw); else recorder.stop();
       };
       requestAnimationFrame(draw);
@@ -136,7 +165,7 @@ export default function VideoStudio({ document, designSystem, title = 'Vídeo', 
   const downloadGenerated = () => {
     const url = draft.generatedUrl || draft.sourceUrl;
     if (!url) return;
-    const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.download='video-5is.webm'; document.body.appendChild(a); a.click(); a.remove();
+    const a=window.document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.download='video-5is.webm'; window.document.body.appendChild(a); a.click(); a.remove();
   };
 
   return (
@@ -149,7 +178,7 @@ export default function VideoStudio({ document, designSystem, title = 'Vídeo', 
       <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)]">
         <section className="min-h-0 overflow-y-auto bg-white border-b xl:border-b-0 xl:border-r border-black/10 p-4 sm:p-5 space-y-5">
           <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Formato de saída</div><div className="mt-2 grid grid-cols-2 gap-2">{FORMATS.map((format)=><button key={format.id} type="button" onClick={()=>chooseFormat(format.id)} className={`rounded-xl border p-3 text-left ${draft.format===format.id?'bg-black text-white border-black':'border-black/10'}`}><div className="text-[11px] font-bold">{format.label}</div><div className={`text-[9px] mt-1 ${draft.format===format.id?'text-white/60':'text-neutral-400'}`}>{format.hint} · {format.width}×{format.height}</div></button>)}</div></div>
-          <div className="rounded-2xl border border-black/10 p-4 space-y-3"><div className="text-sm font-bold">Conteúdo do motion</div><label className="block text-[9px] font-mono text-neutral-500">TÍTULO<input value={draft.title} onChange={(e)=>setDraft({...draft,title:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-black/10 px-3 text-black"/></label><label className="block text-[9px] font-mono text-neutral-500">SUBTÍTULO<textarea value={draft.subtitle||''} onChange={(e)=>setDraft({...draft,subtitle:e.target.value})} className="mt-1 min-h-20 w-full rounded-xl border border-black/10 p-3 text-black"/></label><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono text-neutral-500">FUNDO<input type="color" value={draft.background} onChange={(e)=>setDraft({...draft,background:e.target.value})} className="mt-1 h-11 w-full"/></label><label className="text-[9px] font-mono text-neutral-500">DESTAQUE<input type="color" value={draft.accent} onChange={(e)=>setDraft({...draft,accent:e.target.value})} className="mt-1 h-11 w-full"/></label></div><label className="block text-[9px] font-mono text-neutral-500">DURAÇÃO · {draft.duration}s<input type="range" min={2} max={12} value={draft.duration} onChange={(e)=>setDraft({...draft,duration:Number(e.target.value)})} className="mt-1 w-full h-8"/></label></div>
+          <div className="rounded-2xl border border-black/10 p-4 space-y-3"><div className="text-sm font-bold">Conteúdo do motion</div><label className="block text-[9px] font-mono text-neutral-500">TÍTULO<input value={draft.title} onChange={(e)=>setDraft({...draft,title:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-black/10 px-3 text-black"/></label><label className="block text-[9px] font-mono text-neutral-500">SUBTÍTULO<textarea value={draft.subtitle||''} onChange={(e)=>setDraft({...draft,subtitle:e.target.value})} className="mt-1 min-h-20 w-full rounded-xl border border-black/10 p-3 text-black"/></label><div className="grid grid-cols-1 sm:grid-cols-2 gap-2"><HexColorField label="FUNDO · HEX" value={draft.background} disabled={!canEdit} onChange={(value)=>setDraft({...draft,background:value})}/><HexColorField label="DESTAQUE · HEX" value={draft.accent} disabled={!canEdit} onChange={(value)=>setDraft({...draft,accent:value})}/><HexColorField label="TEXTO · HEX" value={draft.textColor || '#FFFFFF'} disabled={!canEdit} onChange={(value)=>setDraft({...draft,textColor:value})}/></div><label className="block text-[9px] font-mono text-neutral-500">DURAÇÃO · {draft.duration}s<input type="range" min={2} max={12} value={draft.duration} onChange={(e)=>setDraft({...draft,duration:Number(e.target.value)})} className="mt-1 w-full h-8"/></label></div>
           <div className="rounded-2xl border border-black/10 p-4"><div className="text-sm font-bold flex items-center gap-2"><Film size={16}/> Inserir vídeo existente</div><input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];if(f)void uploadVideo(f)}}/><button type="button" disabled={isUploading} onClick={()=>fileRef.current?.click()} className="mt-3 w-full h-11 rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono font-bold disabled:opacity-50">{isUploading?<Loader2 size={15} className="animate-spin"/>:<Upload size={15}/>} UPLOAD</button><div className="mt-2 text-[9px] text-neutral-500">Uploads grandes podem depender do limite do provedor. Para vídeos pesados, use uma URL pública e deixe o projeto referenciá-la.</div><input value={draft.sourceUrl||''} onChange={(e)=>setDraft({...draft,sourceUrl:e.target.value})} placeholder="https://.../video.mp4" className="mt-3 h-10 w-full rounded-xl border border-black/10 px-3 text-xs"/></div>
           <div className="rounded-2xl border-2 border-black p-4"><div className="text-sm font-bold flex items-center gap-2"><WandSparkles size={16}/> Gerar motion dentro do Ateliê</div><div className="mt-1 text-[10px] leading-relaxed text-neutral-500">Gera localmente um vídeo WebM curto com o formato, cores e conteúdo acima. Não depende de uma API externa de vídeo.</div><button type="button" disabled={isGenerating} onClick={()=>void generateMotionVideo()} className="mt-3 w-full min-h-12 rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[11px] font-bold disabled:opacity-50">{isGenerating?<Loader2 size={16} className="animate-spin"/>:<Play size={16}/>} {isGenerating?'GERANDO E ENVIANDO…':'GERAR VÍDEO EXPERIMENTAL'}</button>{(draft.generatedUrl||draft.sourceUrl)&&<button type="button" onClick={downloadGenerated} className="mt-2 w-full h-10 rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono"><Download size={14}/> ABRIR / BAIXAR</button>}</div>
           <label className="block"><span className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Prompt / roteiro para geradores externos</span><textarea value={draft.prompt||''} onChange={(e)=>setDraft({...draft,prompt:e.target.value})} placeholder="Ex.: vídeo vertical de 8 segundos, câmera aproxima lentamente..." className="mt-2 min-h-28 w-full rounded-xl border border-black/10 p-3 text-sm"/></label>
