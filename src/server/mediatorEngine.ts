@@ -24,7 +24,10 @@ export interface MediatorRequestBody {
   wireframeOptions?: { device?: 'auto' | 'mobile' | 'tablet' | 'desktop' | string; fidelity?: 'structure' | 'balanced' | 'faithful' | string };
   uxWriting?: { action?: string; sourceText?: string; originalText?: string; context?: string; screen?: string; tone?: string; sourceLocale?: string; targetLocale?: string; prompt?: string; glossary?: string[] };
   video?: any;
+  character?: any;
+  existingApis?: any[];
 }
+
 
 
 export interface MediatorInsight {
@@ -220,11 +223,6 @@ function compactProjectContext(body: MediatorRequestBody) {
     drawingName: item.drawingName || '',
     interactiveName: item.interactiveName || '',
     interactive: item.interactive ? { engine: item.interactive.engine, title: clipProjectText(item.interactive.title, 180), prompt: clipProjectText(item.interactive.prompt, 900), code: clipProjectText(item.interactive.code, 2600) } : undefined,
-    wireframeName: item.wireframeName || '', wireframe: clipProjectText(item.wireframe, 4200),
-    designSystemName: item.designSystemName || '', designSystem: clipProjectText(item.designSystem, 3500),
-    uxWritingName: item.uxWritingName || '', uxWriting: clipProjectText(item.uxWriting, 3500),
-    spriteName: item.spriteName || '', sprite: clipProjectText(item.sprite, 4200),
-    apiConnectionsName: item.apiConnectionsName || '', apiConnections: clipProjectText(item.apiConnections, 5200),
     attachments: Array.isArray(item.attachments) ? item.attachments.slice(0, 12).map((attachment: any) => ({ name: clipProjectText(attachment?.name, 220), type: clipProjectText(attachment?.type, 120), url: clipProjectText(attachment?.url, 700) })) : [],
   }));
   const compactConversations = conversations.slice(0, 20).map((conversation: any) => ({
@@ -577,6 +575,7 @@ function cleanVideoPlanJson(text: string) {
   const data = JSON.parse(stripped.slice(start, end + 1));
   const allowedFormats = new Set(['reel','story','tiktok','square','feed','youtube','facebook','linkedin','custom']);
   const allowedTransitions = new Set(['cut','fade','slide','zoom']);
+  const allowedMotions = new Set(['none','pan-left','pan-right','zoom-in','zoom-out','float','pulse','rotate']);
   const timeline = Array.isArray(data?.timeline) ? data.timeline.slice(0, 24).map((item: any) => ({
     mediaId: String(item?.mediaId || ''),
     name: String(item?.name || ''),
@@ -584,6 +583,8 @@ function cleanVideoPlanJson(text: string) {
     transition: allowedTransitions.has(String(item?.transition)) ? String(item.transition) : 'fade',
     fit: item?.fit === 'contain' ? 'contain' : 'cover',
     caption: String(item?.caption || '').slice(0, 240),
+    overlayText: String(item?.overlayText || '').slice(0, 160),
+    motion: allowedMotions.has(String(item?.motion)) ? String(item.motion) : 'none',
   })).filter((item: any) => item.mediaId || item.name) : [];
   return {
     title: String(data?.title || '').slice(0, 160),
@@ -597,56 +598,9 @@ function cleanVideoPlanJson(text: string) {
 function buildVideoPlanMessages(body: MediatorRequestBody) {
   const video = (body as any)?.video || {};
   const media = Array.isArray(video.media) ? video.media.slice(0, 60) : [];
-  const system = `Você é montador(a), diretor(a) de motion e estrategista de conteúdo audiovisual dentro do Ateliê 5I’s. Sua tarefa é transformar a instrução do usuário e a mídia DISPONÍVEL em uma timeline editável — nunca inventar arquivos inexistentes. Priorize ritmo, clareza, legibilidade mobile, acessibilidade e coerência com o formato social escolhido. Use apenas mediaId/name presentes na lista. Retorne SOMENTE JSON válido com este formato: {"title":"...","subtitle":"...","format":"reel|story|tiktok|square|feed|youtube|facebook|linkedin|custom","timeline":[{"mediaId":"id existente","name":"nome existente","duration":2.5,"transition":"cut|fade|slide|zoom","fit":"cover|contain","caption":"texto opcional"}],"notes":["decisão de montagem"]}. Se houver pouca mídia, monte uma versão curta com o que existe em vez de inventar cenas.`;
+  const system = `Você é montador(a), diretor(a) de motion e estrategista de conteúdo audiovisual dentro do Ateliê 5I’s. Sua tarefa é transformar a instrução do usuário e a mídia DISPONÍVEL em uma timeline editável — nunca inventar arquivos inexistentes. Priorize ritmo, clareza, legibilidade mobile, acessibilidade e coerência com o formato social escolhido. Use apenas mediaId/name presentes na lista. Retorne SOMENTE JSON válido com este formato: {"title":"...","subtitle":"...","format":"reel|story|tiktok|square|feed|youtube|facebook|linkedin|custom","timeline":[{"mediaId":"id existente","name":"nome existente","duration":2.5,"transition":"cut|fade|slide|zoom","fit":"cover|contain","motion":"none|pan-left|pan-right|zoom-in|zoom-out|float|pulse|rotate","overlayText":"texto curto opcional","caption":"texto opcional"}],"notes":["decisão de montagem"]}. Se houver pouca mídia, monte uma versão curta com o que existe em vez de inventar cenas.`;
   const user = `PEDIDO: ${String((body as any)?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m:any)=>`- ${m.id} | ${m.kind} | ${m.name}`).join('\n') || 'nenhuma mídia'}`;
   return { system, user };
-}
-
-
-function extractJsonObject(text) {
-  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const start = stripped.indexOf('{'); const end = stripped.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('A IA não retornou JSON válido.');
-  return JSON.parse(stripped.slice(start, end + 1));
-}
-function sanitizeCharacterSvg(svg) {
-  const clean = String(svg || '').trim()
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
-    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, '')
-    .replace(/javascript:/gi, '');
-  if (!/^<svg[\s>]/i.test(clean) || !/<\/svg>\s*$/i.test(clean)) throw new Error('A IA não devolveu um SVG completo.');
-  return clean.slice(0, 80000);
-}
-function cleanCharacterSvgJson(text) {
-  const data = extractJsonObject(text);
-  return { svg: sanitizeCharacterSvg(data.svg), notes: Array.isArray(data.notes) ? data.notes.slice(0, 8).map(String) : [] };
-}
-function buildCharacterSvgMessages(body) {
-  const c = body?.character || {};
-  const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. Preserve as escolhas modulares recebidas e trate proporção, shape language, silhueta, roupa, pose e expressão como decisões visuais contextualizadas — nunca como diagnóstico psicológico. Use viewBox 0 0 360 520. O personagem deve ser legível em silhueta e reutilizável em jogos/animação. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
-  const user = `PEDIDO: ${String(body?.prompt || '')}\nNOME: ${String(c.name || '')}\nDESCRIÇÃO: ${String(c.description || '')}\nVISTA: ${String(c.view || 'front')}\nEXPRESSÃO: ${String(c.expression || 'neutral')}\nPOSE: ${String(c.pose || 'neutral')}\nAPARÊNCIA MODULAR: ${JSON.stringify(c.appearance || {})}\nFICHA/INTENÇÃO: ${JSON.stringify(c.profile || {})}`;
-  return { system, user };
-}
-function cleanCharacterSheetJson(text) {
-  const data = extractJsonObject(text); const p = data.profile || {};
-  return { description:String(data.description || '').slice(0,1200), profile:{ role:String(p.role||'').slice(0,220), ageBand:String(p.ageBand||'').slice(0,160), personality:String(p.personality||'').slice(0,900), motivation:String(p.motivation||'').slice(0,900), backstory:String(p.backstory||'').slice(0,1400), keywords:Array.isArray(p.keywords)?p.keywords.slice(0,12).map(String):[], silhouetteIntent:String(p.silhouetteIntent||'').slice(0,900), shapeLanguageRationale:String(p.shapeLanguageRationale||'').slice(0,900), proportionRationale:String(p.proportionRationale||'').slice(0,900), colorRationale:String(p.colorRationale||'').slice(0,900), costumeRationale:String(p.costumeRationale||'').slice(0,900)}, notes:Array.isArray(data.notes)?data.notes.slice(0,8).map(String):[] };
-}
-function buildCharacterSheetMessages(body) {
-  const c=body?.character||{};
-  const system=`Você é concept artist e pesquisador(a) de character design. Complete uma ficha de personagem utilizável por equipe de design/animação/jogos. Fundamente em silhueta, proporção, line of action, model sheet, expression sheet, costume, paleta e consistência. Shape language é convenção visual contextualizada, não psicologia universal. Não invente estereótipos sobre gênero, raça, deficiência ou personalidade a partir do corpo. Retorne SOMENTE JSON: {"description":"...","profile":{"role":"...","ageBand":"...","personality":"...","motivation":"...","backstory":"...","keywords":["..."],"silhouetteIntent":"...","shapeLanguageRationale":"...","proportionRationale":"...","colorRationale":"...","costumeRationale":"..."},"notes":["..."]}.`;
-  const user=`PERSONAGEM: ${String(c.name||'')}\nDESCRIÇÃO ATUAL: ${String(c.description||'')}\nPEDIDO: ${String(body?.prompt||'Complete a ficha sem apagar a autoria do usuário.')}\nAPARÊNCIA: ${JSON.stringify(c.appearance||{})}\nFICHA ATUAL: ${JSON.stringify(c.profile||{})}`;
-  return {system,user};
-}
-function cleanApiBuilderJson(text) {
-  const data=extractJsonObject(text); const allowedMethods=new Set(['GET','POST','PUT','PATCH','DELETE']);
-  return { name:String(data.name||'API criada no projeto').slice(0,160), summary:String(data.summary||'').slice(0,900), auth:String(data.auth||'Sem autenticação').slice(0,240), envVars:Array.isArray(data.envVars)?data.envVars.slice(0,12).map(String):[], capabilities:Array.isArray(data.capabilities)?data.capabilities.slice(0,16).map(String):[], fileName:String(data.fileName||'api/custom.ts').replace(/[^a-zA-Z0-9_./-]/g,'').slice(0,180), endpoints:Array.isArray(data.endpoints)?data.endpoints.slice(0,12).map((e)=>({method:allowedMethods.has(String(e?.method).toUpperCase())?String(e.method).toUpperCase():'GET',path:String(e?.path||'/api/custom').slice(0,220),purpose:String(e?.purpose||'').slice(0,500)})):[], code:String(data.code||'').slice(0,30000) };
-}
-function buildApiBuilderMessages(body) {
-  const existing=Array.isArray(body?.existingApis)?body.existingApis.slice(0,30):[];
-  const system=`Você é arquiteto(a) de APIs para projetos web React/Vite/Vercel. Primeiro reutilize as integrações existentes quando elas atendem ao pedido; quando for preciso criar um endpoint, gere uma função TypeScript em /api compatível com Vercel. Nunca exponha secrets no frontend: use process.env no servidor. Prefira APIs públicas, no-key, open source ou free tier já mencionadas pelo usuário. Gere tratamento de erro, timeout e JSON estável. Retorne SOMENTE JSON válido: {"name":"...","summary":"...","auth":"...","envVars":["..."],"capabilities":["..."],"fileName":"api/nome.ts","endpoints":[{"method":"GET","path":"/api/...","purpose":"..."}],"code":"código TypeScript completo"}.`;
-  const user=`PEDIDO: ${String(body?.prompt||'')}\nAPIs JÁ INCORPORADAS AO PROJETO: ${JSON.stringify(existing)}`;
-  return {system,user};
 }
 
 function cleanPublicationJson(text: string): PublicationArticle {
@@ -895,6 +849,36 @@ async function callGeminiInteractive(system: string, user: string, maxOutputToke
   return { text, provider: 'Gemini', model };
 }
 
+
+function cleanCharacterSvgJsonLocal(text: string) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{'); const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A IA de personagem não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  let svg = String(data?.svg || '').trim().replace(/^```(?:svg|xml)?\s*/i, '').replace(/\s*```$/i, '');
+  const a = svg.indexOf('<svg'), b = svg.lastIndexOf('</svg>'); if (a < 0 || b < a) throw new Error('A IA não devolveu um SVG completo.');
+  svg = svg.slice(a, b + 6).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=\s*(["']).*?\1/gi, '').replace(/javascript:/gi, '');
+  return { svg, description:String(data?.description||''), concept:data?.concept||{} };
+}
+function buildCharacterSvgMessagesLocal(body: any) {
+  const c=body?.character||{};
+  const system=`Você é concept artist e designer de personagens para interfaces, jogos e narrativas interativas. Gere um PERSONAGEM VETORIAL ORIGINAL em SVG, não uma imagem raster. O SVG deve ser simples, legível, responsivo, sem scripts, sem links externos, sem filtros pesados e com grupos semânticos quando possível (head, face, hair, torso, arms, legs, outfit, accessory). Preserve consistência de silhueta, paleta e proporções informadas. Não imite personagem protegido ou estilo de artista vivo específico.
+
+Princípios de projeto: silhueta clara, shape language coerente, proporção cabeça/corpo consciente, leitura em tamanho pequeno, poses futuras possíveis e acessibilidade cromática. Forma não determina personalidade de modo universal; explique a intenção visual sem estereotipar corpo, gênero, raça, deficiência ou idade.
+
+Retorne SOMENTE JSON válido neste formato: {"svg":"<svg ...>...</svg>","description":"...","concept":{"role":"...","archetype":"...","ageImpression":"...","personality":["..."],"keywords":["..."],"backstory":"...","silhouetteIntent":"...","shapeLanguage":"...","colorIntent":"...","movementNotes":"...","accessibilityNotes":"...","designRationale":"..."}}.`;
+  const user=`NOME: ${String(c.name||'Personagem')}
+DESCRIÇÃO ATUAL: ${String(c.description||'')}
+PEDIDO: ${String(body?.prompt||'')}
+TAMANHO DE REFERÊNCIA: ${Number(c.width)||360}x${Number(c.height)||520}
+CONSTRUTOR MANUAL: ${JSON.stringify(c.builder||{})}
+FICHA EXISTENTE: ${JSON.stringify(c.concept||{})}
+
+Use as escolhas manuais como âncora. Se o pedido conflitá-las, preserve primeiro identidade, proporção e paleta e faça a mudança apenas quando explicitamente solicitada.`; return {system,user};
+}
+function cleanApiDefinitionJsonLocal(text:string){const stripped=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/i,'');const a=stripped.indexOf('{'),b=stripped.lastIndexOf('}');if(a<0||b<a)throw new Error('O arquiteto de API não retornou JSON válido.');const d=JSON.parse(stripped.slice(a,b+1));return {id:`custom-api-${Date.now()}`,name:String(d?.name||'API do projeto'),summary:String(d?.summary||''),basePath:String(d?.basePath||'/api'),endpoints:Array.isArray(d?.endpoints)?d.endpoints.slice(0,12):[],env:Array.isArray(d?.env)?d.env.slice(0,12):[],files:Array.isArray(d?.files)?d.files.slice(0,12):[],notes:Array.isArray(d?.notes)?d.notes.slice(0,12):[]};}
+function buildApiAssistantMessagesLocal(body:any){const system=`Você é arquiteto de APIs do Ateliê 5I's. Reutilize APIs disponíveis antes de criar outra. Prefira sem chave, open source ou free tier quando adequado. Nunca exponha segredos no frontend. Retorne SOMENTE JSON válido com {"name":"...","summary":"...","basePath":"/api/...","endpoints":[{"method":"GET|POST|PUT|PATCH|DELETE","path":"/api/...","purpose":"..."}],"env":["VAR_NAME"],"files":[{"path":"api/x.ts","purpose":"..."}],"notes":["..."]}.`;const user=`PROJETO: ${String(body?.project?.name||'Projeto 5I')}\nPEDIDO: ${String(body?.prompt||'')}\nAPIS DISPONÍVEIS: ${JSON.stringify(body?.existingApis||[])}`;return {system,user};}
+
 function offlineInsight(body: MediatorRequestBody): MediatorInsight {
   const role = body.mediator.role.toLowerCase();
   const phase = body.phase;
@@ -940,6 +924,8 @@ function offlineInsight(body: MediatorRequestBody): MediatorInsight {
 }
 
 export async function generateMediatorInsight(body: MediatorRequestBody): Promise<any> {
+  if (body?.mode === 'character-svg') { const {system,user}=buildCharacterSvgMessagesLocal(body); const result=await callGeminiStructured(system,user,5200,Number(process.env.AI_CHARACTER_TIMEOUT_MS||45000),0.28); return {character:cleanCharacterSvgJsonLocal(result.text),provider:result.provider,model:result.model}; }
+  if (body?.mode === 'api-assistant') { const {system,user}=buildApiAssistantMessagesLocal(body); const result=await callGeminiStructured(system,user,3800,Number(process.env.AI_API_ARCHITECT_TIMEOUT_MS||35000),0.16); return {apiDefinition:cleanApiDefinitionJsonLocal(result.text),provider:result.provider,model:result.model}; }
   if (body?.mode === 'wireframe-interpret') {
     if (!body.wireframeSource) throw new Error('Escolha um desenho ou imagem para interpretar.');
     const { system, user } = buildWireframeInterpretationMessages(body);
@@ -949,36 +935,8 @@ export async function generateMediatorInsight(body: MediatorRequestBody): Promis
   if (body?.mode === 'video-compose') {
     if (!String(body?.prompt || '').trim()) throw new Error('Descreva o vídeo que deseja montar.');
     const { system, user } = buildVideoPlanMessages(body);
-    const timeout = Number(process.env.AI_VIDEO_TIMEOUT_MS || 35000);
-    let result = await callGeminiStructured(system, user, 3600, timeout, 0.22);
-    try {
-      const plan = cleanVideoPlanJson(result.text);
-      if (!plan.timeline.length) throw new Error('timeline vazia');
-      return { videoPlan: plan, provider: result.provider, model: result.model };
-    } catch {
-      result = await callGeminiStructured(system, `${user}
-
-CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e use pelo menos 1 mediaId EXATAMENTE como listado na mídia disponível.`, 2600, timeout, 0.12);
-      return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
-    }
-  }
-
-  if (body?.mode === 'character-svg') {
-    if (!String(body?.prompt || '').trim()) throw new Error('Descreva como deseja criar ou refinar o personagem.');
-    const { system, user } = buildCharacterSvgMessages(body);
-    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 45000), 0.22);
-    return { characterSvg: cleanCharacterSvgJson(result.text), provider: result.provider, model: result.model };
-  }
-  if (body?.mode === 'character-sheet') {
-    const { system, user } = buildCharacterSheetMessages(body);
-    const result = await callGeminiStructured(system, user, 4200, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 40000), 0.2);
-    return { characterSheet: cleanCharacterSheetJson(result.text), provider: result.provider, model: result.model };
-  }
-  if (body?.mode === 'api-builder') {
-    if (!String(body?.prompt || '').trim()) throw new Error('Descreva a API que deseja criar.');
-    const { system, user } = buildApiBuilderMessages(body);
-    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_API_BUILDER_TIMEOUT_MS || 50000), 0.14);
-    return { apiSpec: cleanApiBuilderJson(result.text), provider: result.provider, model: result.model };
+    const result = await callGeminiStructured(system, user, 3600, Number(process.env.AI_VIDEO_TIMEOUT_MS || 35000), 0.22);
+    return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
   }
 
   if (body?.mode === 'ux-writing') {
