@@ -14,6 +14,8 @@ import {
   Triangle,
   Type,
   Undo2,
+  WandSparkles,
+  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import { DrawingDocument, DrawingElement, DrawingElementType, DrawingPoint } from '../types';
@@ -33,6 +35,7 @@ interface DrawingStudioProps {
   canEdit?: boolean;
   allDrawings?: DrawingExportItem[];
   onSave: (drawing: DrawingDocument) => void;
+  onAnimate?: (drawing: DrawingDocument) => void;
   onClose: () => void;
 }
 
@@ -163,8 +166,19 @@ const renderDrawingElement = (element: DrawingElement, selected = false) => {
   const common = { stroke, strokeWidth, opacity, fill, vectorEffect: 'non-scaling-stroke' as const, style: selectionStyle };
 
   switch (element.type) {
-    case 'brush':
-      return <path d={pointsToPath(element.points)} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle} />;
+    case 'brush': {
+      const points = element.points || [];
+      const hasPressure = points.some((point) => typeof point.pressure === 'number');
+      if (hasPressure && points.length > 1) {
+        return <g opacity={opacity} style={selectionStyle}>{points.slice(1).map((point, index) => {
+          const previous = points[index];
+          const pressure = Math.max(0.08, Math.min(1, ((previous.pressure ?? .55) + (point.pressure ?? .55)) / 2));
+          const width = strokeWidth * (.45 + pressure);
+          return <line key={index} x1={previous.x} y1={previous.y} x2={point.x} y2={point.y} stroke={stroke} strokeWidth={width} strokeLinecap="round" vectorEffect="non-scaling-stroke" />;
+        })}</g>;
+      }
+      return <path d={pointsToPath(points)} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle} />;
+    }
     case 'line':
       return <line x1={x} y1={y} x2={x2} y2={y2} {...common} fill="none" strokeLinecap="round" />;
     case 'arrow':
@@ -292,7 +306,7 @@ const elementToSvgString = (element: DrawingElement) => {
   const attrs = `stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" fill="${escapeXml(fill)}" opacity="${opacity}" vector-effect="non-scaling-stroke"`;
 
   switch (element.type) {
-    case 'brush': return `<path d="${pointsToPath(element.points)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`;
+    case 'brush': { const pts = element.points || []; const pressured = pts.some((point) => typeof point.pressure === 'number'); if (pressured && pts.length > 1) return `<g opacity="${opacity}">${pts.slice(1).map((point,index)=>{ const prev=pts[index]; const pressure=Math.max(.08,Math.min(1,((prev.pressure??.55)+(point.pressure??.55))/2)); const width=strokeWidth*(.45+pressure); return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" stroke="${escapeXml(stroke)}" stroke-width="${width}" stroke-linecap="round"/>`; }).join('')}</g>`; return `<path d="${pointsToPath(pts)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`; }
     case 'line': return `<line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" ${attrs} fill="none" stroke-linecap="round"/>`;
     case 'arrow': return `<g opacity="${opacity}"><line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polyline points="${arrowHead(x, y, x2, y2, Math.max(12, strokeWidth * 4))}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
     case 'rectangle': return `<rect x="${bounds.minX}" y="${bounds.minY}" width="${Math.max(bounds.width, 1)}" height="${Math.max(bounds.height, 1)}" ${attrs}/>`;
@@ -407,7 +421,7 @@ type TextEditorState = {
   value: string;
 };
 
-export default function DrawingStudio({ drawing, title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onClose }: DrawingStudioProps) {
+export default function DrawingStudio({ drawing, title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onAnimate, onClose }: DrawingStudioProps) {
   const initial = useMemo(() => cloneDrawing(drawing), [drawing]);
   const [history, setHistory] = useState<DrawingDocument[]>([initial]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -418,6 +432,8 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [fontSize, setFontSize] = useState(44);
   const [fontFamily, setFontFamily] = useState('Inter');
+  const [stabilization, setStabilization] = useState(36);
+  const [pressureEnabled, setPressureEnabled] = useState(true);
   const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONTS);
   const [fontSearch, setFontSearch] = useState('');
   const [draft, setDraft] = useState<DrawingElement | null>(null);
@@ -472,20 +488,25 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     setHistoryIndex(nextHistory.length - 1);
   };
 
-  const getSvgPoint = (event: React.PointerEvent<SVGSVGElement>) => {
+  const getSvgPointFromClient = (clientX: number, clientY: number, pressure = .55, t = performance.now()): DrawingPoint => {
     const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
+    if (!svg) return { x: 0, y: 0, pressure, t };
     const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
+    point.x = clientX;
+    point.y = clientY;
     const matrix = svg.getScreenCTM();
-    if (!matrix) return { x: 0, y: 0 };
+    if (!matrix) return { x: 0, y: 0, pressure, t };
     const transformed = point.matrixTransform(matrix.inverse());
     return {
       x: clamp(transformed.x, 0, current.width),
       y: clamp(transformed.y, 0, current.height),
+      pressure: pressureEnabled ? Math.max(.08, Math.min(1, pressure || .55)) : .55,
+      t,
     };
   };
+
+  const getSvgPoint = (event: React.PointerEvent<SVGSVGElement>) =>
+    getSvgPointFromClient(event.clientX, event.clientY, event.pointerType === 'pen' ? event.pressure : .55, event.timeStamp);
 
   const drawingWithPendingText = () => {
     if (!textEditor || !textEditor.value.trim()) return current;
@@ -577,14 +598,28 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
     if (!draft || !canEdit) return;
     event.preventDefault();
-    const point = getSvgPoint(event);
     if (draft.type === 'brush') {
-      const points = draft.points || [];
-      const previous = points[points.length - 1];
-      if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 1.4) return;
-      setDraft({ ...draft, points: [...points, point] });
+      const native = event.nativeEvent as PointerEvent;
+      const coalesced = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : [native];
+      const nextPoints = [...(draft.points || [])];
+      for (const sample of coalesced) {
+        const raw = getSvgPointFromClient(sample.clientX, sample.clientY, sample.pointerType === 'pen' ? sample.pressure : .55, sample.timeStamp);
+        const previous = nextPoints[nextPoints.length - 1];
+        if (!previous) { nextPoints.push(raw); continue; }
+        const smoothing = Math.max(0, Math.min(.88, stabilization / 100 * .88));
+        const point: DrawingPoint = {
+          x: previous.x * smoothing + raw.x * (1 - smoothing),
+          y: previous.y * smoothing + raw.y * (1 - smoothing),
+          pressure: raw.pressure,
+          t: raw.t,
+        };
+        if (Math.hypot(point.x - previous.x, point.y - previous.y) < .35) continue;
+        nextPoints.push(point);
+      }
+      setDraft({ ...draft, points: nextPoints.slice(-2400) });
       return;
     }
+    const point = getSvgPoint(event);
     setDraft({ ...draft, x2: point.x, y2: point.y });
   };
 
@@ -669,6 +704,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
           <button type="button" disabled={!canEdit || historyIndex <= 0} onClick={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Desfazer"><Undo2 size={16} /></button>
           <button type="button" disabled={!canEdit || historyIndex >= history.length - 1} onClick={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Refazer"><Redo2 size={16} /></button>
           <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="md:hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
+          {onAnimate && <button type="button" disabled={!canEdit} onClick={() => onAnimate(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Animar este desenho na Camada Interativa"><WandSparkles size={15}/><span className="hidden sm:inline">ANIMAR</span></button>}
           <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
         </div>
       </header>
@@ -754,6 +790,16 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
                   <span className="text-[9px] font-mono text-neutral-400 uppercase">Espessura</span>
                   <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-24 lg:w-32" />
                   <span className="text-[10px] font-mono w-8">{strokeWidth}px</span>
+                </div>
+              )}
+
+              {tool === 'brush' && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-neutral-50 px-2 py-1">
+                  <SlidersHorizontal size={13} className="text-neutral-400"/>
+                  <span className="text-[9px] font-mono text-neutral-400 uppercase">Estabilização</span>
+                  <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-24"/>
+                  <span className="text-[9px] font-mono w-8">{stabilization}%</span>
+                  <label className="text-[9px] font-mono uppercase flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)}/> Pressão</label>
                 </div>
               )}
             </>
@@ -922,6 +968,15 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
               ))}
             </div>
           </div>
+
+          {tool === 'brush' && (
+            <div className="mb-4 pt-3 border-t border-black/10">
+              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-mono uppercase text-neutral-500">Precisão / estabilização</span><strong className="text-xs font-mono">{stabilization}%</strong></div>
+              <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-full h-8" style={{touchAction:'manipulation'}}/>
+              <label className="mt-1 min-h-11 flex items-center justify-between text-xs font-mono"><span>Usar pressão da caneta quando disponível</span><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)} className="h-5 w-5"/></label>
+              <div className="text-[9px] leading-relaxed text-neutral-500">Captura eventos coalescidos do stylus/touch e suaviza o traço sem rasterizar o desenho.</div>
+            </div>
+          )}
 
           {tool === 'text' && (
             <div className="mb-3 pt-3 border-t border-black/10">
