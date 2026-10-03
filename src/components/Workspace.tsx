@@ -1038,10 +1038,10 @@ const MEDIATORS: Mediator[] = [
     role: 'Implementação, circulação, marketing e monetização',
     phase: 'Implementação',
     description: 'Transforma o projeto em estratégia de chegada ao público: canais, formatos, campanha, métricas, parcerias e modelos de receita.',
-    bio: 'Agente de circulação e sustentabilidade econômica da fase de Implementação. Lê o produto real antes de propor divulgação. Mapeia público, proposta de valor, posicionamento, canais próprios, conquistados e pagos, conteúdos para diferentes redes, lançamentos, parcerias, imprensa, comunidades, SEO/ASO, funil, experimentos de aquisição, retenção e modelos de monetização. Converte cada ideia em ação, ferramenta, formato, métrica e hipótese testável. Evita spam, dark patterns, métricas de vaidade e promessas sem evidência; considera acessibilidade, privacidade, ética e adequação cultural.',
+    bio: 'Agente de marketing e circulação da fase de Implementação. É operativo: lê o produto e já propõe posicionamento, campanhas, lançamentos, conteúdo para Instagram/TikTok/YouTube/Facebook/LinkedIn e outras redes, creators, imprensa, comunidades, SEO/ASO, parcerias, funil, growth, métricas e modelos de monetização. Usa como repertório Kotler e Keller; Kotler, Kartajaya e Setiawan; Byron Sharp/Ehrenberg-Bass; Binet & Field; Cialdini; Jonah Berger; Chaffey; Tuten & Solomon; Kingsnorth; Pulizzi; Ann Handley; Kaushik; Sean Ellis/Morgan Brown e April Dunford. Entrega possibilidades e ações primeiro; só pergunta quando faltar algo realmente decisivo. Não inventa resultados nem recomenda spam ou dark patterns.',
     iconName: 'Megaphone',
     themeColor: 'rose',
-    greeting: 'Se este projeto saísse do canvas hoje, quem precisaria encontrá-lo, por qual caminho, em qual formato — e que modelo faria sua circulação se sustentar?'
+    greeting: 'Me mostra o que já existe e eu transformo isso em campanha: público, posicionamento, formatos, redes, lançamento, parcerias, monetização e métricas. Posso começar com várias rotas agora e depois refinamos.'
   },
   {
     id: 'agent-publica',
