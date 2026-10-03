@@ -417,27 +417,47 @@ export interface SpriteAnimation {
   frames: SpriteFrame[];
 }
 
+export type CharacterSpecies = 'human' | 'anthropomorphic' | 'quadruped' | 'bird' | 'reptile' | 'amphibian' | 'fish' | 'arthropod' | 'fantasy';
+export type CharacterBodyPlan = 'biped' | 'quadruped' | 'avian' | 'serpentine' | 'aquatic' | 'six-limbed' | 'eight-limbed' | 'custom';
+export type CharacterMuzzleStyle = 'none' | 'short' | 'long' | 'round' | 'beak-small' | 'beak-long' | 'beak-hooked';
+export type CharacterTailStyle = 'none' | 'short' | 'long' | 'fluffy' | 'curled' | 'reptile' | 'fish';
+export type CharacterWingStyle = 'none' | 'feather' | 'bat' | 'fin';
+export type CharacterHornStyle = 'none' | 'short' | 'long' | 'antlers' | 'antennae';
+export type CharacterSurfaceStyle = 'skin' | 'fur-short' | 'fur-long' | 'feathers' | 'scales' | 'shell' | 'chitin';
+export type CharacterFootStyle = 'feet' | 'paws' | 'hooves' | 'claws' | 'talons' | 'fins';
+
 export interface CharacterAppearance {
+  species?: CharacterSpecies;
+  bodyPlan?: CharacterBodyPlan;
+  speciesPreset?: string;
   headShape: 'round' | 'oval' | 'square' | 'heart' | 'triangle' | 'wide';
   faceShape: 'soft' | 'angular' | 'long' | 'wide';
   eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large';
-  browStyle: 'soft' | 'straight' | 'arched' | 'bold';
+  browStyle: 'none' | 'soft' | 'straight' | 'arched' | 'bold';
   noseStyle: 'none' | 'small' | 'straight' | 'wide';
   mouthStyle: 'line' | 'smile' | 'full' | 'small';
-  earStyle: 'simple' | 'round' | 'pointed';
+  earStyle: 'none' | 'simple' | 'round' | 'pointed' | 'long' | 'floppy' | 'large' | 'fin';
   hairStyle: 'none' | 'short' | 'bob' | 'long' | 'curly' | 'spiky' | 'bun';
+  muzzleStyle?: CharacterMuzzleStyle;
+  tailStyle?: CharacterTailStyle;
+  wingStyle?: CharacterWingStyle;
+  hornStyle?: CharacterHornStyle;
+  surfaceStyle?: CharacterSurfaceStyle;
+  footStyle?: CharacterFootStyle;
+  whiskers?: boolean;
   bodyShape: 'slim' | 'average' | 'athletic' | 'stocky' | 'chibi';
   torsoShape: 'rectangle' | 'trapezoid' | 'round' | 'triangle';
   armStyle: 'thin' | 'regular' | 'strong';
   legStyle: 'short' | 'regular' | 'long';
   handStyle: 'mitten' | 'simple' | 'defined';
-  outfitStyle: 'basic' | 'sport' | 'formal' | 'fantasy' | 'tech' | 'street';
+  outfitStyle: 'none' | 'basic' | 'sport' | 'formal' | 'fantasy' | 'tech' | 'street';
   accessory: 'none' | 'glasses' | 'hat' | 'scarf' | 'backpack' | 'headphones';
   headToBodyRatio: number;
   shoulderWidth: number;
   limbLength: number;
   bodyWidth: number;
   skinColor: string;
+  surfaceColor?: string;
   hairColor: string;
   eyeColor: string;
   outfitPrimary: string;
