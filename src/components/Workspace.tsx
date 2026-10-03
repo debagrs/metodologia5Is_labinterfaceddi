@@ -1766,6 +1766,8 @@ export default function Workspace({
             connections: (node.connections || []).slice(0, 20).map((id) => clipForPublication(nodeById.get(id)?.title || id, 220)),
             imageName: clipForPublication(node.imageName || '', 220),
             drawingName: clipForPublication(node.drawingName || '', 220),
+            apiConnectionsName: clipForPublication(node.apiConnectionsName || '', 220),
+            apiConnections: node.apiConnections ? clipForPublication(JSON.stringify(node.apiConnections), 3200) : '',
             attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
               name: clipForPublication(attachment.name, 220),
               type: clipForPublication(attachment.type, 120)
@@ -1882,6 +1884,10 @@ export default function Workspace({
           hardware: node.hardware ? clip(JSON.stringify(node.hardware), 3500) : undefined,
           gameDesignName: node.gameDesignName || '',
           gameDesign: node.gameDesign ? clip(JSON.stringify(node.gameDesign), 5500) : undefined,
+          spriteName: node.spriteName || '',
+          sprite: node.sprite ? clip(JSON.stringify(node.sprite), 5500) : undefined,
+          apiConnectionsName: node.apiConnectionsName || '',
+          apiConnections: node.apiConnections ? clip(JSON.stringify(node.apiConnections), 6500) : undefined,
           attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
             name: clip(attachment.name, 260),
             type: clip(attachment.type, 120),
