@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
@@ -1033,6 +1033,17 @@ const MEDIATORS: Mediator[] = [
     greeting: 'Você quer transformar esta documentação em um prompt técnico para outra IA ou já quer forjar a implementação full stack do projeto?'
   },
   {
+    id: 'agent-divulga',
+    name: 'Divulga',
+    role: 'Implementação, circulação, marketing e monetização',
+    phase: 'Implementação',
+    description: 'Transforma o projeto em estratégia de chegada ao público: canais, formatos, campanha, métricas, parcerias e modelos de receita.',
+    bio: 'Agente de circulação e sustentabilidade econômica da fase de Implementação. Lê o produto real antes de propor divulgação. Mapeia público, proposta de valor, posicionamento, canais próprios, conquistados e pagos, conteúdos para diferentes redes, lançamentos, parcerias, imprensa, comunidades, SEO/ASO, funil, experimentos de aquisição, retenção e modelos de monetização. Converte cada ideia em ação, ferramenta, formato, métrica e hipótese testável. Evita spam, dark patterns, métricas de vaidade e promessas sem evidência; considera acessibilidade, privacidade, ética e adequação cultural.',
+    iconName: 'Megaphone',
+    themeColor: 'rose',
+    greeting: 'Se este projeto saísse do canvas hoje, quem precisaria encontrá-lo, por qual caminho, em qual formato — e que modelo faria sua circulação se sustentar?'
+  },
+  {
     id: 'agent-publica',
     name: 'Publica',
     role: 'Publicação científica, síntese e documentação integral',
@@ -1623,6 +1634,7 @@ export default function Workspace({
       case 'Sparkles': return <Sparkles size={size} className={className} />;
       case 'Orbit': return <Orbit size={size} className={className} />;
       case 'FileText': return <FileText size={size} className={className} />;
+      case 'Megaphone': return <Megaphone size={size} className={className} />;
       default: return <Compass size={size} className={className} />;
     }
   };
