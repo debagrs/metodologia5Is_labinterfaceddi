@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'game-design';
 
 export type DrawingElementType =
   | 'brush'
@@ -155,7 +155,7 @@ export interface DrawingDocument {
 export type WireframeDevicePreset = 'mobile' | 'tablet' | 'desktop' | 'watch' | 'custom';
 export type WireframeDirection = 'column' | 'row';
 export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
-export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'list-item' | 'spacer';
+export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'nav-item' | 'list-item' | 'icon' | 'avatar' | 'checkbox' | 'toggle' | 'divider' | 'section' | 'spacer';
 
 export interface WireframeBlock {
   id: string;
@@ -169,7 +169,16 @@ export interface WireframeBlock {
   color?: string;
   componentName?: string;
   isComponent?: boolean;
+  margin?: number;
+  gap?: number;
+  items?: string[];
+  href?: string;
+  interaction?: 'none' | 'navigate' | 'modal' | 'toggle' | 'link';
+  interactionTarget?: string;
+  gridColumnSpan?: number;
+  alignSelf?: 'auto' | 'start' | 'center' | 'end' | 'stretch';
 }
+
 
 export interface WireframeFrame {
   id: string;
@@ -181,6 +190,12 @@ export interface WireframeFrame {
   gap: number;
   padding: number;
   align: WireframeAlign;
+  justify?: 'start' | 'center' | 'end' | 'between';
+  layoutMode?: 'flex' | 'grid';
+  gridColumns?: number;
+  columnGap?: number;
+  rowGap?: number;
+  margin?: number;
   background: string;
   blocks: WireframeBlock[];
 }
@@ -206,6 +221,22 @@ export interface DesignTypeToken {
   weight: number;
   lineHeight: number;
   letterSpacing?: number;
+  wordSpacing?: number;
+  familyRole?: 'display' | 'text' | 'notes';
+}
+
+
+export interface DesignFontFamilies {
+  display: string;
+  text: string;
+  notes: string;
+}
+
+export interface DesignLayoutSpacing {
+  pagePadding: number;
+  sectionGap: number;
+  componentGap: number;
+  controlHeight: number;
 }
 
 export interface DesignSystemDocument {
@@ -215,10 +246,37 @@ export interface DesignSystemDocument {
   spacing: number[];
   radii: number[];
   primaryFont: string;
+  fontFamilies?: DesignFontFamilies;
+  layoutSpacing?: DesignLayoutSpacing;
   updatedAt?: string;
 }
 
 export type VideoFormatPreset = 'reel' | 'story' | 'tiktok' | 'square' | 'feed' | 'youtube' | 'facebook' | 'linkedin' | 'custom';
+
+export type VideoMediaKind = 'image' | 'video';
+export type VideoTransition = 'cut' | 'fade' | 'slide' | 'zoom';
+
+export interface VideoMediaItem {
+  id: string;
+  kind: VideoMediaKind;
+  url: string;
+  name: string;
+  source?: 'project' | 'upload' | 'url';
+  duration?: number;
+  thumbnailUrl?: string;
+}
+
+export interface VideoTimelineItem {
+  id: string;
+  mediaId: string;
+  kind: VideoMediaKind;
+  url: string;
+  name: string;
+  duration: number;
+  transition?: VideoTransition;
+  fit?: 'cover' | 'contain';
+  caption?: string;
+}
 
 export interface VideoDocument {
   title: string;
@@ -234,6 +292,150 @@ export interface VideoDocument {
   sourceName?: string;
   generatedUrl?: string;
   prompt?: string;
+  media?: VideoMediaItem[];
+  timeline?: VideoTimelineItem[];
+  aiPlan?: string[];
+}
+
+
+export type UXWritingTone = 'clear' | 'warm' | 'direct' | 'institutional' | 'playful';
+
+export interface UXWritingTranslation {
+  locale: string;
+  label: string;
+  text: string;
+  status?: 'draft' | 'reviewed';
+}
+
+export interface UXWritingEntry {
+  id: string;
+  key: string;
+  screen: string;
+  context: string;
+  sourceText: string;
+  accessibleText?: string;
+  librasGuide?: string;
+  librasVideoUrl?: string;
+  tone: UXWritingTone;
+  translations: UXWritingTranslation[];
+  notes?: string;
+}
+
+export interface UXWritingDocument {
+  title: string;
+  sourceLocale: string;
+  targetLocales: string[];
+  entries: UXWritingEntry[];
+  glossary: string[];
+  updatedAt?: string;
+}
+
+export type SoundPreset = 'click' | 'pop' | 'success' | 'error' | 'whoosh' | 'notification';
+
+export interface SoundCue {
+  id: string;
+  name: string;
+  source: 'synth' | 'upload' | 'url';
+  preset?: SoundPreset;
+  url?: string;
+  trigger?: string;
+  volume: number;
+  duration: number;
+  frequency: number;
+}
+
+export interface SoundDocument {
+  title: string;
+  cues: SoundCue[];
+  masterVolume: number;
+  updatedAt?: string;
+}
+
+export type HardwareSource = 'gyro-alpha' | 'gyro-beta' | 'gyro-gamma' | 'motion-x' | 'motion-y' | 'motion-z' | 'serial';
+export type HardwareTarget = 'rotate' | 'move-x' | 'move-y' | 'scale' | 'opacity' | 'trigger';
+
+export interface HardwareMapping {
+  id: string;
+  name: string;
+  source: HardwareSource;
+  target: HardwareTarget;
+  targetNodeId?: string;
+  inputMin: number;
+  inputMax: number;
+  outputMin: number;
+  outputMax: number;
+  invert?: boolean;
+}
+
+export interface HardwareDocument {
+  title: string;
+  baudRate: number;
+  protocol: 'device-sensors' | 'serial' | 'mixed';
+  mappings: HardwareMapping[];
+  notes?: string;
+  updatedAt?: string;
+}
+
+export type GameSceneType = 'menu' | 'level' | 'boss' | 'cutscene' | 'result';
+export type GameSprintStatus = 'todo' | 'doing' | 'done';
+
+export interface GameScene {
+  id: string;
+  name: string;
+  type: GameSceneType;
+  objective: string;
+  mechanics: string[];
+  background: string;
+  nextSceneId?: string;
+}
+
+export interface GameSprintItem {
+  id: string;
+  title: string;
+  status: GameSprintStatus;
+  effort: 1 | 2 | 3 | 5 | 8;
+  notes?: string;
+}
+
+export interface GameJamMember {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface GameJamAsset {
+  id: string;
+  nodeId?: string;
+  name: string;
+  type: string;
+  url?: string;
+  selected?: boolean;
+}
+
+export interface GameJamState {
+  enabled: boolean;
+  name: string;
+  theme: string;
+  constraints: string;
+  startAt?: string;
+  deadline?: string;
+  durationHours: number;
+  team: GameJamMember[];
+  assets: GameJamAsset[];
+  buildUrl?: string;
+  submissionUrl?: string;
+  checklist: Array<{ id: string; label: string; done: boolean }>;
+}
+
+export interface GameDesignDocument {
+  title: string;
+  genre: string;
+  coreLoop: string;
+  playerGoal: string;
+  scenes: GameScene[];
+  sprints: GameSprintItem[];
+  jam?: GameJamState;
+  updatedAt?: string;
 }
 
 export interface NodeComment {
@@ -280,6 +482,14 @@ export interface ThoughtNode {
   designSystemName?: string;
   video?: VideoDocument;
   videoName?: string;
+  uxWriting?: UXWritingDocument;
+  uxWritingName?: string;
+  sound?: SoundDocument;
+  soundName?: string;
+  hardware?: HardwareDocument;
+  hardwareName?: string;
+  gameDesign?: GameDesignDocument;
+  gameDesignName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
