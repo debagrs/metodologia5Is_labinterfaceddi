@@ -417,7 +417,7 @@ export interface SpriteAnimation {
   frames: SpriteFrame[];
 }
 
-export type CharacterSpecies = 'human' | 'anthropomorphic' | 'quadruped' | 'bird' | 'reptile' | 'amphibian' | 'fish' | 'arthropod' | 'fantasy';
+export type CharacterSpecies = 'human' | 'anthropomorphic' | 'quadruped' | 'bird' | 'reptile' | 'amphibian' | 'fish' | 'arthropod' | 'fantasy' | 'hybrid';
 export type CharacterBodyPlan = 'biped' | 'quadruped' | 'avian' | 'serpentine' | 'aquatic' | 'six-limbed' | 'eight-limbed' | 'custom';
 export type CharacterMuzzleStyle = 'none' | 'short' | 'long' | 'round' | 'beak-small' | 'beak-long' | 'beak-hooked';
 export type CharacterTailStyle = 'none' | 'short' | 'long' | 'fluffy' | 'curled' | 'reptile' | 'fish';
@@ -430,6 +430,9 @@ export interface CharacterAppearance {
   species?: CharacterSpecies;
   bodyPlan?: CharacterBodyPlan;
   speciesPreset?: string;
+  hybridPrimaryPreset?: string;
+  hybridSecondaryPreset?: string;
+  hybridBlend?: number;
   headShape: 'round' | 'oval' | 'square' | 'heart' | 'triangle' | 'wide';
   faceShape: 'soft' | 'angular' | 'long' | 'wide';
   eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large';
