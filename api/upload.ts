@@ -97,10 +97,11 @@ export default async function handler(req: any, res: any) {
 
     if (
       !contentType.startsWith("image/") &&
-      !contentType.startsWith("video/")
+      !contentType.startsWith("video/") &&
+      !contentType.startsWith("audio/")
     ) {
       return res.status(400).json({
-        error: "Escolha somente uma imagem ou um vídeo.",
+        error: "Escolha somente uma imagem, um vídeo ou um áudio.",
       });
     }
 
