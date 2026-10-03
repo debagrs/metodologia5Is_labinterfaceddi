@@ -1,1110 +1,898 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ArrowLeftRight,
-  Circle,
-  Download,
-  Eraser,
-  Minus,
-  Pencil,
-  Redo2,
-  Save,
-  Square,
-  Star,
-  Trash2,
-  Triangle,
-  Type,
-  Undo2,
-  WandSparkles,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
-import { DrawingDocument, DrawingElement, DrawingElementType, DrawingPoint } from '../types';
+export type AiProvider = 'groq' | 'gemini' | 'offline';
 
-type DrawingTool = DrawingElementType | 'select';
-type ExportFormat = 'svg' | 'png' | 'jpg';
-
-export interface DrawingExportItem {
-  id: string;
-  name: string;
-  drawing: DrawingDocument;
+export interface MediatorRequestBody {
+  project: { name: string; projectType: string; problem: string; community: string; ods: string };
+  mediator: { id?: string; name: string; role: string; bio: string };
+  phase: string;
+  mode?: 'chat' | 'publication' | string;
+  message?: string;
+  conversation?: Array<{ role: string; text: string }>;
+  conversations?: Array<{ mediatorId: string; mediatorName: string; messages: Array<{ role: string; text: string; createdAt?: string }> }>;
+  existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
+  engine?: 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg' | string;
+  interactionMode?: 'auto' | 'pointer' | 'hover' | 'scroll' | string;
+  effectPreset?: 'network' | 'breathe' | 'draw' | 'wave' | 'explode' | 'drift' | string;
+  intensity?: 'subtle' | 'medium' | 'strong' | string;
+  preserveBrand?: boolean;
+  asset?: { url?: string; name?: string; contentType?: string; kind?: string; profile?: { palette?: string[]; counts?: Record<string, number>; sourceType?: string } } | null;
+  currentTitle?: string;
+  currentCode?: string;
+  prompt?: string;
+  implementationPlan?: any;
+  requestedFiles?: Array<{ path: string; purpose?: string }>;
+  wireframeSource?: { kind?: 'image' | 'drawing' | string; name?: string; url?: string; svg?: string; width?: number; height?: number };
+  wireframeOptions?: { device?: 'auto' | 'mobile' | 'tablet' | 'desktop' | string; fidelity?: 'structure' | 'balanced' | 'faithful' | string };
 }
 
-interface DrawingStudioProps {
-  drawing: DrawingDocument;
-  title?: string;
-  canEdit?: boolean;
-  allDrawings?: DrawingExportItem[];
-  onSave: (drawing: DrawingDocument) => void;
-  onAnimate?: (drawing: DrawingDocument) => void;
-  onClose: () => void;
+
+export interface MediatorInsight {
+  title: string;
+  question: string;
+  provocations: string[];
+  scientificContext: string;
+  provider?: string;
+  model?: string;
+  remainingToday?: number | null;
+  warnings?: string[];
 }
 
-const PALETTE = ['#111111', '#6B7280', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899', '#FFFFFF'];
+export interface PublicationArticle {
+  title: string;
+  subtitle?: string;
+  abstract: string;
+  keywords: string[];
+  sections: Array<{ heading: string; body: string }>;
+  references?: string[];
+  editorialNotes?: string[];
+}
 
-const FALLBACK_FONTS = [
-  'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Nunito', 'Raleway',
-  'Merriweather', 'Playfair Display', 'Source Sans 3', 'Source Serif 4', 'IBM Plex Sans',
-  'IBM Plex Mono', 'Space Grotesk', 'DM Sans', 'DM Serif Display', 'Work Sans', 'Ubuntu',
-  'Oswald', 'Bebas Neue', 'Libre Baskerville', 'Crimson Text', 'Fira Sans', 'Fira Mono'
-];
+export interface PublicationResult {
+  article: PublicationArticle;
+  provider?: string;
+  model?: string;
+  warnings?: string[];
+}
 
-const SHAPE_TOOLS: { tool: DrawingTool; label: string }[] = [
-  { tool: 'line', label: 'Linha' },
-  { tool: 'arrow', label: 'Seta' },
-  { tool: 'rectangle', label: 'Retângulo' },
-  { tool: 'rounded-rectangle', label: 'Ret. arred.' },
-  { tool: 'ellipse', label: 'Círculo/Elipse' },
-  { tool: 'triangle', label: 'Triângulo' },
-  { tool: 'diamond', label: 'Losango' },
-  { tool: 'pentagon', label: 'Pentágono' },
-  { tool: 'hexagon', label: 'Hexágono' },
-  { tool: 'star', label: 'Estrela' },
-  { tool: 'cube', label: 'Cubo 3D' },
-  { tool: 'sphere', label: 'Esfera 3D' },
-  { tool: 'cylinder', label: 'Cilindro 3D' },
-  { tool: 'cone', label: 'Cone 3D' },
-  { tool: 'pyramid', label: 'Pirâmide 3D' },
-];
-
-const cloneDrawing = (drawing: DrawingDocument): DrawingDocument => JSON.parse(JSON.stringify(drawing));
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-
-const pointsToPath = (points: DrawingPoint[] = []) => {
-  if (points.length === 0) return '';
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y} L ${points[0].x + 0.01} ${points[0].y + 0.01}`;
-  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
-
-  let path = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const current = points[i];
-    const next = points[i + 1];
-    const midX = (current.x + next.x) / 2;
-    const midY = (current.y + next.y) / 2;
-    path += ` Q ${current.x} ${current.y} ${midX} ${midY}`;
-  }
-  const last = points[points.length - 1];
-  path += ` L ${last.x} ${last.y}`;
-  return path;
+const REFERENCES: Record<string, string> = {
+  pesquisa: 'Triangulação metodológica; etnografia de design; pesquisa participante; saturação teórica; cartografia; métodos mistos.',
+  ux: 'Don Norman; Preece, Rogers e Sharp; Jakob Nielsen; John Sweller; teoria da atividade; modelos mentais; 101 UX Principles.',
+  bioetica: 'Van Rensselaer Potter; bioética; educação humanitária; justiça de design; alteridade; prevenção de dark patterns; impactos humanos e não humanos.',
+  acessibilidade: 'WCAG; e-MAG; desenho universal; modelo social da deficiência; tecnologias assistivas; multimodalidade; linguagem simples.',
+  visual: 'Gestalt; semiótica; Josef Albers; Eva Heller; Itten; Müller-Brockmann; tipografia; hierarquia e ritmo visual.',
+  documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
+  heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
+  implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
+  divulgacao: 'Philip Kotler e Kevin Lane Keller; Kotler, Kartajaya e Setiawan (Marketing 4.0, 5.0 e 6.0); Byron Sharp e Ehrenberg-Bass; Les Binet e Peter Field; Robert Cialdini; Jonah Berger; Dave Chaffey e Fiona Ellis-Chadwick; Tracy Tuten e Michael Solomon; Simon Kingsnorth; Joe Pulizzi; Ann Handley; Avinash Kaushik; Sean Ellis e Morgan Brown; April Dunford. Proposta de valor; posicionamento; marca; canais próprios/conquistados/pagos; conteúdo; social media; SEO/ASO; comunidades; creators; imprensa; parcerias; aquisição, ativação, retenção, indicação; analytics; experimentação; monetização.',
+  cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.',
+  futuros: 'Referência prioritária: HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. Tese (Doutorado em Design), UFRGS, 2022. Conceitos centrais: projetar por cenários como prática dinâmica, social, participativa e iterativa; deslocamento do problema para possibilidades; memórias do futuro; construção retrospectiva; cenários articulando atores, trama, trajetória, evidências e espaço-tempo. Referências mobilizadas na tese, conforme pertinência: Nigel Cross; Herbert Simon; Donald Schön; Rittel e Webber; Richard Buchanan; Sanders e Stappers; Kensing e Blomberg; Krippendorff; Ezio Manzini; François Jégou; Celaschi e Deserti; Paulo Reyes; Manuela Celi; Carlo Franzato; Herman Kahn e Anthony Wiener; Michel Godet; Peter Schwartz; Kees van der Heijden; Ute von Reibnitz; Pieter Desmet; Marc Hassenzahl; Anna Pohlmeyer; Roberto Verganti; David Ingvar; Michel Thiollent; Laurence Bardin. Complementares do Mago: André Coutinho e Anderson Penha; Anthony Dunne e Fiona Raby; speculative design; futures thinking; sinais e tendências; contratendências; futuros prováveis, possíveis e desejáveis; design fiction; props; narrativas; participatory futures; backcasting.'
 };
 
-const regularPolygonPoints = (x: number, y: number, x2: number, y2: number, sides: number, rotation = -Math.PI / 2) => {
-  const minX = Math.min(x, x2);
-  const maxX = Math.max(x, x2);
-  const minY = Math.min(y, y2);
-  const maxY = Math.max(y, y2);
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  const rx = Math.max((maxX - minX) / 2, 1);
-  const ry = Math.max((maxY - minY) / 2, 1);
-  return Array.from({ length: sides }, (_, index) => {
-    const angle = rotation + (index * Math.PI * 2) / sides;
-    return `${cx + Math.cos(angle) * rx},${cy + Math.sin(angle) * ry}`;
-  }).join(' ');
-};
+function referenceFor(role: string): string {
+  const value = role.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (value.includes('pesquisa')) return REFERENCES.pesquisa;
+  if (value.includes('bio')) return REFERENCES.bioetica;
+  if (value.includes('acess')) return REFERENCES.acessibilidade;
+  if (value.includes('visual')) return REFERENCES.visual;
+  if (value.includes('document') || value.includes('public') || value.includes('cient')) return REFERENCES.documentacao;
+  if (value.includes('heur')) return REFERENCES.heuristicas;
+  if (value.includes('futuro') || value.includes('cenario') || value.includes('especul') || value.includes('foresight')) return REFERENCES.futuros;
+  if (value.includes('cosmot') || value.includes('tecnolog') || value.includes('hi-low') || value.includes('hi low')) return REFERENCES.cosmotecnica;
+  if (value.includes('marketing') || value.includes('divul') || value.includes('monetiza') || value.includes('circul')) return REFERENCES.divulgacao;
+  if (value.includes('implement')) return REFERENCES.implementacao;
+  return REFERENCES.ux;
+}
 
-const starPoints = (x: number, y: number, x2: number, y2: number) => {
-  const minX = Math.min(x, x2);
-  const maxX = Math.max(x, x2);
-  const minY = Math.min(y, y2);
-  const maxY = Math.max(y, y2);
-  const cx = (minX + maxX) / 2;
-  const cy = (minY + maxY) / 2;
-  const outerX = Math.max((maxX - minX) / 2, 1);
-  const outerY = Math.max((maxY - minY) / 2, 1);
-  const innerX = outerX * 0.45;
-  const innerY = outerY * 0.45;
-  return Array.from({ length: 10 }, (_, index) => {
-    const angle = -Math.PI / 2 + (index * Math.PI) / 5;
-    const rx = index % 2 === 0 ? outerX : innerX;
-    const ry = index % 2 === 0 ? outerY : innerY;
-    return `${cx + Math.cos(angle) * rx},${cy + Math.sin(angle) * ry}`;
-  }).join(' ');
-};
+function buildMessages(body: MediatorRequestBody) {
+  const thoughts = body.existingThoughts?.length
+    ? body.existingThoughts.slice(-18).map((item) => `- [${item.phase}] ${item.title}: ${item.content}`).join('\n')
+    : 'Ainda não há registros no canvas.';
 
-const getBounds = (element: DrawingElement) => {
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const x2 = element.x2 ?? x;
-  const y2 = element.y2 ?? y;
+  const divulgaRule = body.mediator.id === 'agent-divulga'
+    ? ' Para DIVULGA: seja direto e generoso em possibilidades. Entregue o plano antes de fazer perguntas. Traga marketing forte, lançamento, formatos, canais, creators, imprensa, comunidade, SEO/ASO, conteúdo, growth, métricas e monetização. Use Kotler/Keller, Marketing 4.0–6.0, Byron Sharp/Ehrenberg-Bass, Binet & Field, Cialdini, Berger, Chaffey, Tuten & Solomon, Kingsnorth, Pulizzi, Handley, Kaushik, Ellis/Brown e Dunford conforme pertinência. Relacione ideias a público, mensagem, formato, canal/ferramenta e métrica. Só não invente audiência/receita/resultados nem sugira spam, fraude ou dark patterns.'
+    : '';
+  const system = `Você integra a Metodologia 5I’s: Ideação, Inambulação, Instauração, Inspeção e Implementação.
+Você é ${body.mediator.name}, agente de ${body.mediator.role}. ${body.mediator.bio}
+Base conceitual: ${referenceFor(body.mediator.role)}
+Regras: não substitua a autoria; não entregue solução acabada; questione premissas; relacione à fase ${body.phase}; não invente autores, normas ou dados; use português do Brasil; retorne somente JSON válido no formato {"title":"...","question":"...","provocations":["...","..."],"scientificContext":"..."}.${divulgaRule}`;
+
+  const user = `PROJETO
+Nome: ${body.project.name}
+Tipo: ${body.project.projectType}
+Problema: ${body.project.problem}
+Comunidade: ${body.project.community}
+ODS: ${body.project.ods}
+Fase: ${body.phase}
+
+REGISTROS
+${thoughts}
+
+${body.mode === 'chat' ? `CONVERSA RECENTE
+${(body.conversation || []).slice(-12).map((item) => `${item.role}: ${item.text}`).join('\n\n')}
+
+MENSAGEM ATUAL
+${body.message || ''}
+
+Responda à mensagem atual de forma prática e contextualizada.` : 'Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas.'}`;
+
+  return { system, user };
+}
+
+function buildPublicationMessages(body: MediatorRequestBody) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+
+  const compactRecords = records.slice(0, 180).map((item: any) => ({
+    id: item.id,
+    type: item.type,
+    phase: item.phase,
+    title: clipProjectText(item.title, 240),
+    content: clipProjectText(item.content, 1600),
+    scientificContext: clipProjectText(item.scientificContext, 700),
+    provocations: Array.isArray(item.provocations) ? item.provocations.slice(0, 5).map((value: unknown) => clipProjectText(value, 320)) : [],
+    connections: Array.isArray(item.connections) ? item.connections.slice(0, 20) : [],
+    imageName: item.imageName || '',
+    drawingName: item.drawingName || '',
+    attachments: Array.isArray(item.attachments) ? item.attachments.slice(0, 12).map((attachment: any) => ({
+      name: clipProjectText(attachment?.name, 220),
+      type: clipProjectText(attachment?.type, 120),
+    })) : [],
+  }));
+
+  const compactConversations = conversations.slice(0, 24).map((conversation: any) => ({
+    mediatorId: conversation.mediatorId,
+    mediatorName: conversation.mediatorName,
+    messages: Array.isArray(conversation.messages)
+      ? conversation.messages.slice(-18).map((message: any) => ({
+          role: message.role,
+          text: clipProjectText(message.text, 1000),
+          createdAt: message.createdAt,
+        }))
+      : [],
+  }));
+
+  const system = `Você é Publica, agente editorial da Metodologia 5I’s de Design de Interfaces.
+Sua tarefa é transformar documentação de projeto em um relato científico consistente, rastreável e pronto para revisão/submissão editorial.
+
+REGRAS INEGOCIÁVEIS
+- Leia todos os registros fornecidos das cinco fases: Ideação, Inambulação, Instauração, Inspeção e Implementação.
+- Considere também as conversas com os agentes como diário reflexivo do processo.
+- Não invente número de participantes, dados, resultados, testes, datas, referências bibliográficas, autores ou conclusões não documentadas.
+- Quando faltar uma evidência necessária, escreva a lacuna de modo editorialmente útil e registre-a em editorialNotes.
+- Preserve a autoria humana: a IA organiza, sintetiza e redige, mas não reivindica autoria do projeto.
+- Diferencie claramente decisão de projeto, evidência observada, interpretação e reflexão metodológica.
+- Produza português acadêmico brasileiro claro, sem inflar o texto com jargão.
+- O artigo é um RELATO DE PROJETO/RELATO DE EXPERIÊNCIA em design, não um experimento inventado.
+- Use a Metodologia 5I’s como eixo metodológico do percurso.
+- Seja completo, mas conciso o suficiente para caber integralmente na resposta: prefira 2 a 4 parágrafos por seção.
+- Retorne somente JSON válido, sem markdown externo.
+
+FORMATO OBRIGATÓRIO
+{
+  "title":"...",
+  "subtitle":"...",
+  "abstract":"150 a 250 palavras",
+  "keywords":["4 a 6 termos"],
+  "sections":[
+    {"heading":"Introdução","body":"..."},
+    {"heading":"Metodologia e percurso projetual","body":"..."},
+    {"heading":"Desenvolvimento do projeto","body":"..."},
+    {"heading":"Resultados e discussão","body":"..."},
+    {"heading":"Considerações finais","body":"..."}
+  ],
+  "references":["somente referências bibliográficas explicitamente identificáveis nos registros; se não houver dados suficientes, deixe vazio"],
+  "editorialNotes":["lacunas factuais ou bibliográficas que precisam ser conferidas antes da submissão"]
+}`;
+
+  const user = `PROJETO
+${JSON.stringify(body.project, null, 2)}
+
+FASE ATIVA NO MOMENTO DA EXPORTAÇÃO
+${body.phase}
+
+CARDS, NOTAS, CONEXÕES E REGISTROS DO CANVAS — CONTEÚDO COMPACTADO SEM AS IMAGENS BINÁRIAS
+${JSON.stringify(compactRecords, null, 2)}
+
+CONVERSAS SALVAS COM OS AGENTES — TRECHOS MAIS RECENTES
+${JSON.stringify(compactConversations, null, 2)}
+
+Redija o relato científico usando todo o material pertinente. Reconstrua decisões, deslocamentos, métodos, protótipos, inspeções e implementação conforme o que realmente está registrado. Não transforme ausência de registro em resultado.`;
+  return { system, user };
+}
+
+function clipProjectText(value: unknown, limit = 1600) {
+  const text = String(value ?? '').trim();
+  return text.length > limit ? `${text.slice(0, limit)}\n[… conteúdo abreviado para geração técnica …]` : text;
+}
+
+function compactProjectContext(body: MediatorRequestBody) {
+  const records = Array.isArray(body.existingThoughts) ? body.existingThoughts : [];
+  const conversations = Array.isArray(body.conversations) ? body.conversations : [];
+  const compactRecords = records.slice(0, 140).map((item: any) => ({
+    id: item.id, type: item.type, phase: item.phase,
+    title: clipProjectText(item.title, 220),
+    content: clipProjectText(item.content, 1800),
+    scientificContext: clipProjectText(item.scientificContext, 700),
+    provocations: Array.isArray(item.provocations) ? item.provocations.slice(0, 5).map((value: unknown) => clipProjectText(value, 320)) : [],
+    connections: Array.isArray(item.connections) ? item.connections.slice(0, 20) : [],
+    imageName: item.imageName || '', imageUrl: clipProjectText(item.imageUrl, 700),
+    drawingName: item.drawingName || '',
+    interactiveName: item.interactiveName || '',
+    interactive: item.interactive ? { engine: item.interactive.engine, title: clipProjectText(item.interactive.title, 180), prompt: clipProjectText(item.interactive.prompt, 900), code: clipProjectText(item.interactive.code, 2600) } : undefined,
+    attachments: Array.isArray(item.attachments) ? item.attachments.slice(0, 12).map((attachment: any) => ({ name: clipProjectText(attachment?.name, 220), type: clipProjectText(attachment?.type, 120), url: clipProjectText(attachment?.url, 700) })) : [],
+  }));
+  const compactConversations = conversations.slice(0, 20).map((conversation: any) => ({
+    mediatorId: conversation.mediatorId, mediatorName: conversation.mediatorName,
+    messages: Array.isArray(conversation.messages) ? conversation.messages.slice(-16).map((message: any) => ({ role: message.role, text: clipProjectText(message.text, 900) })) : [],
+  }));
+  return `PROJETO\n${JSON.stringify(body.project, null, 2)}\n\nFASE ATIVA\n${body.phase}\n\nREGISTROS DO CANVAS — CONTEXTO TÉCNICO COMPACTADO\n${JSON.stringify(compactRecords, null, 2)}\n\nCONVERSAS DOS AGENTES — TRECHOS MAIS RECENTES\n${JSON.stringify(compactConversations, null, 2)}`;
+}
+
+function buildImplementationPromptMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, agente de Implementação da Metodologia 5I’s. Converta a documentação real do projeto em ENGENHARIA DE PROMPT para uma IA de desenvolvimento. Preserve requisitos, público, contexto, decisões visuais, funcionalidades, acessibilidade e referências. Não invente conteúdo ausente: marque hipóteses. Solicite React + Vite + TypeScript, Supabase quando houver persistência/autenticação/storage, Vercel, .env.example, RLS, mobile-first, acessibilidade, estados de erro/loading e documentação. Retorne somente JSON válido: {"promptEngineering":"...","architectureSummary":"...","stack":["..."],"assumptions":["..."],"acceptanceCriteria":["..."]}.`;
+  return { system, user: `${compactProjectContext(body)}\n\nCrie um superprompt técnico autocontido que permita reconstruir o projeto sem acesso ao canvas original.` };
+}
+
+function buildImplementationPlanMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, arquiteta de implementação da Metodologia 5I’s. Nesta etapa NÃO gere o código completo. Leia a documentação compactada do projeto e produza um PLANO DE IMPLEMENTAÇÃO detalhado para que os arquivos sejam gerados em lotes curtos e coerentes. Preserve requisitos, público, conteúdo, decisões visuais, acessibilidade e referências. Não invente funcionalidades; marque inferências em assumptions. Stack padrão React + Vite + TypeScript, Supabase somente quando necessário e Vercel. Liste entre 8 e 20 arquivos e descreva em purpose seus exports/imports/contratos. Sempre inclua package.json, tsconfig.json, tsconfig.node.json, index.html, src/main.tsx, src/App.tsx, src/index.css, README.md e .env.example. Retorne SOMENTE JSON: {"plan":{"projectName":"...","summary":"...","architectureSummary":"...","implementationBrief":"...","stack":["..."],"routes":[{"path":"/","purpose":"..."}],"dataModel":[{"name":"...","purpose":"...","fields":["..."]}],"designSystem":{"direction":"...","tokens":["..."],"responsive":"...","accessibility":"..."},"files":[{"path":"src/App.tsx","purpose":"..."}],"assumptions":["..."],"postGenerationChecks":["..."]}}.`;
+  return { system, user: `${compactProjectContext(body)}\n\nCrie o plano técnico. Não escreva ainda o conteúdo integral dos arquivos.` };
+}
+
+function buildImplementationFilesMessages(body: MediatorRequestBody) {
+  const system = `Você é Forja, agente full stack da Metodologia 5I’s. Gere SOMENTE os arquivos solicitados neste lote, seguindo estritamente o plano. Código funcional, React + Vite + TypeScript, Supabase somente se previsto, mobile-first, acessível e sem segredos no cliente. Não crie imports para arquivos fora do plano. Não use TODO nas funções principais. .env.example sem valores reais. Para package.json use build = "vite build" e mantenha a checagem TypeScript separada em typecheck = "tsc --noEmit"; não use "tsc && vite build". Se o lote incluir tsconfig.json ou tsconfig.node.json, gere configurações válidas para Vite + React + TypeScript. Retorne SOMENTE JSON: {"files":[{"path":"caminho/exato","content":"conteúdo integral"}]}.`;
+  const user = `PLANO TÉCNICO\n${JSON.stringify(body.implementationPlan || {}, null, 2)}\n\nARQUIVOS DESTE LOTE\n${JSON.stringify(body.requestedFiles || [], null, 2)}\n\nGere exatamente esses arquivos.`;
+  return { system, user };
+}
+
+function buildInteractiveCodeMessages(body: MediatorRequestBody) {
+  const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'] as const;
+  type Engine = (typeof allowedEngines)[number];
+  const engine: Engine = allowedEngines.includes(body.engine as Engine) ? body.engine as Engine : 'p5';
+  const interactionMode = ['auto', 'pointer', 'hover', 'scroll'].includes(String(body.interactionMode)) ? String(body.interactionMode) : 'pointer';
+  const effectPreset = ['network', 'breathe', 'draw', 'wave', 'explode', 'drift'].includes(String(body.effectPreset)) ? String(body.effectPreset) : '';
+  const intensity = ['subtle', 'medium', 'strong'].includes(String(body.intensity)) ? String(body.intensity) : 'subtle';
+  const preserveBrand = body.preserveBrand !== false;
+  const asset = body.asset && typeof body.asset === 'object' && body.asset.url
+    ? {
+        url: String(body.asset.url),
+        name: String(body.asset.name || 'asset'),
+        contentType: String(body.asset.contentType || ''),
+        kind: body.asset.kind === 'svg' ? 'svg' : 'image',
+        profile: body.asset.profile && typeof body.asset.profile === 'object' ? {
+          palette: Array.isArray(body.asset.profile.palette) ? body.asset.profile.palette.slice(0, 12).map(String) : [],
+          counts: body.asset.profile.counts && typeof body.asset.profile.counts === 'object' ? body.asset.profile.counts : {},
+          sourceType: 'svg',
+        } : undefined,
+      }
+    : null;
+
+  const engineRules: Record<Engine, string> = {
+    p5: `p5.js já está carregado em modo global. NÃO escreva HTML, imports ou tags <script>. Declare setup(), draw() e handlers necessários. Use const canvas = createCanvas(windowWidth, windowHeight); canvas.parent(STAGE); e resizeCanvas no resize.`,
+    three: `O código roda em <script type="module"> depois de import * as THREE. NÃO escreva imports adicionais, HTML ou tags <script>. Use THREE, renderer, scene, camera, requestAnimationFrame e resize; anexe renderer.domElement ao STAGE.`,
+    gsap: `GSAP já está carregado globalmente na variável gsap. NÃO escreva imports, HTML ou tags <script>. Crie os elementos DOM/SVG necessários dentro de STAGE e anime com timelines/tweens do gsap.`,
+    anime: `Anime.js 3.x já está carregado globalmente na função anime. NÃO escreva imports, HTML ou tags <script>. Crie os elementos DOM/SVG dentro de STAGE e anime com anime({...}).`,
+    matter: `Matter.js já está carregado globalmente na variável Matter. NÃO escreva imports, HTML ou tags <script>. Use Engine, Runner/Render ou desenho próprio em canvas, mantenha a física leve e dimensione ao STAGE.`,
+    svg: `SVG.js já está carregado globalmente na função SVG e GSAP também está disponível em gsap. NÃO escreva imports, HTML ou tags <script>. Crie o SVG dentro de STAGE. Para um SVG enviado, você pode usar await window.loadInteractiveSvg() dentro de uma função async/IIFE e inserir/manipular seus grupos e paths.`,
+  };
+
+  const assetRules = asset
+    ? `Há um asset fornecido pelo usuário e ele deve ser tratado como parte central da interação quando o prompt pedir isso.
+ASSET já existe no runtime: ${JSON.stringify(asset)}
+Helpers disponíveis:
+- STAGE: elemento DOM que ocupa 100% da prévia.
+- ASSET: metadados do arquivo enviado (url, name, contentType, kind).
+- window.createInteractiveImage(options): cria uma <img> do asset dentro de STAGE e retorna o elemento.
+- window.loadInteractiveSvg(): retorna o texto do SVG remoto; use somente quando ASSET.kind === 'svg'.
+Não substitua o asset por desenhos inventados se o pedido for animar a marca/imagem enviada.
+Se ASSET.kind === 'svg', monte e manipule o SVG ORIGINAL usando window.loadInteractiveSvg(); nunca redesenhe uma aproximação da marca.`
+    : `Não há asset enviado. Se o prompt pedir uma marca/imagem específica, trabalhe apenas com formas geradas até que o usuário envie o arquivo; não invente URL externa.`;
+
+  const modeRules: Record<string, string> = {
+    auto: 'A interação principal deve funcionar automaticamente em loop; ainda respeite resize e prefers-reduced-motion quando viável.',
+    pointer: 'A interação principal deve responder tanto a mouse quanto a toque/pointer, sem depender apenas de hover.',
+    hover: 'A interação deve responder a hover/foco no desktop e oferecer comportamento equivalente por toque no mobile.',
+    scroll: 'A interação deve responder ao scroll quando inserida na página; como a prévia pode não rolar, inclua também fallback por wheel/pointer para ser testável.',
+  };
+
+  const system = `Você é Forja em modo laboratório de interação da Metodologia 5I’s. Gere um experimento visual executável, expressivo e performático para ser salvo como uma camada reutilizável do canvas.
+
+MOTOR: ${engine}
+${engineRules[engine]}
+
+RUNTIME COMUM
+- STAGE ocupa toda a área da prévia e já existe.
+- ASSET contém o arquivo enviado ou null.
+- MODE contém o modo de interação escolhido.
+${assetRules}
+${modeRules[interactionMode] || modeRules.pointer}
+
+EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
+INTENSIDADE: ${intensity}
+PROTEÇÃO DA MARCA: ${preserveBrand ? 'ATIVA' : 'desativada'}
+${preserveBrand && asset?.kind === 'svg' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
+- O SVG enviado é a fonte visual final. NÃO recrie, redesenhe ou substitua seus elementos.
+- NÃO altere fill, stroke, gradientes, viewBox, proporções, tipografia ou ordem visual dos elementos.
+- Preserve exatamente as cores detectadas: ${JSON.stringify(asset.profile?.palette || [])}.
+- Para animar, prefira transform, opacity, strokeDasharray/strokeDashoffset e elementos auxiliares sobrepostos que não modifiquem a arte original.
+- Se adicionar linhas de rede, use uma cor já existente na paleta do SVG e baixa opacidade.
+- Ao terminar a animação/interação, os elementos devem poder retornar à composição original.` : ''}
+
+REGRAS
+- Responda a desktop e mobile/touch.
+- O resultado precisa caber e se adaptar ao container, não a uma resolução fixa.
+- Limite partículas/corpos/objetos para bom desempenho em celular.
+- Não acesse cookies, localStorage, parent window ou APIs privadas.
+- Não faça novas requisições de rede, exceto window.loadInteractiveSvg() para o asset fornecido.
+- Não carregue bibliotecas adicionais: use somente o motor escolhido e os helpers já disponíveis.
+- Evite áudio automático.
+- Respeite a identidade visual e a intenção conceitual descritas no prompt.
+- Se CÓDIGO ATUAL for fornecido, trate o pedido como uma revisão: preserve o que já funciona e devolva o CÓDIGO COMPLETO atualizado, nunca apenas um patch.
+- Evite vazamentos: ao recriar a cena, não acumule listeners, loops ou canvases duplicados desnecessariamente.
+
+IMPORTANTE: NÃO devolva JSON. Responda exatamente neste protocolo textual:
+TITLE: nome curto da interação
+ENGINE: ${engine}
+<<<CODE>>>
+JavaScript puro aqui
+<<<END_CODE>>>
+
+Não escreva explicações fora desse protocolo. Não use cercas Markdown se puder evitar.`;
+
+  const context = body.existingThoughts?.slice(-30).map((item) => `[${item.phase}] ${item.title}: ${item.content}`).join('\n') || '';
+  const user = `PROJETO: ${body.project.name}
+PROBLEMA: ${body.project.problem}
+FASE: ${body.phase}
+MOTOR ESCOLHIDO: ${engine}
+MODO DE INTERAÇÃO: ${interactionMode}
+EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
+INTENSIDADE: ${intensity}
+PROTEÇÃO DA MARCA: ${preserveBrand ? 'ativa' : 'desativada'}
+PALETA DETECTADA: ${asset?.profile?.palette?.length ? asset.profile.palette.join(', ') : 'não disponível'}
+ASSET: ${asset ? `${asset.name} (${asset.kind}) — ${asset.url}` : 'nenhum'}
+
+CONTEXTO DO CANVAS:
+${context}
+
+CÓDIGO ATUAL (se houver, revise a partir dele):
+${String(body.currentCode || '').slice(0, 14000) || 'nenhum'}
+
+PEDIDO / NOVA INSTRUÇÃO:
+${body.prompt || ''}
+
+Gere o experimento completo usando ${engine}.`;
+  return { system, user };
+}
+
+function parseJsonObject(text: string, errorMessage: string) {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error(errorMessage);
+  return JSON.parse(stripped.slice(start, end + 1));
+}
+
+function cleanImplementationPromptJson(text: string) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para a engenharia de prompt.');
+  if (!data.promptEngineering) throw new Error('A engenharia de prompt retornou vazia.');
   return {
-    minX: Math.min(x, x2),
-    maxX: Math.max(x, x2),
-    minY: Math.min(y, y2),
-    maxY: Math.max(y, y2),
-    width: Math.abs(x2 - x),
-    height: Math.abs(y2 - y),
-    cx: (x + x2) / 2,
-    cy: (y + y2) / 2,
+    promptEngineering: String(data.promptEngineering),
+    architectureSummary: String(data.architectureSummary || ''),
+    stack: Array.isArray(data.stack) ? data.stack.map(String) : [],
+    assumptions: Array.isArray(data.assumptions) ? data.assumptions.map(String) : [],
+    acceptanceCriteria: Array.isArray(data.acceptanceCriteria) ? data.acceptanceCriteria.map(String) : [],
   };
-};
-
-const arrowHead = (x1: number, y1: number, x2: number, y2: number, size: number) => {
-  const angle = Math.atan2(y2 - y1, x2 - x1);
-  const left = {
-    x: x2 - Math.cos(angle - Math.PI / 6) * size,
-    y: y2 - Math.sin(angle - Math.PI / 6) * size,
-  };
-  const right = {
-    x: x2 - Math.cos(angle + Math.PI / 6) * size,
-    y: y2 - Math.sin(angle + Math.PI / 6) * size,
-  };
-  return `${left.x},${left.y} ${x2},${y2} ${right.x},${right.y}`;
-};
-
-const renderDrawingElement = (element: DrawingElement, selected = false) => {
-  const stroke = element.stroke || '#111111';
-  const fill = element.fill || 'none';
-  const strokeWidth = element.strokeWidth || 2;
-  const opacity = element.opacity ?? 1;
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const x2 = element.x2 ?? x;
-  const y2 = element.y2 ?? y;
-  const bounds = getBounds(element);
-  const selectionStyle = selected ? { filter: 'drop-shadow(0 0 3px rgba(59,130,246,.9))' } : undefined;
-  const common = { stroke, strokeWidth, opacity, fill, vectorEffect: 'non-scaling-stroke' as const, style: selectionStyle };
-
-  switch (element.type) {
-    case 'brush': {
-      const points = element.points || [];
-      const hasPressure = points.some((point) => typeof point.pressure === 'number');
-      if (hasPressure && points.length > 1) {
-        return <g opacity={opacity} style={selectionStyle}>{points.slice(1).map((point, index) => {
-          const previous = points[index];
-          const pressure = Math.max(0.08, Math.min(1, ((previous.pressure ?? .55) + (point.pressure ?? .55)) / 2));
-          const width = strokeWidth * (.45 + pressure);
-          return <line key={index} x1={previous.x} y1={previous.y} x2={point.x} y2={point.y} stroke={stroke} strokeWidth={width} strokeLinecap="round" vectorEffect="non-scaling-stroke" />;
-        })}</g>;
-      }
-      return <path d={pointsToPath(points)} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle} />;
-    }
-    case 'line':
-      return <line x1={x} y1={y} x2={x2} y2={y2} {...common} fill="none" strokeLinecap="round" />;
-    case 'arrow':
-      return (
-        <g style={selectionStyle} opacity={opacity}>
-          <line x1={x} y1={y} x2={x2} y2={y2} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-          <polyline points={arrowHead(x, y, x2, y2, Math.max(12, strokeWidth * 4))} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        </g>
-      );
-    case 'rectangle':
-      return <rect x={bounds.minX} y={bounds.minY} width={Math.max(bounds.width, 1)} height={Math.max(bounds.height, 1)} {...common} />;
-    case 'rounded-rectangle':
-      return <rect x={bounds.minX} y={bounds.minY} width={Math.max(bounds.width, 1)} height={Math.max(bounds.height, 1)} rx={Math.min(32, Math.max(8, Math.min(bounds.width, bounds.height) * 0.12))} {...common} />;
-    case 'ellipse':
-      return <ellipse cx={bounds.cx} cy={bounds.cy} rx={Math.max(bounds.width / 2, 1)} ry={Math.max(bounds.height / 2, 1)} {...common} />;
-    case 'triangle':
-      return <polygon points={`${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.maxY} ${bounds.minX},${bounds.maxY}`} {...common} />;
-    case 'diamond':
-      return <polygon points={`${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.cy} ${bounds.cx},${bounds.maxY} ${bounds.minX},${bounds.cy}`} {...common} />;
-    case 'pentagon':
-      return <polygon points={regularPolygonPoints(x, y, x2, y2, 5)} {...common} />;
-    case 'hexagon':
-      return <polygon points={regularPolygonPoints(x, y, x2, y2, 6, 0)} {...common} />;
-    case 'star':
-      return <polygon points={starPoints(x, y, x2, y2)} {...common} />;
-    case 'cube': {
-      const depth = Math.max(12, Math.min(bounds.width, bounds.height) * 0.22);
-      const fx = bounds.minX;
-      const fy = bounds.minY + depth;
-      const fw = Math.max(bounds.width - depth, 1);
-      const fh = Math.max(bounds.height - depth, 1);
-      return (
-        <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle}>
-          <rect x={fx} y={fy} width={fw} height={fh} />
-          <polyline points={`${fx},${fy} ${fx + depth},${bounds.minY} ${bounds.maxX},${bounds.minY} ${fx + fw},${fy}`} fill={fill} />
-          <polyline points={`${fx + fw},${fy} ${bounds.maxX},${bounds.minY} ${bounds.maxX},${bounds.maxY - depth} ${fx + fw},${fy + fh}`} fill={fill} />
-          <line x1={fx + depth} y1={bounds.minY} x2={fx + depth} y2={fy + fh - depth} />
-        </g>
-      );
-    }
-    case 'sphere':
-      return (
-        <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle}>
-          <ellipse cx={bounds.cx} cy={bounds.cy} rx={Math.max(bounds.width / 2, 1)} ry={Math.max(bounds.height / 2, 1)} />
-          <ellipse cx={bounds.cx} cy={bounds.cy} rx={Math.max(bounds.width / 5, 1)} ry={Math.max(bounds.height / 2, 1)} fill="none" />
-          <ellipse cx={bounds.cx} cy={bounds.cy} rx={Math.max(bounds.width / 2, 1)} ry={Math.max(bounds.height / 5, 1)} fill="none" />
-        </g>
-      );
-    case 'cylinder': {
-      const ry = Math.max(bounds.height * 0.12, 4);
-      return (
-        <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle}>
-          <path d={`M ${bounds.minX} ${bounds.minY + ry} L ${bounds.minX} ${bounds.maxY - ry} A ${bounds.width / 2} ${ry} 0 0 0 ${bounds.maxX} ${bounds.maxY - ry} L ${bounds.maxX} ${bounds.minY + ry}`} />
-          <ellipse cx={bounds.cx} cy={bounds.minY + ry} rx={Math.max(bounds.width / 2, 1)} ry={ry} />
-          <ellipse cx={bounds.cx} cy={bounds.maxY - ry} rx={Math.max(bounds.width / 2, 1)} ry={ry} fill="none" />
-        </g>
-      );
-    }
-    case 'cone': {
-      const baseRy = Math.max(bounds.height * 0.09, 4);
-      return (
-        <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle}>
-          <path d={`M ${bounds.cx} ${bounds.minY} L ${bounds.maxX} ${bounds.maxY - baseRy} A ${bounds.width / 2} ${baseRy} 0 0 1 ${bounds.minX} ${bounds.maxY - baseRy} Z`} />
-          <ellipse cx={bounds.cx} cy={bounds.maxY - baseRy} rx={Math.max(bounds.width / 2, 1)} ry={baseRy} fill="none" />
-        </g>
-      );
-    }
-    case 'pyramid':
-      return (
-        <g fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle}>
-          <polygon points={`${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.maxY - bounds.height * 0.18} ${bounds.cx},${bounds.maxY} ${bounds.minX},${bounds.maxY - bounds.height * 0.18}`} />
-          <line x1={bounds.cx} y1={bounds.minY} x2={bounds.cx} y2={bounds.maxY} />
-          <line x1={bounds.cx} y1={bounds.minY} x2={bounds.minX} y2={bounds.maxY - bounds.height * 0.18} />
-          <line x1={bounds.cx} y1={bounds.minY} x2={bounds.maxX} y2={bounds.maxY - bounds.height * 0.18} />
-        </g>
-      );
-    case 'text': {
-      const size = element.fontSize || 32;
-      const lines = (element.text || '').split('\n');
-      return (
-        <text x={x} y={y} fill={stroke} fontSize={size} fontFamily={element.fontFamily || 'Inter'} opacity={opacity} style={selectionStyle}>
-          {lines.map((line, index) => (
-            <tspan key={`${element.id}-line-${index}`} x={x} dy={index === 0 ? 0 : size * 1.2}>{line || ' '}</tspan>
-          ))}
-        </text>
-      );
-    }
-    default:
-      return null;
-  }
-};
-
-export function DrawingPreview({ drawing, className = '' }: { drawing: DrawingDocument; className?: string }) {
-  return (
-    <svg
-      viewBox={`0 0 ${drawing.width} ${drawing.height}`}
-      preserveAspectRatio="xMidYMid meet"
-      className={className}
-      role="img"
-      aria-label="Pré-visualização da folha de desenho"
-    >
-      <rect width={drawing.width} height={drawing.height} fill={drawing.background || '#FFFFFF'} />
-      {drawing.elements.map((element) => <g key={element.id}>{renderDrawingElement(element)}</g>)}
-    </svg>
-  );
 }
 
-const escapeXml = (value: string) => value
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&apos;');
+function cleanImplementationPlanJson(text: string) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para o plano técnico.');
+  const plan = data.plan;
+  if (!plan || !Array.isArray(plan.files) || plan.files.length < 5) throw new Error('O plano técnico da Forja veio incompleto.');
+  const plannedFiles = plan.files.filter((file: any) => file?.path).slice(0, 22).map((file: any) => ({ path: String(file.path), purpose: String(file.purpose || '') }));
+  const requiredFiles = [
+    ['package.json', 'Dependências e scripts dev/build/preview do projeto Vite; build deve ser vite build e typecheck deve ser tsc --noEmit.'], ['tsconfig.json', 'Configuração TypeScript do código React em src.'], ['tsconfig.node.json', 'Configuração TypeScript para arquivos de configuração do Vite.'], ['index.html', 'Documento HTML de entrada do Vite.'],
+    ['src/main.tsx', 'Bootstrap React e importação dos estilos globais.'], ['src/App.tsx', 'Composição principal da aplicação.'],
+    ['src/index.css', 'Estilos globais, responsividade e acessibilidade.'], ['README.md', 'Documentação do projeto.'], ['.env.example', 'Variáveis públicas necessárias, sem valores reais.']
+  ];
+  const seen = new Set(plannedFiles.map((file: any) => file.path));
+  for (const [path, purpose] of requiredFiles) if (!seen.has(path)) plannedFiles.push({ path, purpose });
+  return { projectName: String(plan.projectName || 'projeto-5is'), summary: String(plan.summary || ''), architectureSummary: String(plan.architectureSummary || ''), implementationBrief: String(plan.implementationBrief || ''), stack: Array.isArray(plan.stack) ? plan.stack.map(String) : [], routes: Array.isArray(plan.routes) ? plan.routes.slice(0, 30) : [], dataModel: Array.isArray(plan.dataModel) ? plan.dataModel.slice(0, 30) : [], designSystem: plan.designSystem && typeof plan.designSystem === 'object' ? plan.designSystem : {}, files: plannedFiles.slice(0, 24), assumptions: Array.isArray(plan.assumptions) ? plan.assumptions.map(String) : [], postGenerationChecks: Array.isArray(plan.postGenerationChecks) ? plan.postGenerationChecks.map(String) : [] };
+}
 
-const elementToSvgString = (element: DrawingElement) => {
-  const stroke = element.stroke || '#111111';
-  const fill = element.fill || 'none';
-  const strokeWidth = element.strokeWidth || 2;
-  const opacity = element.opacity ?? 1;
-  const x = element.x ?? 0;
-  const y = element.y ?? 0;
-  const x2 = element.x2 ?? x;
-  const y2 = element.y2 ?? y;
-  const bounds = getBounds(element);
-  const attrs = `stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" fill="${escapeXml(fill)}" opacity="${opacity}" vector-effect="non-scaling-stroke"`;
+function cleanImplementationFilesJson(text: string, requestedFiles: Array<{ path: string; purpose?: string }> = []) {
+  const data = parseJsonObject(text, 'A Forja não retornou JSON válido para este lote.');
+  const requested = new Set(requestedFiles.map((file) => String(file.path)));
+  const files = Array.isArray(data.files) ? data.files.filter((file: any) => file?.path && typeof file.content === 'string' && requested.has(String(file.path))).map((file: any) => ({ path: String(file.path), content: String(file.content) })) : [];
+  if (!files.length) throw new Error('A Forja não devolveu os arquivos solicitados neste lote.');
+  return files;
+}
 
-  switch (element.type) {
-    case 'brush': { const pts = element.points || []; const pressured = pts.some((point) => typeof point.pressure === 'number'); if (pressured && pts.length > 1) return `<g opacity="${opacity}">${pts.slice(1).map((point,index)=>{ const prev=pts[index]; const pressure=Math.max(.08,Math.min(1,((prev.pressure??.55)+(point.pressure??.55))/2)); const width=strokeWidth*(.45+pressure); return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" stroke="${escapeXml(stroke)}" stroke-width="${width}" stroke-linecap="round"/>`; }).join('')}</g>`; return `<path d="${pointsToPath(pts)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`; }
-    case 'line': return `<line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" ${attrs} fill="none" stroke-linecap="round"/>`;
-    case 'arrow': return `<g opacity="${opacity}"><line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polyline points="${arrowHead(x, y, x2, y2, Math.max(12, strokeWidth * 4))}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
-    case 'rectangle': return `<rect x="${bounds.minX}" y="${bounds.minY}" width="${Math.max(bounds.width, 1)}" height="${Math.max(bounds.height, 1)}" ${attrs}/>`;
-    case 'rounded-rectangle': return `<rect x="${bounds.minX}" y="${bounds.minY}" width="${Math.max(bounds.width, 1)}" height="${Math.max(bounds.height, 1)}" rx="${Math.min(32, Math.max(8, Math.min(bounds.width, bounds.height) * 0.12))}" ${attrs}/>`;
-    case 'ellipse': return `<ellipse cx="${bounds.cx}" cy="${bounds.cy}" rx="${Math.max(bounds.width / 2, 1)}" ry="${Math.max(bounds.height / 2, 1)}" ${attrs}/>`;
-    case 'triangle': return `<polygon points="${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.maxY} ${bounds.minX},${bounds.maxY}" ${attrs}/>`;
-    case 'diamond': return `<polygon points="${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.cy} ${bounds.cx},${bounds.maxY} ${bounds.minX},${bounds.cy}" ${attrs}/>`;
-    case 'pentagon': return `<polygon points="${regularPolygonPoints(x, y, x2, y2, 5)}" ${attrs}/>`;
-    case 'hexagon': return `<polygon points="${regularPolygonPoints(x, y, x2, y2, 6, 0)}" ${attrs}/>`;
-    case 'star': return `<polygon points="${starPoints(x, y, x2, y2)}" ${attrs}/>`;
-    case 'cube': {
-      const depth = Math.max(12, Math.min(bounds.width, bounds.height) * 0.22);
-      const fx = bounds.minX;
-      const fy = bounds.minY + depth;
-      const fw = Math.max(bounds.width - depth, 1);
-      const fh = Math.max(bounds.height - depth, 1);
-      return `<g ${attrs}><rect x="${fx}" y="${fy}" width="${fw}" height="${fh}"/><polyline points="${fx},${fy} ${fx + depth},${bounds.minY} ${bounds.maxX},${bounds.minY} ${fx + fw},${fy}"/><polyline points="${fx + fw},${fy} ${bounds.maxX},${bounds.minY} ${bounds.maxX},${bounds.maxY - depth} ${fx + fw},${fy + fh}"/><line x1="${fx + depth}" y1="${bounds.minY}" x2="${fx + depth}" y2="${fy + fh - depth}"/></g>`;
-    }
-    case 'sphere': return `<g ${attrs}><ellipse cx="${bounds.cx}" cy="${bounds.cy}" rx="${Math.max(bounds.width / 2, 1)}" ry="${Math.max(bounds.height / 2, 1)}"/><ellipse cx="${bounds.cx}" cy="${bounds.cy}" rx="${Math.max(bounds.width / 5, 1)}" ry="${Math.max(bounds.height / 2, 1)}" fill="none"/><ellipse cx="${bounds.cx}" cy="${bounds.cy}" rx="${Math.max(bounds.width / 2, 1)}" ry="${Math.max(bounds.height / 5, 1)}" fill="none"/></g>`;
-    case 'cylinder': {
-      const ry = Math.max(bounds.height * 0.12, 4);
-      return `<g ${attrs}><path d="M ${bounds.minX} ${bounds.minY + ry} L ${bounds.minX} ${bounds.maxY - ry} A ${bounds.width / 2} ${ry} 0 0 0 ${bounds.maxX} ${bounds.maxY - ry} L ${bounds.maxX} ${bounds.minY + ry}"/><ellipse cx="${bounds.cx}" cy="${bounds.minY + ry}" rx="${Math.max(bounds.width / 2, 1)}" ry="${ry}"/><ellipse cx="${bounds.cx}" cy="${bounds.maxY - ry}" rx="${Math.max(bounds.width / 2, 1)}" ry="${ry}" fill="none"/></g>`;
-    }
-    case 'cone': {
-      const baseRy = Math.max(bounds.height * 0.09, 4);
-      return `<g ${attrs}><path d="M ${bounds.cx} ${bounds.minY} L ${bounds.maxX} ${bounds.maxY - baseRy} A ${bounds.width / 2} ${baseRy} 0 0 1 ${bounds.minX} ${bounds.maxY - baseRy} Z"/><ellipse cx="${bounds.cx}" cy="${bounds.maxY - baseRy}" rx="${Math.max(bounds.width / 2, 1)}" ry="${baseRy}" fill="none"/></g>`;
-    }
-    case 'pyramid': return `<g ${attrs}><polygon points="${bounds.cx},${bounds.minY} ${bounds.maxX},${bounds.maxY - bounds.height * 0.18} ${bounds.cx},${bounds.maxY} ${bounds.minX},${bounds.maxY - bounds.height * 0.18}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.cx}" y2="${bounds.maxY}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.minX}" y2="${bounds.maxY - bounds.height * 0.18}"/><line x1="${bounds.cx}" y1="${bounds.minY}" x2="${bounds.maxX}" y2="${bounds.maxY - bounds.height * 0.18}"/></g>`;
-    case 'text': {
-      const size = element.fontSize || 32;
-      const lines = (element.text || '').split('\n');
-      const tspans = lines.map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : size * 1.2}">${escapeXml(line || ' ')}</tspan>`).join('');
-      return `<text x="${x}" y="${y}" fill="${escapeXml(stroke)}" font-size="${size}" font-family="${escapeXml(element.fontFamily || 'Inter')}" opacity="${opacity}">${tspans}</text>`;
-    }
-    default: return '';
-  }
-};
+function cleanInteractiveResponse(text: string, fallbackEngine: string = 'p5') {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('A interação retornou sem conteúdo.');
+  const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
+  const normalizeEngine = (value: unknown) => allowedEngines.includes(String(value)) ? String(value) : (allowedEngines.includes(fallbackEngine) ? fallbackEngine : 'p5');
 
-export const drawingToSvgString = (drawing: DrawingDocument) => {
-  const body = drawing.elements.map(elementToSvgString).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${drawing.width}" height="${drawing.height}" viewBox="0 0 ${drawing.width} ${drawing.height}"><rect width="100%" height="100%" fill="${escapeXml(drawing.background || '#FFFFFF')}"/>${body}</svg>`;
-};
-
-const sanitizeName = (name: string) => name.trim().replace(/[^a-zA-Z0-9À-ÿ_-]+/g, '-').replace(/^-+|-+$/g, '') || 'desenho';
-
-const triggerBlobDownload = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
-export const exportDrawing = async (drawing: DrawingDocument, format: ExportFormat, name = 'desenho') => {
-  const svg = drawingToSvgString(drawing);
-  const safeName = sanitizeName(name);
-  if (format === 'svg') {
-    triggerBlobDownload(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), `${safeName}.svg`);
-    return;
-  }
-
-  const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(svgBlob);
   try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Não foi possível rasterizar o desenho.'));
-      img.src = url;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = drawing.width;
-    canvas.height = drawing.height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Canvas de exportação indisponível.');
-    context.fillStyle = drawing.background || '#FFFFFF';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, drawing.width, drawing.height);
-    const mime = format === 'png' ? 'image/png' : 'image/jpeg';
-    const extension = format === 'png' ? 'png' : 'jpg';
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Falha ao gerar imagem.')), mime, format === 'jpg' ? 0.94 : undefined);
-    });
-    triggerBlobDownload(blob, `${safeName}.${extension}`);
-  } finally {
-    URL.revokeObjectURL(url);
+    const data = parseJsonObject(raw, '');
+    if (data?.interactive?.code) {
+      return {
+        title: String(data.interactive.title || 'Interação'),
+        engine: normalizeEngine(data.interactive.engine),
+        code: String(data.interactive.code),
+      };
+    }
+  } catch {
+    // Compatibilidade: o protocolo principal não depende de JSON.
   }
-};
 
-const makeElementId = () => `draw-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const titleMatch = raw.match(/^TITLE:\s*(.+)$/im);
+  const engineMatch = raw.match(/^ENGINE:\s*(p5|three|gsap|anime|matter|svg)$/im);
+  const markerStart = raw.indexOf('<<<CODE>>>');
+  const markerEnd = raw.lastIndexOf('<<<END_CODE>>>');
+  let code = '';
 
-const shapeIcon = (tool: DrawingTool) => {
-  if (tool === 'line' || tool === 'arrow') return <Minus size={18} />;
-  if (tool === 'ellipse' || tool === 'sphere') return <Circle size={18} />;
-  if (tool === 'triangle' || tool === 'cone' || tool === 'pyramid') return <Triangle size={18} />;
-  if (tool === 'star') return <Star size={18} />;
-  return <Square size={18} />;
-};
+  if (markerStart >= 0) {
+    const start = markerStart + '<<<CODE>>>'.length;
+    code = raw.slice(start, markerEnd > start ? markerEnd : undefined).trim();
+  }
+  if (!code) {
+    const fenced = raw.match(/```(?:javascript|js)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) code = fenced[1].trim();
+  }
+  if (!code) {
+    code = raw
+      .replace(/^TITLE:\s*.*$/im, '')
+      .replace(/^ENGINE:\s*.*$/im, '')
+      .replace(/<<<CODE>>>/g, '')
+      .replace(/<<<END_CODE>>>/g, '')
+      .trim();
+  }
+  code = code
+    .replace(/^```(?:javascript|js)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/^<script(?:\s[^>]*)?>\s*/i, '')
+    .replace(/\s*<\/script>$/i, '')
+    .trim();
 
-const isShapeTool = (tool: DrawingTool) => SHAPE_TOOLS.some((item) => item.tool === tool);
+  if (!code) throw new Error('A interação retornou sem código executável. Tente gerar novamente.');
+  return {
+    title: String(titleMatch?.[1]?.trim() || 'Interação'),
+    engine: normalizeEngine(engineMatch?.[1]),
+    code,
+  };
+}
 
-type MobilePanel = 'style' | 'shapes' | 'export' | null;
 
-type TextEditorState = {
-  x: number;
-  y: number;
-  left: number;
-  top: number;
-  value: string;
-};
+function cleanWireframeInterpretationJson(text: string) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A interpretação do wireframe não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const frame = data?.frame;
+  if (!frame || !Array.isArray(frame.blocks)) throw new Error('A interpretação do wireframe veio incompleta.');
+  const allowedTypes = new Set(['text','button','input','image','card','navbar','list-item','spacer']);
+  const cleanColor = (value: any, fallback: string) => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
+  return {
+    frame: {
+      name: String(frame.name || 'Interface interpretada'),
+      preset: ['mobile','tablet','desktop','watch','custom'].includes(frame.preset) ? frame.preset : 'custom',
+      width: Math.max(120, Math.min(2400, Number(frame.width) || 393)),
+      height: Math.max(120, Math.min(4000, Number(frame.height) || 852)),
+      direction: frame.direction === 'row' ? 'row' : 'column',
+      gap: Math.max(0, Math.min(120, Number(frame.gap) || 12)),
+      padding: Math.max(0, Math.min(160, Number(frame.padding) || 20)),
+      align: ['start','center','end','stretch'].includes(frame.align) ? frame.align : 'stretch',
+      background: cleanColor(frame.background, '#FFFFFF'),
+      blocks: frame.blocks.slice(0, 40).map((block: any) => ({
+        type: allowedTypes.has(block?.type) ? block.type : 'card', label: String(block?.label || 'Elemento').slice(0, 180),
+        width: block?.width === 'hug' || block?.width === 'fill' || Number.isFinite(Number(block?.width)) ? block.width : 'fill',
+        height: block?.height === 'hug' || Number.isFinite(Number(block?.height)) ? block.height : 'hug',
+        padding: Math.max(0, Math.min(80, Number(block?.padding) || 0)), radius: Math.max(0, Math.min(999, Number(block?.radius) || 0)),
+        background: cleanColor(block?.background, '#F4F4F2'), color: cleanColor(block?.color, '#111111'),
+      }))
+    },
+    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 6).map(String) : [],
+    uncertainties: Array.isArray(data?.uncertainties) ? data.uncertainties.slice(0, 6).map(String) : [],
+  };
+}
 
-export default function DrawingStudio({ drawing, title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onAnimate, onClose }: DrawingStudioProps) {
-  const initial = useMemo(() => cloneDrawing(drawing), [drawing]);
-  const [history, setHistory] = useState<DrawingDocument[]>([initial]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [tool, setTool] = useState<DrawingTool>('brush');
-  const [strokeColor, setStrokeColor] = useState('#111111');
-  const [fillColor, setFillColor] = useState('#FFFFFF');
-  const [useFill, setUseFill] = useState(false);
-  const [strokeWidth, setStrokeWidth] = useState(4);
-  const [fontSize, setFontSize] = useState(44);
-  const [fontFamily, setFontFamily] = useState('Inter');
-  const [stabilization, setStabilization] = useState(36);
-  const [pressureEnabled, setPressureEnabled] = useState(true);
-  const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONTS);
-  const [fontSearch, setFontSearch] = useState('');
-  const [draft, setDraft] = useState<DrawingElement | null>(null);
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
-  const [desktopShapesOpen, setDesktopShapesOpen] = useState(false);
-  const [textEditor, setTextEditor] = useState<TextEditorState | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const paperRef = useRef<HTMLDivElement>(null);
-  const textInputRef = useRef<HTMLTextAreaElement>(null);
-  const current = history[historyIndex];
+function buildWireframeInterpretationMessages(body: MediatorRequestBody) {
+  const source = body.wireframeSource || {};
+  const device = ['auto','mobile','tablet','desktop'].includes(String(body.wireframeOptions?.device)) ? String(body.wireframeOptions?.device) : 'auto';
+  const fidelity = ['structure','balanced','faithful'].includes(String(body.wireframeOptions?.fidelity)) ? String(body.wireframeOptions?.fidelity) : 'balanced';
+  const system = `Converta rabiscos, screenshots e desenhos vetoriais em uma interface EDITÁVEL. Reconheça navbar, texto, botão, input, imagem, card, item de lista e spacer. Não produza imagem final. Fidelidade: ${fidelity}. Dispositivo: ${device}. Retorne somente JSON: {"frame":{"name":"...","preset":"mobile|tablet|desktop|watch|custom","width":393,"height":852,"direction":"column|row","gap":16,"padding":24,"align":"start|center|end|stretch","background":"#FFFFFF","blocks":[{"type":"navbar|text|button|input|image|card|list-item|spacer","label":"...","width":"fill|hug ou número","height":"hug ou número","padding":12,"radius":12,"background":"#F4F4F2","color":"#111111"}]},"notes":["..."],"uncertainties":["..."]}. Cores somente em HEX de 6 dígitos.`;
+  const user = `Origem: ${source.name || 'esboço'}. Tipo: ${source.kind || 'image'}. Converta a estrutura visual em blocos editáveis. Quando houver dúvida, gere a hipótese mais útil e registre-a em uncertainties.`;
+  return { system, user };
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('https://fonts.google.com/metadata/fonts')
-      .then((response) => response.text())
-      .then((raw) => {
-        const cleaned = raw.replace(/^\)\]\}'\s*/, '');
-        const payload = JSON.parse(cleaned);
-        const families = (payload.familyMetadataList || [])
-          .map((item: any) => String(item.family || '').trim())
-          .filter(Boolean)
-          .sort((a: string, b: string) => a.localeCompare(b));
-        if (!cancelled && families.length) setFontFamilies(families);
+async function callGeminiWireframe(system: string, user: string, source: any, maxOutputTokens = 3600, timeoutMs = 45000) {
+  if (source?.kind !== 'image' || !source?.url) {
+    return callGeminiStructured(system, `${user}\n\nSVG DO DESENHO:\n${String(source?.svg || '').slice(0, 70000)}`, maxOutputTokens, timeoutMs, 0.12);
+  }
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const imageResponse = await fetchWithTimeout(String(source.url), {}, 12000);
+  if (!imageResponse.ok) throw new Error('Não foi possível ler a imagem do esboço.');
+  const mimeType = String(imageResponse.headers.get('content-type') || 'image/png').split(';')[0];
+  const bytes = Buffer.from(await imageResponse.arrayBuffer());
+  if (bytes.length > 4 * 1024 * 1024) throw new Error('A imagem é grande demais para interpretação.');
+  const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }, { inlineData: { mimeType, data: bytes.toString('base64') } }] }],
+      generationConfig: { temperature: 0.12, responseMimeType: 'application/json', maxOutputTokens }
+    })
+  }, timeoutMs);
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu a estrutura do wireframe.');
+  return { text, provider: 'Gemini', model };
+}
+
+function cleanPublicationJson(text: string): PublicationArticle {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('O Publica não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.title || !data.abstract || !Array.isArray(data.keywords) || !Array.isArray(data.sections)) {
+    throw new Error('O artigo retornado pelo Publica veio incompleto.');
+  }
+  return {
+    title: String(data.title),
+    subtitle: data.subtitle ? String(data.subtitle) : undefined,
+    abstract: String(data.abstract),
+    keywords: data.keywords.slice(0, 8).map(String),
+    sections: data.sections
+      .filter((section: any) => section?.heading && section?.body)
+      .map((section: any) => ({ heading: String(section.heading), body: String(section.body) })),
+    references: Array.isArray(data.references) ? data.references.map(String) : [],
+    editorialNotes: Array.isArray(data.editorialNotes) ? data.editorialNotes.map(String) : []
+  };
+}
+
+function cleanJson(text: string): MediatorInsight {
+  const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('O modelo não retornou JSON válido.');
+
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  if (!data.title || !data.question || !data.scientificContext || !Array.isArray(data.provocations)) {
+    throw new Error('A resposta da IA veio incompleta.');
+  }
+
+  return {
+    title: String(data.title),
+    question: String(data.question),
+    provocations: data.provocations.slice(0, 3).map(String),
+    scientificContext: String(data.scientificContext)
+  };
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 18_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') throw new Error(`Tempo limite de ${Math.round(timeoutMs / 1000)} segundos excedido.`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function parseResponse(response: Response): Promise<any> {
+  const raw = await response.text();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`O provedor devolveu uma resposta inválida (${response.status}).`);
+  }
+}
+
+async function callGroq(system: string, user: string, deep: boolean): Promise<MediatorInsight> {
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) throw new Error('GROQ_API_KEY ausente.');
+
+  const model = deep
+    ? (process.env.GROQ_DEEP_MODEL || 'qwen/qwen3.6-27b')
+    : (process.env.GROQ_FAST_MODEL || 'llama-3.1-8b-instant');
+
+  const response = await fetchWithTimeout(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        temperature: 0.35,
+        max_completion_tokens: 700,
+        response_format: { type: 'json_object' }
       })
-      .catch(() => { /* fallback list remains available */ });
-    return () => { cancelled = true; };
-  }, []);
+    },
+    Number(process.env.AI_TIMEOUT_MS || 18_000)
+  );
 
-  useEffect(() => {
-    if (!fontFamily) return;
-    const id = `google-font-${fontFamily.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
-    if (document.getElementById(id)) return;
-    const link = document.createElement('link');
-    link.id = id;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily).replace(/%20/g, '+')}:wght@300;400;500;600;700&display=swap`;
-    document.head.appendChild(link);
-  }, [fontFamily]);
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.message || `Falha Groq HTTP ${response.status}.`);
+  }
 
-  useEffect(() => {
-    if (textEditor) {
-      requestAnimationFrame(() => textInputRef.current?.focus());
-    }
-  }, [textEditor]);
-
-  const commit = (next: DrawingDocument) => {
-    const truncated = history.slice(0, historyIndex + 1);
-    const nextHistory = [...truncated, cloneDrawing(next)].slice(-60);
-    setHistory(nextHistory);
-    setHistoryIndex(nextHistory.length - 1);
+  const text = data?.choices?.[0]?.message?.content || '';
+  return {
+    ...cleanJson(text),
+    provider: 'Groq',
+    model: data?.model || model
   };
+}
 
-  const getSvgPointFromClient = (clientX: number, clientY: number, pressure = .55, t = performance.now()): DrawingPoint => {
-    const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0, pressure, t };
-    const point = svg.createSVGPoint();
-    point.x = clientX;
-    point.y = clientY;
-    const matrix = svg.getScreenCTM();
-    if (!matrix) return { x: 0, y: 0, pressure, t };
-    const transformed = point.matrixTransform(matrix.inverse());
-    return {
-      x: clamp(transformed.x, 0, current.width),
-      y: clamp(transformed.y, 0, current.height),
-      pressure: pressureEnabled ? Math.max(.08, Math.min(1, pressure || .55)) : .55,
-      t,
-    };
-  };
+async function callGemini(system: string, user: string): Promise<MediatorInsight> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
 
-  const getSvgPoint = (event: React.PointerEvent<SVGSVGElement>) =>
-    getSvgPointFromClient(event.clientX, event.clientY, event.pointerType === 'pen' ? event.pressure : .55, event.timeStamp);
-
-  const drawingWithPendingText = () => {
-    if (!textEditor || !textEditor.value.trim()) return current;
-    const element: DrawingElement = {
-      id: makeElementId(),
-      type: 'text',
-      stroke: strokeColor,
-      strokeWidth,
-      x: textEditor.x,
-      y: textEditor.y,
-      text: textEditor.value.trimEnd(),
-      fontSize,
-      fontFamily,
-    };
-    return { ...current, elements: [...current.elements, element] };
-  };
-
-  const commitTextEditor = () => {
-    if (!textEditor) return;
-    const next = drawingWithPendingText();
-    if (next !== current) commit(next);
-    setTextEditor(null);
-  };
-
-  const saveDrawing = () => {
-    const next = drawingWithPendingText();
-    if (next !== current) {
-      commit(next);
-      setTextEditor(null);
-    }
-    onSave(next);
-  };
-
-  const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (!canEdit) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const point = getSvgPoint(event);
-    const target = event.target as SVGElement;
-    const hitId = target.closest('[data-drawing-element-id]')?.getAttribute('data-drawing-element-id') || null;
-
-    if (tool === 'select') {
-      setSelectedElementId(hitId);
-      return;
-    }
-
-    if (tool === 'text') {
-      const paperRect = paperRef.current?.getBoundingClientRect();
-      setTextEditor({
-        x: point.x,
-        y: point.y,
-        left: paperRect ? event.clientX - paperRect.left : 0,
-        top: paperRect ? event.clientY - paperRect.top : 0,
-        value: '',
-      });
-      setSelectedElementId(null);
-      return;
-    }
-
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    setSelectedElementId(null);
-
-    if (tool === 'brush') {
-      setDraft({
-        id: makeElementId(),
-        type: 'brush',
-        stroke: strokeColor,
-        strokeWidth,
-        fill: 'none',
-        points: [point],
-      });
-      return;
-    }
-
-    const element: DrawingElement = {
-      id: makeElementId(),
-      type: tool,
-      stroke: strokeColor,
-      fill: useFill ? fillColor : 'none',
-      strokeWidth,
-      x: point.x,
-      y: point.y,
-      x2: point.x,
-      y2: point.y,
-    };
-    setDraft(element);
-  };
-
-  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (!draft || !canEdit) return;
-    event.preventDefault();
-    if (draft.type === 'brush') {
-      const native = event.nativeEvent as PointerEvent;
-      const coalesced = typeof native.getCoalescedEvents === 'function' ? native.getCoalescedEvents() : [native];
-      const nextPoints = [...(draft.points || [])];
-      for (const sample of coalesced) {
-        const raw = getSvgPointFromClient(sample.clientX, sample.clientY, sample.pointerType === 'pen' ? sample.pressure : .55, sample.timeStamp);
-        const previous = nextPoints[nextPoints.length - 1];
-        if (!previous) { nextPoints.push(raw); continue; }
-        const smoothing = Math.max(0, Math.min(.88, stabilization / 100 * .88));
-        const point: DrawingPoint = {
-          x: previous.x * smoothing + raw.x * (1 - smoothing),
-          y: previous.y * smoothing + raw.y * (1 - smoothing),
-          pressure: raw.pressure,
-          t: raw.t,
-        };
-        if (Math.hypot(point.x - previous.x, point.y - previous.y) < .35) continue;
-        nextPoints.push(point);
-      }
-      setDraft({ ...draft, points: nextPoints.slice(-2400) });
-      return;
-    }
-    const point = getSvgPoint(event);
-    setDraft({ ...draft, x2: point.x, y2: point.y });
-  };
-
-  const defaultSizedElement = (element: DrawingElement) => {
-    const x = element.x ?? 0;
-    const y = element.y ?? 0;
-    const horizontalOnly = element.type === 'line' || element.type === 'arrow';
-    const desiredX = x + 180 <= current.width ? x + 180 : Math.max(0, x - 180);
-    const desiredY = horizontalOnly ? y : y + 120 <= current.height ? y + 120 : Math.max(0, y - 120);
-    return { ...element, x2: desiredX, y2: desiredY };
-  };
-
-  const finishDraft = (event?: React.PointerEvent<SVGSVGElement>) => {
-    if (event) {
-      try { event.currentTarget.releasePointerCapture?.(event.pointerId); } catch { /* pointer may already be released */ }
-    }
-    if (!draft) return;
-    if (draft.type === 'brush') {
-      if ((draft.points?.length || 0) > 1) commit({ ...current, elements: [...current.elements, draft] });
-      setDraft(null);
-      return;
-    }
-
-    const distance = Math.abs((draft.x2 ?? 0) - (draft.x ?? 0)) + Math.abs((draft.y2 ?? 0) - (draft.y ?? 0));
-    const finished = distance > 4 ? draft : defaultSizedElement(draft);
-    commit({ ...current, elements: [...current.elements, finished] });
-    setDraft(null);
-  };
-
-  const deleteSelected = () => {
-    if (!selectedElementId) return;
-    commit({ ...current, elements: current.elements.filter((element) => element.id !== selectedElementId) });
-    setSelectedElementId(null);
-  };
-
-  const eraseLast = () => {
-    if (current.elements.length === 0) return;
-    commit({ ...current, elements: current.elements.slice(0, -1) });
-    setSelectedElementId(null);
-  };
-
-  const handleExport = async (format: ExportFormat, scope: 'current' | 'all' = 'current') => {
-    setExporting(true);
-    try {
-      if (scope === 'all' && allDrawings.length > 0) {
-        for (const item of allDrawings) {
-          await exportDrawing(item.drawing, format, item.name);
-          await new Promise((resolve) => setTimeout(resolve, 120));
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: {
+          temperature: 0.35,
+          responseMimeType: 'application/json',
+          maxOutputTokens: 700
         }
-      } else {
-        await exportDrawing(current, format, title);
+      })
+    },
+    Number(process.env.AI_TIMEOUT_MS || 18_000)
+  );
+
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('') || '';
+  return {
+    ...cleanJson(text),
+    provider: 'Gemini',
+    model
+  };
+}
+
+async function callGeminiPublication(system: string, user: string): Promise<PublicationResult> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const timeoutMs = Number(process.env.AI_PUBLICATION_TIMEOUT_MS || 50_000);
+  const startedAt = Date.now();
+  const totalBudgetMs = Math.min(54_000, Math.max(20_000, timeoutMs));
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+
+  const requestPublication = async (retry = false, attemptTimeoutMs = timeoutMs): Promise<{ text: string; finishReason?: string }> => {
+    const response = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{
+          role: 'user',
+          parts: [{ text: retry
+            ? `${user}\n\nIMPORTANTE: a tentativa anterior foi interrompida ou produziu JSON inválido. Gere novamente em versão mais concisa. Mantenha todas as cinco seções, limite cada seção a no máximo 3 parágrafos e feche obrigatoriamente o objeto JSON.`
+            : user }]
+        }],
+        generationConfig: {
+          temperature: retry ? 0.15 : 0.22,
+          responseMimeType: 'application/json',
+          maxOutputTokens: 7000
+        }
+      })
+    }, attemptTimeoutMs);
+
+    const data = await parseResponse(response);
+    if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+    const blockReason = data?.promptFeedback?.blockReason;
+    if (blockReason) throw new Error(`O Gemini bloqueou a publicação: ${blockReason}.`);
+
+    const candidate = data?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason && /SAFETY|RECITATION|PROHIBITED/i.test(String(finishReason))) {
+      throw new Error(`O Gemini interrompeu a publicação (${finishReason}).`);
+    }
+    const text = candidate?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+    if (!text) throw new Error(`O Gemini não devolveu conteúdo para a publicação${finishReason ? ` (${finishReason})` : ''}.`);
+    return { text, finishReason };
+  };
+
+  const firstAttemptTimeout = Math.min(42_000, totalBudgetMs - 8_000);
+  const first = await requestPublication(false, firstAttemptTimeout);
+  try {
+    return { article: cleanPublicationJson(first.text), provider: 'Gemini', model };
+  } catch (firstError) {
+    if (first.finishReason && !/MAX_TOKENS|STOP/i.test(String(first.finishReason))) throw firstError;
+    const remainingMs = totalBudgetMs - (Date.now() - startedAt) - 1_500;
+    if (remainingMs < 12_000) throw firstError;
+    const second = await requestPublication(true, Math.min(26_000, remainingMs));
+    return { article: cleanPublicationJson(second.text), provider: 'Gemini', model };
+  }
+}
+
+async function callGeminiStructured(system: string, user: string, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens }
+      })
+    },
+    timeoutMs
+  );
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu conteúdo estruturado.');
+  return { text, provider: 'Gemini', model };
+}
+
+async function callGeminiInteractive(system: string, user: string, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35) {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature, maxOutputTokens }
+      })
+    },
+    timeoutMs
+  );
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu código para a interação.');
+  return { text, provider: 'Gemini', model };
+}
+
+function offlineInsight(body: MediatorRequestBody): MediatorInsight {
+  const role = body.mediator.role.toLowerCase();
+  const phase = body.phase;
+  let question = `Que evidência ainda falta para sustentar a principal decisão deste projeto na fase de ${phase}?`;
+  let provocations = [
+    'Identifique uma suposição ainda não verificada.',
+    'Registre uma evidência observável que poderia confirmá-la ou refutá-la.',
+    'Defina quem precisa participar dessa verificação.'
+  ];
+
+  if (role.includes('acess')) {
+    question = 'Que barreira impede uma pessoa com diferentes modos de percepção ou ação de concluir a tarefa?';
+    provocations = ['Teste somente com teclado.', 'Revise rótulos, foco e contraste.', 'Descreva uma alternativa multimodal.'];
+  } else if (role.includes('bio')) {
+    question = 'Quem recebe os benefícios e quem assume os riscos desta decisão de design?';
+    provocations = ['Mapeie humanos e não humanos afetados.', 'Procure coerção, exclusão ou dark patterns.', 'Registre uma salvaguarda verificável.'];
+  } else if (role.includes('visual')) {
+    question = 'A hierarquia visual revela a prioridade real da tarefa ou apenas a preferência estética?';
+    provocations = ['Liste os três primeiros elementos percebidos.', 'Compare contraste, proximidade e alinhamento.', 'Remova um ruído e teste novamente.'];
+  } else if (role.includes('heur')) {
+    question = 'Qual falha observável reduz previsibilidade, controle ou recuperação durante a interação?';
+    provocations = ['Escolha uma heurística.', 'Registre evidência concreta.', 'Defina gravidade e critério de correção.'];
+  } else if (role.includes('futuro') || role.includes('cenario') || role.includes('especul')) {
+    question = 'Que futuro este projeto ajuda a tornar mais provável — e que futuro desejável ainda precisa ser deliberadamente projetado?';
+    provocations = [
+      'Liste um sinal fraco, uma tendência e uma contratendência já observáveis.',
+      'Construa cenários contrastantes: provável, possível e desejável, explicitando a principal incerteza de cada um.',
+      'Escolha o cenário desejável e faça backcasting: qual experimento pequeno pode começar agora?'
+    ];
+  } else if (role.includes('implement')) {
+    question = 'Que critério de aceite permite verificar no código que esta decisão foi preservada?';
+    provocations = ['Escreva o requisito em linguagem testável.', 'Defina estado de sucesso e falha.', 'Inclua acessibilidade, privacidade e desempenho.'];
+  }
+
+  return {
+    title: 'Roteiro pedagógico offline',
+    question,
+    provocations,
+    scientificContext: `Modo pedagógico sem API. Use como roteiro de investigação na fase ${phase}; valide depois com evidências e referências.`,
+    provider: 'Modo pedagógico',
+    model: 'offline'
+  };
+}
+
+export async function generateMediatorInsight(body: MediatorRequestBody): Promise<any> {
+  if (body?.mode === 'wireframe-interpret') {
+    if (!body.wireframeSource) throw new Error('Escolha um desenho ou imagem para interpretar.');
+    const { system, user } = buildWireframeInterpretationMessages(body);
+    const result = await callGeminiWireframe(system, user, body.wireframeSource, 3600, Number(process.env.AI_WIREFRAME_TIMEOUT_MS || 45000));
+    return { wireframeInterpretation: cleanWireframeInterpretationJson(result.text), provider: result.provider, model: result.model };
+  }
+  if (!body?.project || !body?.mediator || !body?.phase) {
+    throw new Error('Parâmetros obrigatórios ausentes.');
+  }
+
+  if (body.mode === 'implementation-prompt') {
+    const { system, user } = buildImplementationPromptMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_TIMEOUT_MS || 60000), 0.18);
+    return { ...cleanImplementationPromptJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-plan') {
+    const { system, user } = buildImplementationPlanMessages(body);
+    const result = await callGeminiStructured(system, user, 5000, Number(process.env.AI_IMPLEMENTATION_PLAN_TIMEOUT_MS || 32000), 0.15);
+    return { plan: cleanImplementationPlanJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'implementation-files') {
+    if (!body.implementationPlan || !Array.isArray(body.requestedFiles) || !body.requestedFiles.length) throw new Error('Plano técnico ou lote de arquivos ausente.');
+    const { system, user } = buildImplementationFilesMessages(body);
+    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_IMPLEMENTATION_BATCH_TIMEOUT_MS || 38000), 0.12);
+    return { files: cleanImplementationFilesJson(result.text, body.requestedFiles), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'interactive-code') {
+    if (!String(body.prompt || '').trim()) throw new Error('Descreva a interação que deseja criar.');
+    const { system, user } = buildInteractiveCodeMessages(body);
+    const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
+    const engine = allowedEngines.includes(String(body.engine)) ? String(body.engine) : 'p5';
+    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
+  }
+
+  if (body.mode === 'publication') {
+    const { system, user } = buildPublicationMessages(body);
+    return callGeminiPublication(system, user);
+  }
+
+  const { system, user } = buildMessages(body);
+  const requested = (process.env.AI_PROVIDER || 'groq').toLowerCase() as AiProvider;
+  const order = (process.env.AI_FALLBACK_ORDER || 'groq,gemini,offline')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value): value is AiProvider => ['groq', 'gemini', 'offline'].includes(value));
+  const providers = [requested, ...order.filter((provider) => provider !== requested)]
+    .filter((provider, index, array) => array.indexOf(provider) === index);
+
+  const deep = /bio|heur|implement|document/i.test(body.mediator.role)
+    || body.phase === 'Inspeção'
+    || body.phase === 'Implementação';
+
+  const errors: string[] = [];
+  for (const provider of providers) {
+    try {
+      if (provider === 'groq') return await callGroq(system, user, deep);
+      if (provider === 'gemini') return await callGemini(system, user);
+      if (provider === 'offline') {
+        return { ...offlineInsight(body), warnings: errors.length ? errors : undefined };
       }
-    } finally {
-      setExporting(false);
+    } catch (error: any) {
+      const message = error?.message || 'erro desconhecido';
+      console.error(`[5I IA] ${provider}:`, message);
+      errors.push(`${provider}: ${message}`);
     }
-  };
+  }
 
-  const chooseTool = (nextTool: DrawingTool) => {
-    setTool(nextTool);
-    setDraft(null);
-    setTextEditor(null);
-    if (nextTool !== 'select') setSelectedElementId(null);
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
-      if (nextTool === 'brush' || nextTool === 'text' || isShapeTool(nextTool)) setMobilePanel('style');
-      else setMobilePanel(null);
-    }
-  };
-
-  const activeShape = SHAPE_TOOLS.find((item) => item.tool === tool);
-
-  return (
-    <div className="fixed inset-0 z-[100] bg-[#ECECEA] flex flex-col canvas-control" onPointerDown={(event) => event.stopPropagation()}>
-      <header className="shrink-0 bg-white border-b border-black/10 px-2 sm:px-4 py-2 flex items-center gap-2 justify-between" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
-        <div className="min-w-0 flex items-center gap-2">
-          <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar folha"><X size={18} /></button>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{title}</div>
-            <div className="text-[10px] font-mono text-neutral-500">{current.width} × {current.height}px · {current.elements.length} elementos</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button type="button" disabled={!canEdit || historyIndex <= 0} onClick={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Desfazer"><Undo2 size={16} /></button>
-          <button type="button" disabled={!canEdit || historyIndex >= history.length - 1} onClick={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Refazer"><Redo2 size={16} /></button>
-          <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="md:hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
-          {onAnimate && <button type="button" disabled={!canEdit} onClick={() => onAnimate(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Animar este desenho na Camada Interativa"><WandSparkles size={15}/><span className="hidden sm:inline">ANIMAR</span></button>}
-          <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
-        </div>
-      </header>
-
-      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
-      <div className="hidden md:flex shrink-0 bg-white border-b border-black/10 flex-col">
-        <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-2 border-b border-black/5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <ToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setDesktopShapesOpen(false); }} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
-            <ToolButton active={tool === 'brush'} onClick={() => { chooseTool('brush'); setDesktopShapesOpen(false); }} label="Pincel"><Pencil size={15} /></ToolButton>
-            <ToolButton active={tool === 'text'} onClick={() => { chooseTool('text'); setDesktopShapesOpen(false); }} label="Texto"><Type size={15} /></ToolButton>
-            <ToolButton active={tool === 'line'} onClick={() => { chooseTool('line'); setDesktopShapesOpen(false); }} label="Linha"><Minus size={15} /></ToolButton>
-            <ToolButton active={tool === 'arrow'} onClick={() => { chooseTool('arrow'); setDesktopShapesOpen(false); }} label="Seta"><Minus size={15} /></ToolButton>
-            <button
-              type="button"
-              onClick={() => setDesktopShapesOpen((open) => !open)}
-              className={`h-8 px-2.5 rounded-lg border flex items-center gap-1.5 text-[10px] font-mono uppercase cursor-pointer ${desktopShapesOpen || (isShapeTool(tool) && tool !== 'line' && tool !== 'arrow') ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-black/10 hover:border-black/30'}`}
-              title="Abrir paleta de formas"
-            >
-              <Square size={15} />
-              <span>{activeShape && tool !== 'line' && tool !== 'arrow' ? activeShape.label : 'Formas'}</span>
-            </button>
-          </div>
-
-          <div className="h-6 w-px bg-black/10 mx-1" />
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" disabled={!canEdit || !selectedElementId} onClick={deleteSelected} className="h-8 px-2.5 rounded-lg border border-black/10 text-[10px] font-mono uppercase flex items-center gap-1.5 disabled:opacity-30 cursor-pointer"><Trash2 size={14} /> Excluir</button>
-            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={eraseLast} className="h-8 px-2.5 rounded-lg border border-black/10 text-[10px] font-mono uppercase flex items-center gap-1.5 disabled:opacity-30 cursor-pointer"><Eraser size={14} /> Último</button>
-            <button type="button" disabled={!canEdit || current.elements.length === 0} onClick={() => commit({ ...current, elements: [] })} className="h-8 px-2.5 rounded-lg border border-red-200 text-red-700 text-[10px] font-mono uppercase disabled:opacity-30 cursor-pointer">Limpar folha</button>
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-1">
-            <span className="text-[9px] font-mono text-neutral-400 uppercase mr-1">Exportar</span>
-            {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-              <button key={format} type="button" disabled={exporting} onClick={() => void handleExport(format)} className="h-8 px-2.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-[10px] font-mono uppercase flex items-center gap-1 disabled:opacity-50 cursor-pointer"><Download size={13} /> {format}</button>
-            ))}
-            {allDrawings.length > 1 && (['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-              <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-8 px-2.5 rounded-lg border border-black text-[9px] font-mono uppercase disabled:opacity-50 cursor-pointer">TODAS {format}</button>
-            ))}
-          </div>
-        </div>
-
-        {desktopShapesOpen && (
-          <div className="px-3 lg:px-4 py-2 border-b border-black/5 bg-[#FAFAF8]">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">Formas 2D e 3D</span>
-              <span className="text-[9px] text-neutral-400">Escolha uma forma e desenhe diretamente na folha.</span>
-            </div>
-            <div className="grid grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-13 gap-1.5">
-              {SHAPE_TOOLS.filter((item) => item.tool !== 'line' && item.tool !== 'arrow').map((item) => (
-                <button
-                  key={item.tool}
-                  type="button"
-                  onClick={() => { chooseTool(item.tool); setDesktopShapesOpen(false); }}
-                  className={`min-h-10 rounded-lg border px-2 flex items-center justify-center gap-1.5 text-[9px] font-mono uppercase ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10 hover:border-black/30'}`}
-                  title={item.label}
-                >
-                  {shapeIcon(item.tool)} <span className="truncate">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-2 bg-white">
-          <div className="flex items-center gap-2 min-w-fit">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-neutral-500">{tool === 'select' ? 'Seleção' : tool === 'brush' ? 'Pincel' : tool === 'text' ? 'Texto' : activeShape?.label || 'Ferramenta'}</span>
-          </div>
-
-          {tool !== 'select' && (
-            <>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[9px] font-mono text-neutral-400 uppercase mr-1">Traço</span>
-                {PALETTE.map((color) => (
-                  <button key={color} type="button" onClick={() => setStrokeColor(color)} className={`h-6 w-6 rounded-full border cursor-pointer ${strokeColor === color ? 'ring-2 ring-black ring-offset-1' : 'border-black/20'}`} style={{ backgroundColor: color }} aria-label={`Cor ${color}`} />
-                ))}
-                <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor personalizada" />
-              </div>
-
-              {tool !== 'text' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono text-neutral-400 uppercase">Espessura</span>
-                  <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-24 lg:w-32" />
-                  <span className="text-[10px] font-mono w-8">{strokeWidth}px</span>
-                </div>
-              )}
-
-              {tool === 'brush' && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-neutral-50 px-2 py-1">
-                  <SlidersHorizontal size={13} className="text-neutral-400"/>
-                  <span className="text-[9px] font-mono text-neutral-400 uppercase">Estabilização</span>
-                  <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-24"/>
-                  <span className="text-[9px] font-mono w-8">{stabilization}%</span>
-                  <label className="text-[9px] font-mono uppercase flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)}/> Pressão</label>
-                </div>
-              )}
-            </>
-          )}
-
-          {tool === 'text' && (
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <span className="text-[9px] font-mono text-neutral-400 uppercase">Tipografia</span>
-              <select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} className="h-8 w-[180px] lg:w-[220px] rounded-lg border border-black/10 bg-white px-2 text-[10px]" style={{ fontFamily }}>
-                {fontFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
-              </select>
-              <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-28" />
-              <span className="text-[10px] font-mono w-10">{fontSize}px</span>
-            </div>
-          )}
-
-          {isShapeTool(tool) && tool !== 'line' && tool !== 'arrow' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="text-[9px] font-mono uppercase flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} /> Preenchimento</label>
-              {useFill && (
-                <>
-                  <span className="h-6 w-px bg-black/10" />
-                  {PALETTE.map((color) => (
-                    <button key={`desktop-fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-6 w-6 rounded-full border cursor-pointer ${fillColor === color ? 'ring-2 ring-black ring-offset-1' : 'border-black/20'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
-                  ))}
-                  <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="h-7 w-8 rounded border border-black/15 bg-white" title="Cor de preenchimento" />
-                </>
-              )}
-            </div>
-          )}
-
-          {tool === 'select' && (
-            <span className="text-[10px] text-neutral-500">Selecione um elemento na folha para mover ou excluir.</span>
-          )}
-        </div>
-      </div>
-
-      <main className="flex-1 min-h-0 p-2 md:p-5 pb-24 md:pb-5 overflow-auto flex items-start justify-center bg-[#ECECEA]">
-        <div ref={paperRef} className="relative w-full max-w-[1400px] min-w-[280px] flex justify-center">
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${current.width} ${current.height}`}
-            preserveAspectRatio="xMidYMid meet"
-            className="block w-full h-auto max-h-[calc(100dvh-145px)] md:max-h-[calc(100dvh-150px)] bg-white shadow-2xl border border-black/10"
-            style={{ touchAction: 'none', cursor: tool === 'select' ? 'default' : tool === 'text' ? 'text' : 'crosshair' }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishDraft}
-            onPointerCancel={finishDraft}
-          >
-            <rect width={current.width} height={current.height} fill={current.background || '#FFFFFF'} />
-            {current.elements.map((element) => (
-              <g key={element.id} data-drawing-element-id={element.id}>
-                {renderDrawingElement(element, selectedElementId === element.id)}
-              </g>
-            ))}
-            {draft && <g opacity={0.85}>{renderDrawingElement(draft)}</g>}
-          </svg>
-
-          {textEditor && (
-            <textarea
-              ref={textInputRef}
-              value={textEditor.value}
-              onChange={(event) => setTextEditor({ ...textEditor, value: event.target.value })}
-              onBlur={commitTextEditor}
-              onPointerDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  setTextEditor(null);
-                }
-                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault();
-                  commitTextEditor();
-                }
-              }}
-              placeholder="Digite aqui…"
-              className="absolute z-20 min-w-[120px] max-w-[min(78vw,520px)] min-h-[48px] border-0 bg-transparent p-0 outline-none resize-none overflow-hidden"
-              style={{
-                left: textEditor.left,
-                top: textEditor.top,
-                color: strokeColor,
-                fontSize: `${Math.max(16, Math.min(42, fontSize * 0.62))}px`,
-                fontFamily,
-                lineHeight: 1.15,
-                caretColor: strokeColor,
-                transform: 'translateY(-0.15em)',
-                touchAction: 'manipulation',
-              }}
-              aria-label="Texto do desenho"
-            />
-          )}
-        </div>
-      </main>
-
-      <footer className="hidden md:flex shrink-0 bg-white border-t border-black/10 px-3 py-1.5 text-[10px] font-mono text-neutral-500 items-center justify-between gap-3">
-        <span className="truncate">Caneta/touch: desenhe diretamente. Formas: toque e arraste ou apenas toque para inserir. Texto: escolha T e toque na folha.</span>
-        <span className="shrink-0">SVG vetorial · PNG/JPG raster</span>
-      </footer>
-
-      {/* Painéis mobile */}
-      {mobilePanel === 'shapes' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[48dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div>
-              <div className="text-xs font-semibold">Formas</div>
-              <div className="text-[10px] font-mono text-neutral-500">Toque para escolher; depois arraste ou toque na folha.</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {SHAPE_TOOLS.map((item) => (
-              <button
-                key={item.tool}
-                type="button"
-                onClick={() => chooseTool(item.tool)}
-                className={`min-h-16 rounded-xl border px-2 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-mono ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10'}`}
-              >
-                {shapeIcon(item.tool)}
-                <span className="text-center leading-tight">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mobilePanel === 'style' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[54dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="text-xs font-semibold">Cor e tamanho</div>
-              <div className="text-[10px] font-mono text-neutral-500">{tool === 'text' ? 'Cor e tamanho do texto' : tool === 'brush' ? 'Cor e espessura do pincel' : 'Traço e preenchimento da forma'}</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-
-          <div className="mb-4">
-            <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do traço</div>
-            <div className="grid grid-cols-6 gap-2">
-              {PALETTE.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setStrokeColor(color)}
-                  className={`h-11 rounded-xl border ${strokeColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`}
-                  style={{ backgroundColor: color }}
-                  aria-label={`Usar cor ${color}`}
-                />
-              ))}
-              <label className="h-11 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden">
-                + COR
-                <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="absolute opacity-0 pointer-events-none" />
-              </label>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono uppercase text-neutral-500">Espessura</span>
-              <span className="text-xs font-mono font-bold">{strokeWidth}px</span>
-            </div>
-            <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
-            <div className="grid grid-cols-5 gap-2 mt-1">
-              {[2, 4, 8, 16, 32].map((size) => (
-                <button key={size} type="button" onClick={() => setStrokeWidth(size)} className={`h-10 rounded-xl border text-[10px] font-mono ${strokeWidth === size ? 'bg-black text-white border-black' : 'border-black/10'}`}>{size}px</button>
-              ))}
-            </div>
-          </div>
-
-          {tool === 'brush' && (
-            <div className="mb-4 pt-3 border-t border-black/10">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-mono uppercase text-neutral-500">Precisão / estabilização</span><strong className="text-xs font-mono">{stabilization}%</strong></div>
-              <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-full h-8" style={{touchAction:'manipulation'}}/>
-              <label className="mt-1 min-h-11 flex items-center justify-between text-xs font-mono"><span>Usar pressão da caneta quando disponível</span><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)} className="h-5 w-5"/></label>
-              <div className="text-[9px] leading-relaxed text-neutral-500">Captura eventos coalescidos do stylus/touch e suaviza o traço sem rasterizar o desenho.</div>
-            </div>
-          )}
-
-          {tool === 'text' && (
-            <div className="mb-3 pt-3 border-t border-black/10">
-              <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Tipografia · Google Fonts</div>
-              <input
-                value={fontSearch}
-                onChange={(event) => setFontSearch(event.target.value)}
-                placeholder="Buscar tipografia…"
-                className="w-full h-11 rounded-xl border border-black/15 px-3 text-sm outline-none mb-2"
-              />
-              <select
-                value={fontFamily}
-                onChange={(event) => setFontFamily(event.target.value)}
-                className="w-full h-12 rounded-xl border border-black/15 bg-white px-3 text-sm mb-3"
-                style={{ fontFamily }}
-              >
-                {fontFamilies.filter((family) => family.toLowerCase().includes(fontSearch.toLowerCase())).map((family) => (
-                  <option key={family} value={family}>{family}</option>
-                ))}
-              </select>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono uppercase text-neutral-500">Tamanho do texto</span>
-                <span className="text-xs font-mono font-bold">{fontSize}px</span>
-              </div>
-              <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
-              <button type="button" onClick={() => setMobilePanel(null)} className="mt-2 w-full h-11 rounded-xl bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider">Escrever na folha</button>
-            </div>
-          )}
-
-          {isShapeTool(tool) && (
-            <div className="pt-3 border-t border-black/10">
-              <label className="flex items-center justify-between gap-3 min-h-11 text-xs font-mono">
-                <span>Preencher forma</span>
-                <input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} className="h-5 w-5" />
-              </label>
-              {useFill && (
-                <div className="mt-2">
-                  <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do preenchimento</div>
-                  <div className="grid grid-cols-6 gap-2">
-                    {PALETTE.map((color) => (
-                      <button key={`fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-10 rounded-xl border ${fillColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
-                    ))}
-                    <label className="h-10 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden relative">
-                      + COR
-                      <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {mobilePanel === 'export' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="text-xs font-semibold">Exportar desenho</div>
-              <div className="text-[10px] font-mono text-neutral-500">SVG mantém vetores; PNG/JPG geram imagem.</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-              <button key={format} type="button" disabled={exporting} onClick={() => void handleExport(format)} className="h-12 rounded-xl bg-black text-white text-xs font-mono uppercase flex items-center justify-center gap-1.5 disabled:opacity-50"><Download size={14} /> {format}</button>
-            ))}
-          </div>
-          {allDrawings.length > 1 && (
-            <div className="mt-3 pt-3 border-t border-black/10">
-              <div className="text-[10px] font-mono text-neutral-500 mb-2">EXPORTAR TODAS AS FOLHAS</div>
-              <div className="grid grid-cols-3 gap-2">
-                {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-                  <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-11 rounded-xl border border-black text-[10px] font-mono uppercase disabled:opacity-50">TODAS {format}</button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedElementId && tool === 'select' && !mobilePanel && (
-        <div className="md:hidden absolute right-2 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] z-[125] flex items-center gap-2 rounded-2xl border border-black/15 bg-white p-2 shadow-xl">
-          <button type="button" onClick={deleteSelected} className="h-11 px-3 rounded-xl bg-red-50 text-red-700 text-[10px] font-mono font-bold uppercase flex items-center gap-2"><Trash2 size={15} /> Excluir elemento</button>
-        </div>
-      )}
-
-      {/* Barra de ferramentas mobile: sempre visível e com áreas de toque grandes. */}
-      <div className="md:hidden absolute left-0 right-0 bottom-0 z-[120] border-t border-black/10 bg-white/95 backdrop-blur-xl px-2 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }} onPointerDown={(event) => event.stopPropagation()}>
-        <div className="grid grid-cols-5 gap-1 max-w-[560px] mx-auto">
-          <MobileToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setMobilePanel(null); }} label="Selecionar"><ArrowLeftRight size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'brush'} onClick={() => chooseTool('brush')} label="Pincel"><Pencil size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'text'} onClick={() => chooseTool('text')} label="Texto"><Type size={18} /></MobileToolButton>
-          <MobileToolButton active={isShapeTool(tool)} onClick={() => setMobilePanel(mobilePanel === 'shapes' ? null : 'shapes')} label={activeShape ? activeShape.label.split(' ')[0] : 'Formas'}>{activeShape ? shapeIcon(activeShape.tool) : <Square size={18} />}</MobileToolButton>
-          <MobileToolButton active={mobilePanel === 'style'} onClick={() => setMobilePanel(mobilePanel === 'style' ? null : 'style')} label="Estilo">
-            <span className="h-5 w-5 rounded-full border border-black/20" style={{ backgroundColor: strokeColor }} />
-          </MobileToolButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ToolButton({ active, onClick, label, compact = false, children }: { active: boolean; onClick: () => void; label: string; compact?: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`${compact ? 'h-8 px-2' : 'h-8 px-2.5'} rounded-lg border flex items-center gap-1.5 text-[10px] font-mono uppercase cursor-pointer ${active ? 'bg-black text-white border-black' : 'bg-white text-neutral-700 border-black/10 hover:border-black/30'}`}
-      title={label}
-    >
-      {children}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function MobileToolButton({ active, onClick, label, children }: { active: boolean; onClick: () => void; label: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-h-14 rounded-xl flex flex-col items-center justify-center gap-1 px-1 text-[9px] font-mono leading-none ${active ? 'bg-black text-white' : 'bg-white text-neutral-700'}`}
-      title={label}
-      style={{ touchAction: 'manipulation' }}
-    >
-      {children}
-      <span className="max-w-full truncate">{label}</span>
-    </button>
-  );
+  return { ...offlineInsight(body), warnings: errors };
 }
