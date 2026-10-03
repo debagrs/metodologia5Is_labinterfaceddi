@@ -1,242 +1,60 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, Copy, Frame, ImagePlus,
-  LayoutGrid, Loader2, Monitor, Plus, Save, ScanLine, Smartphone, Sparkles, Tablet,
-  Trash2, Upload, Watch, X
+  AlignCenter, AlignLeft, AlignRight, ArrowDown, ArrowUp, CheckSquare, CircleUserRound, Copy,
+  Frame, Image as ImageIcon, ImagePlus, LayoutGrid, Link2, List, Loader2, Menu, Monitor,
+  MousePointerClick, Plus, Rows3, Save, Smartphone, Square, Tablet, ToggleLeft, Trash2, Type,
+  Upload, Watch, X
 } from 'lucide-react';
-import {
-  DesignSystemDocument, DrawingDocument, WireframeAlign, WireframeBlock,
-  WireframeBlockType, WireframeDevicePreset, WireframeDocument, WireframeFrame
-} from '../types';
+import { DesignSystemDocument, DrawingDocument, WireframeAlign, WireframeBlock, WireframeBlockType, WireframeDevicePreset, WireframeDocument, WireframeFrame } from '../types';
 import { drawingToSvgString } from './DrawingStudio';
 import { ensureTursoSession } from '../lib/turso';
 
-export type WireframeImportSource =
-  | { kind: 'drawing'; name: string; drawing: DrawingDocument }
-  | { kind: 'image'; name: string; url: string };
-
-interface WireframeStudioProps {
-  document: WireframeDocument;
-  designSystem?: DesignSystemDocument;
-  title?: string;
-  canEdit?: boolean;
-  availableDrawings?: Array<{ id: string; name: string; drawing: DrawingDocument }>;
-  initialSource?: WireframeImportSource | null;
-  onSave: (document: WireframeDocument) => void;
-  onClose: () => void;
-}
-
-const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-const DEVICE_PRESETS: Array<{ id: string; preset: WireframeDevicePreset; label: string; width: number; height: number; icon: React.ElementType }> = [
-  { id: 'mobile', preset: 'mobile', label: 'Mobile', width: 393, height: 852, icon: Smartphone },
-  { id: 'tablet', preset: 'tablet', label: 'Tablet', width: 768, height: 1024, icon: Tablet },
-  { id: 'desktop', preset: 'desktop', label: 'Desktop', width: 1440, height: 1024, icon: Monitor },
-  { id: 'watch', preset: 'watch', label: 'Watch', width: 205, height: 251, icon: Watch },
-  { id: 'instagram-post', preset: 'custom', label: 'Instagram 1:1', width: 1080, height: 1080, icon: Frame },
-  { id: 'instagram-feed', preset: 'custom', label: 'Instagram 4:5', width: 1080, height: 1350, icon: Frame },
-  { id: 'story', preset: 'custom', label: 'Story / Reel', width: 1080, height: 1920, icon: Frame },
-  { id: 'tiktok', preset: 'custom', label: 'TikTok', width: 1080, height: 1920, icon: Frame },
-  { id: 'facebook', preset: 'custom', label: 'Facebook', width: 1200, height: 630, icon: Frame },
-  { id: 'snapchat', preset: 'custom', label: 'Snapchat', width: 1080, height: 1920, icon: Frame },
-  { id: 'youtube', preset: 'custom', label: 'YouTube', width: 1920, height: 1080, icon: Frame },
-  { id: 'a4', preset: 'custom', label: 'A4 impressão', width: 2480, height: 3508, icon: Frame },
-  { id: 'a3', preset: 'custom', label: 'A3 impressão', width: 3508, height: 4961, icon: Frame },
+export type WireframeImportSource={kind:'drawing';name:string;drawing:DrawingDocument}|{kind:'image';name:string;url:string};
+interface Props{document:WireframeDocument;designSystem?:DesignSystemDocument;title?:string;canEdit?:boolean;availableDrawings?:Array<{id:string;name:string;drawing:DrawingDocument}>;initialSource?:WireframeImportSource|null;onSave:(document:WireframeDocument)=>void;onClose:()=>void;}
+const id=(p:string)=>`${p}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+const PRESETS:Array<{id:string;preset:WireframeDevicePreset;label:string;width:number;height:number;icon:React.ElementType}>=[
+ {id:'mobile',preset:'mobile',label:'Mobile',width:393,height:852,icon:Smartphone},{id:'tablet',preset:'tablet',label:'Tablet',width:768,height:1024,icon:Tablet},{id:'desktop',preset:'desktop',label:'Desktop',width:1440,height:1024,icon:Monitor},{id:'watch',preset:'watch',label:'Watch',width:205,height:251,icon:Watch},
+ {id:'instagram',preset:'custom',label:'Instagram 1:1',width:1080,height:1080,icon:Frame},{id:'feed',preset:'custom',label:'Instagram 4:5',width:1080,height:1350,icon:Frame},{id:'story',preset:'custom',label:'Story / Reel',width:1080,height:1920,icon:Frame},{id:'youtube',preset:'custom',label:'YouTube',width:1920,height:1080,icon:Frame},{id:'a4',preset:'custom',label:'A4',width:2480,height:3508,icon:Frame}
 ];
-
-const BLOCKS: Array<{ type: WireframeBlockType; label: string }> = [
-  { type: 'text', label: 'Texto' }, { type: 'button', label: 'Botão' }, { type: 'input', label: 'Campo' },
-  { type: 'image', label: 'Imagem' }, { type: 'card', label: 'Card' }, { type: 'navbar', label: 'Navbar' },
-  { type: 'list-item', label: 'Item de lista' }, { type: 'spacer', label: 'Espaço' },
+const BLOCKS:Array<{type:WireframeBlockType;label:string;icon:React.ElementType}>=[
+ {type:'text',label:'Texto',icon:Type},{type:'button',label:'Botão',icon:MousePointerClick},{type:'input',label:'Campo',icon:Square},{type:'image',label:'Imagem',icon:ImageIcon},{type:'card',label:'Card',icon:Frame},{type:'navbar',label:'Menu / Navbar',icon:Menu},{type:'nav-item',label:'Item navegação',icon:Link2},{type:'list-item',label:'Item de lista',icon:List},{type:'section',label:'Seção',icon:Rows3},{type:'icon',label:'Ícone',icon:Square},{type:'avatar',label:'Avatar',icon:CircleUserRound},{type:'checkbox',label:'Checkbox',icon:CheckSquare},{type:'toggle',label:'Toggle',icon:ToggleLeft},{type:'divider',label:'Divisor',icon:Square},{type:'spacer',label:'Espaço',icon:Rows3}
 ];
+const surface=(ds?:DesignSystemDocument)=>ds?.colors.find(c=>c.role==='surface')?.value||'#FFFFFF';
+const text=(ds?:DesignSystemDocument)=>ds?.colors.find(c=>c.role==='text')?.value||'#111111';
+const brand=(ds?:DesignSystemDocument)=>ds?.colors.find(c=>c.role==='brand')?.value||'#111111';
+const font=(ds?:DesignSystemDocument,role:'display'|'text'|'notes'='text')=>ds?.fontFamilies?.[role]||ds?.primaryFont||'Inter';
+const blockDefault=(type:WireframeBlockType,ds?:DesignSystemDocument):WireframeBlock=>({id:id('block'),type,label:BLOCKS.find(x=>x.type===type)?.label||'Elemento',width:'fill',height:type==='image'||type==='card'||type==='section'?160:type==='navbar'?64:type==='spacer'?32:type==='divider'?1:48,padding:type==='divider'||type==='spacer'?0:12,margin:0,gap:8,radius:type==='button'||type==='input'||type==='card'?12:0,background:type==='button'?brand(ds):type==='text'||type==='spacer'||type==='divider'?'transparent':'#F4F4F2',color:type==='button'?'#FFFFFF':text(ds),items:type==='navbar'?['Início','Projeto','Sobre']:undefined,interaction:'none',gridColumnSpan:1,alignSelf:'stretch'});
+export const blankWireframe=(ds?:DesignSystemDocument):WireframeDocument=>({activeFrameId:'frame-1',componentLibrary:[],frames:[{id:'frame-1',name:'Mobile · Home',preset:'mobile',width:393,height:852,direction:'column',gap:16,padding:24,margin:0,align:'stretch',justify:'start',layoutMode:'flex',gridColumns:4,columnGap:16,rowGap:16,background:surface(ds),blocks:[{...blockDefault('navbar',ds),label:'Logo · Menu'},{...blockDefault('text',ds),label:'Título principal',height:'hug'},{...blockDefault('text',ds),label:'Texto de apoio da interface',height:'hug'},{...blockDefault('button',ds),label:'Ação principal'},{...blockDefault('card',ds),label:'Conteúdo em destaque'}]}]});
 
-export const blankWireframe = (designSystem?: DesignSystemDocument): WireframeDocument => ({
-  activeFrameId: 'frame-1', componentLibrary: [], frames: [{
-    id: 'frame-1', name: 'Mobile · Home', preset: 'mobile', width: 393, height: 852,
-    direction: 'column', gap: 16, padding: 24, align: 'stretch',
-    background: designSystem?.colors.find((item) => item.role === 'surface')?.value || '#FFFFFF',
-    blocks: [
-      { id: makeId('block'), type: 'navbar', label: 'Logo · Menu', width: 'fill', height: 56 },
-      { id: makeId('block'), type: 'text', label: 'Título principal', width: 'fill', height: 'hug' },
-      { id: makeId('block'), type: 'text', label: 'Texto de apoio para explicar a proposta.', width: 'fill', height: 'hug' },
-      { id: makeId('block'), type: 'button', label: 'Ação principal', width: 'fill', height: 48 },
-      { id: makeId('block'), type: 'card', label: 'Conteúdo em destaque', width: 'fill', height: 160 },
-    ],
-  }],
-});
+function PreviewBlock({b,ds}:{b:WireframeBlock;ds?:DesignSystemDocument}){const style:React.CSSProperties={width:b.width==='fill'?'100%':b.width==='hug'?'auto':b.width,minHeight:typeof b.height==='number'?b.height:undefined,padding:b.padding,margin:b.margin,borderRadius:b.radius,background:b.background==='transparent'?'transparent':b.background,color:b.color,fontFamily:font(ds,b.type==='text'?'text':'text'),gridColumn:`span ${Math.max(1,b.gridColumnSpan||1)}`,alignSelf:b.alignSelf==='auto'?undefined:b.alignSelf as any};if(b.type==='spacer')return <div style={{height:typeof b.height==='number'?b.height:24}}/>;if(b.type==='divider')return <div style={{height:1,background:b.color||'#CCC',width:'100%',margin:b.margin}}/>;if(b.type==='image')return <div style={style} className="border border-dashed border-black/20 flex items-center justify-center text-[10px] text-neutral-400"><ImageIcon size={18}/></div>;if(b.type==='navbar')return <div style={style} className="border border-black/10 flex items-center justify-between text-[10px]"><strong>LOGO</strong><div className="flex gap-3">{(b.items||['Menu']).map(x=><span key={x}>{x}</span>)}</div></div>;if(b.type==='nav-item')return <div style={style} className="text-[11px] font-semibold">{b.label}</div>;if(b.type==='input')return <div style={style} className="border border-black/15 text-[11px] text-neutral-400 flex items-center">{b.label}</div>;if(b.type==='button')return <div style={style} className="flex items-center justify-center text-[11px] font-bold">{b.label}</div>;if(b.type==='card'||b.type==='section')return <div style={style} className="border border-black/10"><div className="h-12 rounded-lg bg-black/5 mb-2"/><strong className="text-[11px]">{b.label}</strong></div>;if(b.type==='list-item')return <div style={style} className="border border-black/10 flex items-center gap-2"><span className="h-7 w-7 rounded-full bg-black/10"/><span className="text-[11px]">{b.label}</span></div>;if(b.type==='avatar')return <div style={{...style,width:48,height:48,borderRadius:999}} className="border border-black/10 flex items-center justify-center"><CircleUserRound size={24}/></div>;if(b.type==='checkbox')return <div style={style} className="flex items-center gap-2"><span className="h-5 w-5 border border-black rounded"/>{b.label}</div>;if(b.type==='toggle')return <div style={style} className="flex items-center gap-2"><span className="h-5 w-9 rounded-full bg-black/20 p-0.5"><span className="block h-4 w-4 rounded-full bg-white"/></span>{b.label}</div>;if(b.type==='icon')return <div style={style} className="flex items-center justify-center"><Square size={20}/></div>;return <div style={{...style,fontFamily:font(ds,b.label.toLowerCase().includes('título')?'display':'text')}} className="text-sm font-semibold">{b.label}</div>}
+export function WireframePreview({document,designSystem,className=''}:{document:WireframeDocument;designSystem?:DesignSystemDocument;className?:string}){const f=document.frames.find(x=>x.id===document.activeFrameId)||document.frames[0];if(!f)return <div className={className}/>;const scale=Math.min(1,300/f.width,230/f.height);return <div className={`bg-[#ECEBE7] p-3 flex items-center justify-center overflow-hidden ${className}`}><div style={{width:f.width*scale,height:f.height*scale,background:f.background,padding:f.padding*scale,gap:Math.max(2,f.gap*scale),display:f.layoutMode==='grid'?'grid':'flex',gridTemplateColumns:f.layoutMode==='grid'?`repeat(${f.gridColumns||4},1fr)`:undefined,flexDirection:f.direction,overflow:'hidden',borderRadius:10}}>{f.blocks.map(b=><div key={b.id} style={{transform:`scale(${Math.max(.35,scale)})`,transformOrigin:'top left'}}><PreviewBlock b={b} ds={designSystem}/></div>)}</div></div>}
+const drawingUrl=(d:DrawingDocument)=>`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawingToSvgString(d))}`;
 
-const blockDefaults = (type: WireframeBlockType, designSystem?: DesignSystemDocument): WireframeBlock => ({
-  id: makeId('block'), type, label: BLOCKS.find((item) => item.type === type)?.label || 'Elemento', width: 'fill',
-  height: type === 'image' || type === 'card' ? 160 : type === 'navbar' ? 56 : type === 'button' || type === 'input' ? 48 : type === 'spacer' ? 32 : 'hug',
-  padding: 12, radius: designSystem?.radii?.find((value) => value >= 8 && value < 999) || 12,
-  background: type === 'button' ? (designSystem?.colors.find((item) => item.role === 'brand')?.value || '#111111') : '#F4F4F2',
-  color: type === 'button' ? '#FFFFFF' : (designSystem?.colors.find((item) => item.role === 'text')?.value || '#111111'),
-});
-
-function BlockPreview({ block, fontFamily = 'Inter', compact = false }: { block: WireframeBlock; fontFamily?: string; compact?: boolean }) {
-  const common: React.CSSProperties = {
-    borderRadius: block.radius ?? 10,
-    minHeight: typeof block.height === 'number' ? Math.max(compact ? block.height * .45 : block.height, compact ? 18 : 28) : undefined,
-    width: block.width === 'fill' ? '100%' : typeof block.width === 'number' ? block.width : 'auto',
-    background: block.type === 'text' || block.type === 'spacer' ? 'transparent' : block.background || '#F4F4F2',
-    color: block.color || '#111111', fontFamily,
-  };
-  if (block.type === 'spacer') return <div style={{ height: compact ? 12 : (typeof block.height === 'number' ? block.height : 24) }} />;
-  if (block.type === 'image') return <div style={common} className="border border-dashed border-black/25 flex items-center justify-center text-[9px] font-mono text-neutral-500">IMAGEM</div>;
-  if (block.type === 'input') return <div style={common} className="border border-black/15 px-3 flex items-center text-[10px] text-neutral-400">{block.label || 'Campo'}</div>;
-  if (block.type === 'navbar') return <div style={common} className="border border-black/10 px-3 flex items-center justify-between text-[9px] font-mono"><strong>LOGO</strong><span>MENU</span></div>;
-  if (block.type === 'card') return <div style={common} className="border border-black/10 p-3 flex flex-col justify-end"><div className="h-1/2 rounded-lg bg-black/5 mb-2"/><strong className="text-[10px]">{block.label}</strong></div>;
-  if (block.type === 'button') return <div style={common} className="px-3 flex items-center justify-center text-[10px] font-bold">{block.label}</div>;
-  if (block.type === 'list-item') return <div style={common} className="border border-black/10 px-3 flex items-center gap-2"><span className="h-7 w-7 rounded-full bg-black/10"/><span className="text-[10px] font-medium">{block.label}</span></div>;
-  return <div style={common} className={block.type === 'text' ? 'text-sm font-semibold' : ''}>{block.label}</div>;
-}
-
-export function WireframePreview({ document, designSystem, className = '' }: { document: WireframeDocument; designSystem?: DesignSystemDocument; className?: string }) {
-  const frame = document.frames.find((item) => item.id === document.activeFrameId) || document.frames[0];
-  if (!frame) return <div className={className}/>;
-  const scale = Math.min(1, 300 / Math.max(frame.width, 1), 230 / Math.max(frame.height, 1));
-  return <div className={`bg-[#ECEBE7] p-3 flex items-center justify-center overflow-hidden ${className}`}>
-    <div style={{ width: frame.width * scale, height: frame.height * scale, background: frame.background, padding: frame.padding * scale, gap: Math.max(2, frame.gap * scale), display: 'flex', flexDirection: frame.direction, borderRadius: 10, boxShadow: '0 5px 24px rgba(0,0,0,.10)', overflow: 'hidden' }}>
-      {frame.blocks.map((block) => <BlockPreview key={block.id} block={{...block, height: typeof block.height === 'number' ? block.height * scale : block.height }} fontFamily={designSystem?.primaryFont || 'Inter'} compact />)}
-    </div>
-  </div>;
-}
-
-const imageFromDrawing = (drawing: DrawingDocument) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawingToSvgString(drawing))}`;
-
-export default function WireframeStudio({ document, designSystem, title = 'Wireframes', canEdit = true, availableDrawings = [], initialSource = null, onSave, onClose }: WireframeStudioProps) {
-  const [draft, setDraft] = useState<WireframeDocument>(() => JSON.parse(JSON.stringify(document)));
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [source, setSource] = useState<WireframeImportSource | null>(initialSource);
-  const [fidelity, setFidelity] = useState<'structure' | 'balanced' | 'faithful'>('balanced');
-  const [targetDevice, setTargetDevice] = useState<'auto' | 'mobile' | 'tablet' | 'desktop'>('auto');
-  const [isUploading, setIsUploading] = useState(false);
-  const [isInterpreting, setIsInterpreting] = useState(false);
-  const [interpretationNotes, setInterpretationNotes] = useState<string[]>([]);
-  const [uncertainties, setUncertainties] = useState<string[]>([]);
-  const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-  const frame = useMemo(() => draft.frames.find((item) => item.id === draft.activeFrameId) || draft.frames[0], [draft]);
-  const fontFamily = designSystem?.primaryFont || 'Inter';
-
-  const patchFrame = (patch: Partial<WireframeFrame>) => { if (!frame) return; setDraft((current) => ({ ...current, frames: current.frames.map((item) => item.id === frame.id ? { ...item, ...patch } : item) })); };
-  const patchBlock = (id: string, patch: Partial<WireframeBlock>) => patchFrame({ blocks: frame.blocks.map((item) => item.id === id ? { ...item, ...patch } : item) });
-  const addBlock = (type: WireframeBlockType) => { const block = blockDefaults(type, designSystem); patchFrame({ blocks: [...frame.blocks, block] }); setSelectedBlockId(block.id); };
-  const moveBlock = (id: string, direction: -1 | 1) => { const index = frame.blocks.findIndex((item) => item.id === id); const target = index + direction; if (index < 0 || target < 0 || target >= frame.blocks.length) return; const blocks = [...frame.blocks]; [blocks[index], blocks[target]] = [blocks[target], blocks[index]]; patchFrame({ blocks }); };
-  const addFrame = (preset = DEVICE_PRESETS[0]) => { const id = makeId('frame'); const next: WireframeFrame = { id, name: `${preset.label} · Nova tela`, preset: preset.preset, width: preset.width, height: preset.height, direction: 'column', gap: 16, padding: 24, align: 'stretch', background: designSystem?.colors.find((item) => item.role === 'surface')?.value || '#FFFFFF', blocks: [] }; setDraft((current) => ({ ...current, frames: [...current.frames, next], activeFrameId: id })); setSelectedBlockId(null); };
-  const duplicateFrame = () => { const id = makeId('frame'); const copy: WireframeFrame = { ...JSON.parse(JSON.stringify(frame)), id, name: `${frame.name} · cópia`, blocks: frame.blocks.map((block) => ({ ...block, id: makeId('block') })) }; setDraft((current) => ({ ...current, frames: [...current.frames, copy], activeFrameId: id })); };
-
-  const uploadSourceImage = async (file: File) => {
-    if (!file.type.startsWith('image/')) { setError('Escolha uma imagem, foto ou screenshot.'); return; }
-    if (file.size > 4 * 1024 * 1024) { setError('A imagem precisa ter até 4 MB.'); return; }
-    setIsUploading(true); setError('');
-    try {
-      const session = await ensureTursoSession();
-      const response = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name), ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) }, body: file });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.url) throw new Error(data.error || 'Não foi possível enviar a imagem.');
-      setSource({ kind: 'image', name: file.name, url: data.url });
-    } catch (err: any) { setError(err?.message || 'Falha no upload.'); }
-    finally { setIsUploading(false); if (fileRef.current) fileRef.current.value = ''; }
-  };
-
-  const interpretSource = async () => {
-    if (!source || !canEdit) return;
-    setIsInterpreting(true); setError(''); setInterpretationNotes([]); setUncertainties([]);
-    try {
-      const session = await ensureTursoSession().catch(() => null);
-      const wireframeSource = source.kind === 'drawing'
-        ? { kind: 'drawing', name: source.name, svg: drawingToSvgString(source.drawing).slice(0, 70000), width: source.drawing.width, height: source.drawing.height }
-        : { kind: 'image', name: source.name, url: source.url };
-      const response = await fetch('/api/mediators/think', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) },
-        body: JSON.stringify({ mode: 'wireframe-interpret', wireframeSource, wireframeOptions: { device: targetDevice, fidelity } }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.wireframeInterpretation?.frame) throw new Error(data.error || 'A IA não conseguiu interpretar o esboço.');
-      const raw = data.wireframeInterpretation.frame;
-      const blocks: WireframeBlock[] = (Array.isArray(raw.blocks) ? raw.blocks : []).map((block: any) => ({
-        ...blockDefaults(BLOCKS.some((item) => item.type === block.type) ? block.type : 'card', designSystem),
-        ...block,
-        id: makeId('block'),
-        width: block.width === 'hug' || block.width === 'fill' || typeof block.width === 'number' ? block.width : 'fill',
-        height: block.height === 'hug' || typeof block.height === 'number' ? block.height : 'hug',
-      }));
-      const newFrame: WireframeFrame = {
-        id: makeId('frame'), name: String(raw.name || `${source.name} · interpretado`),
-        preset: ['mobile', 'tablet', 'desktop', 'watch', 'custom'].includes(raw.preset) ? raw.preset : 'custom',
-        width: Math.max(120, Number(raw.width) || 393), height: Math.max(120, Number(raw.height) || 852),
-        direction: raw.direction === 'row' ? 'row' : 'column', gap: Math.max(0, Number(raw.gap) || 12),
-        padding: Math.max(0, Number(raw.padding) || 20),
-        align: ['start', 'center', 'end', 'stretch'].includes(raw.align) ? raw.align : 'stretch',
-        background: /^#[0-9a-f]{6}$/i.test(String(raw.background || '')) ? raw.background : '#FFFFFF', blocks,
-      };
-      setDraft((current) => ({ ...current, frames: [...current.frames, newFrame], activeFrameId: newFrame.id }));
-      setSelectedBlockId(null);
-      setInterpretationNotes(Array.isArray(data.wireframeInterpretation.notes) ? data.wireframeInterpretation.notes.slice(0, 6) : []);
-      setUncertainties(Array.isArray(data.wireframeInterpretation.uncertainties) ? data.wireframeInterpretation.uncertainties.slice(0, 6) : []);
-    } catch (err: any) { setError(err?.message || 'Não foi possível transformar o esboço em wireframe.'); }
-    finally { setIsInterpreting(false); }
-  };
-
-  const selected = frame?.blocks.find((item) => item.id === selectedBlockId) || null;
-  const previewScale = frame ? Math.min(1, 720 / frame.width, 690 / frame.height) : 1;
-  const sourcePreview = source?.kind === 'drawing' ? imageFromDrawing(source.drawing) : source?.url;
-
-  return <div className="fixed inset-0 z-[125] bg-[#EDECE8] flex flex-col canvas-control" onPointerDown={(event)=>event.stopPropagation()}>
-    <header className="shrink-0 min-h-16 bg-white border-b border-black/10 px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}>
-      <button type="button" onClick={onClose} className="h-11 w-11 rounded-xl hover:bg-black/5 flex items-center justify-center" aria-label="Fechar Wireframes"><X size={19}/></button>
-      <div className="min-w-0 flex-1"><div className="font-bold truncate">{title}</div><div className="text-[10px] font-mono text-neutral-500 uppercase">frames · auto layout · componentes · desenho → interface</div></div>
-      <button type="button" disabled={!canEdit} onClick={()=>onSave(draft)} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15}/> SALVAR</button>
-    </header>
-
-    <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_290px]">
-      <aside className="min-h-0 overflow-y-auto bg-white border-b lg:border-b-0 lg:border-r border-black/10 p-3 space-y-4">
-        <div className="rounded-2xl border-2 border-black p-3 bg-[#FAFAF8]">
-          <div className="flex items-center gap-2"><Sparkles size={16}/><div><div className="text-[11px] font-bold">Transformar desenho em interface</div><div className="text-[9px] text-neutral-500">Foto, screenshot ou desenho do próprio canvas viram blocos editáveis.</div></div></div>
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e)=>{const file=e.target.files?.[0]; if(file) void uploadSourceImage(file)}}/>
-          <button type="button" disabled={isUploading || !canEdit} onClick={()=>fileRef.current?.click()} className="mt-3 h-10 w-full rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono font-bold disabled:opacity-50">{isUploading?<Loader2 size={14} className="animate-spin"/>:<Upload size={14}/>} ENVIAR IMAGEM</button>
-          {!!availableDrawings.length && <div className="mt-3"><div className="text-[9px] font-mono text-neutral-500 mb-1">OU USE UM DESENHO DO CANVAS</div><div className="max-h-32 overflow-auto space-y-1">{availableDrawings.map((item)=><button key={item.id} type="button" onClick={()=>setSource({kind:'drawing',name:item.name,drawing:item.drawing})} className="w-full min-h-9 rounded-lg border border-black/10 px-2 flex items-center gap-2 text-left text-[9px]"><ScanLine size={13}/><span className="truncate">{item.name}</span></button>)}</div></div>}
-          {source && <div className="mt-3 rounded-xl overflow-hidden border border-black/10 bg-white"><img src={sourcePreview} alt={`Origem ${source.name}`} className="w-full max-h-40 object-contain bg-white"/><div className="px-2 py-1.5 text-[9px] font-mono truncate">{source.name}</div></div>}
-          <div className="mt-3 grid grid-cols-3 gap-1">{(['structure','balanced','faithful'] as const).map((value)=><button key={value} type="button" onClick={()=>setFidelity(value)} className={`h-9 rounded-lg border text-[8px] font-mono ${fidelity===value?'bg-black text-white border-black':'border-black/10'}`}>{value==='structure'?'ESTRUTURA':value==='balanced'?'EQUILIBRADA':'MUITO FIEL'}</button>)}</div>
-          <select value={targetDevice} onChange={(e)=>setTargetDevice(e.target.value as any)} className="mt-2 h-10 w-full rounded-xl border border-black/10 px-2 text-[10px] bg-white"><option value="auto">Tela automática</option><option value="mobile">Mobile</option><option value="tablet">Tablet</option><option value="desktop">Desktop</option></select>
-          <button type="button" disabled={!source || isInterpreting || !canEdit} onClick={()=>void interpretSource()} className="mt-2 min-h-11 w-full rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[10px] font-bold disabled:opacity-40">{isInterpreting?<Loader2 size={15} className="animate-spin"/>:<ImagePlus size={15}/>} {isInterpreting?'INTERPRETANDO…':'GERAR WIREFRAME EDITÁVEL'}</button>
-          {!!interpretationNotes.length && <div className="mt-2 text-[9px] text-neutral-600 space-y-1">{interpretationNotes.map((note,index)=><div key={index}>✓ {note}</div>)}</div>}
-          {!!uncertainties.length && <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[9px] text-amber-800">{uncertainties.map((note,index)=><div key={index}>? {note}</div>)}</div>}
-          {error && <div className="mt-2 rounded-lg bg-red-50 border border-red-200 p-2 text-[9px] text-red-700">{error}</div>}
-        </div>
-
-        <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Frames e formatos</div><div className="mt-2 grid grid-cols-2 lg:grid-cols-1 gap-2">{DEVICE_PRESETS.map((preset)=>{const Icon=preset.icon;return <button key={preset.id} type="button" onClick={()=>addFrame(preset)} className="min-h-12 rounded-xl border border-black/10 px-3 flex items-center gap-3 text-left hover:border-black"><Icon size={17}/><span><strong className="block text-[11px]">{preset.label}</strong><span className="text-[9px] font-mono text-neutral-400">{preset.width}×{preset.height}</span></span></button>})}</div></div>
-        <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Telas do projeto</div><div className="mt-2 space-y-1.5">{draft.frames.map((item)=><button key={item.id} type="button" onClick={()=>{setDraft({...draft,activeFrameId:item.id});setSelectedBlockId(null)}} className={`w-full rounded-xl border px-3 py-2 text-left ${item.id===frame?.id?'bg-black text-white border-black':'border-black/10'}`}><div className="text-[10px] font-bold truncate">{item.name}</div><div className={`text-[9px] font-mono ${item.id===frame?.id?'text-white/60':'text-neutral-400'}`}>{item.width}×{item.height}</div></button>)}</div></div>
-        <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Componentes</div><div className="mt-2 grid grid-cols-2 gap-1.5">{BLOCKS.map((item)=><button key={item.type} type="button" disabled={!canEdit} onClick={()=>addBlock(item.type)} className="min-h-10 rounded-lg border border-black/10 bg-white hover:border-black text-[9px] font-mono">+ {item.label}</button>)}</div></div>
-        {!!draft.componentLibrary?.length && <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Biblioteca do projeto</div><div className="mt-2 space-y-1.5">{draft.componentLibrary.map((component)=><button key={component.id} type="button" onClick={()=>{const copy={...component,id:makeId('block'),isComponent:false};patchFrame({blocks:[...frame.blocks,copy]})}} className="w-full min-h-10 rounded-lg border border-black/10 px-2 text-left text-[10px]">{component.componentName || component.label}</button>)}</div></div>}
-      </aside>
-
-      <section className="min-h-[50vh] lg:min-h-0 overflow-auto p-4 sm:p-7 flex items-start justify-center">
-        {frame && <div className="relative shrink-0" style={{width:frame.width*previewScale,height:frame.height*previewScale}}>
-          <div style={{width:frame.width,height:frame.height,transform:`scale(${previewScale})`,transformOrigin:'top left',background:frame.background,padding:frame.padding,gap:frame.gap,display:'flex',flexDirection:frame.direction,alignItems:frame.align==='stretch'?'stretch':frame.align==='start'?'flex-start':frame.align==='end'?'flex-end':'center',boxShadow:'0 12px 50px rgba(0,0,0,.14)',fontFamily,borderRadius:frame.preset==='watch'?42:18,overflow:'hidden'}}>
-            {frame.blocks.map((block)=><button key={block.id} type="button" onClick={()=>setSelectedBlockId(block.id)} className={`text-left shrink-0 ${selectedBlockId===block.id?'outline outline-2 outline-blue-500 outline-offset-2':''}`} style={{width:block.width==='fill'?'100%':block.width==='hug'?'auto':block.width}}><BlockPreview block={block} fontFamily={fontFamily}/></button>)}
-          </div>
-          <div className="absolute -top-6 left-0 text-[9px] font-mono text-neutral-500">{frame.name} · {frame.width}×{frame.height}</div>
-        </div>}
-      </section>
-
-      <aside className="min-h-0 overflow-y-auto bg-white border-t lg:border-t-0 lg:border-l border-black/10 p-3 space-y-4">
-        {frame && <>
-          <div className="flex items-center justify-between"><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Frame</div><button type="button" onClick={duplicateFrame} className="h-9 px-2 rounded-lg border border-black/10 flex items-center gap-1 text-[9px] font-mono"><Copy size={13}/> DUPLICAR</button></div>
-          <input value={frame.name} onChange={(e)=>patchFrame({name:e.target.value})} className="h-10 w-full rounded-xl border border-black/10 px-3 text-xs font-bold"/>
-          <div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono text-neutral-500">LARGURA<input type="number" value={frame.width} onChange={(e)=>patchFrame({width:Math.max(120,Number(e.target.value))})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label><label className="text-[9px] font-mono text-neutral-500">ALTURA<input type="number" value={frame.height} onChange={(e)=>patchFrame({height:Math.max(120,Number(e.target.value))})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label></div>
-          <div><div className="text-[9px] font-mono text-neutral-500 mb-1">AUTO LAYOUT</div><div className="grid grid-cols-2 gap-2"><button onClick={()=>patchFrame({direction:'column'})} className={`h-10 rounded-lg border text-[10px] ${frame.direction==='column'?'bg-black text-white border-black':'border-black/10'}`}>VERTICAL</button><button onClick={()=>patchFrame({direction:'row'})} className={`h-10 rounded-lg border text-[10px] ${frame.direction==='row'?'bg-black text-white border-black':'border-black/10'}`}>HORIZONTAL</button></div></div>
-          <div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono text-neutral-500">GAP<input type="number" min={0} value={frame.gap} onChange={(e)=>patchFrame({gap:Number(e.target.value)})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label><label className="text-[9px] font-mono text-neutral-500">PADDING<input type="number" min={0} value={frame.padding} onChange={(e)=>patchFrame({padding:Number(e.target.value)})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label></div>
-          <div><div className="text-[9px] font-mono text-neutral-500 mb-1">ALINHAMENTO</div><div className="grid grid-cols-4 gap-1">{([['start',AlignLeft],['center',AlignCenter],['end',AlignRight],['stretch',LayoutGrid]] as [WireframeAlign,React.ElementType][]).map(([value,Icon])=><button key={value} onClick={()=>patchFrame({align:value})} className={`h-10 rounded-lg border flex items-center justify-center ${frame.align===value?'bg-black text-white border-black':'border-black/10'}`} title={value}><Icon size={15}/></button>)}</div></div>
-        </>}
-
-        {selected && <div className="pt-4 border-t border-black/10 space-y-3"><div className="flex items-center justify-between"><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Elemento</div><div className="flex gap-1"><button onClick={()=>moveBlock(selected.id,-1)} className="h-8 w-8 border border-black/10 rounded-lg flex items-center justify-center"><ArrowUp size={13}/></button><button onClick={()=>moveBlock(selected.id,1)} className="h-8 w-8 border border-black/10 rounded-lg flex items-center justify-center"><ArrowDown size={13}/></button><button onClick={()=>{patchFrame({blocks:frame.blocks.filter((item)=>item.id!==selected.id)});setSelectedBlockId(null)}} className="h-8 w-8 border border-red-200 text-red-600 rounded-lg flex items-center justify-center"><Trash2 size={13}/></button></div></div>
-          <label className="text-[9px] font-mono text-neutral-500">CONTEÚDO<input value={selected.label} onChange={(e)=>patchBlock(selected.id,{label:e.target.value})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label>
-          <div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono text-neutral-500">ALTURA<input type="number" value={typeof selected.height==='number'?selected.height:44} onChange={(e)=>patchBlock(selected.id,{height:Number(e.target.value)})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label><label className="text-[9px] font-mono text-neutral-500">RAIO<input type="number" value={selected.radius||0} onChange={(e)=>patchBlock(selected.id,{radius:Number(e.target.value)})} className="mt-1 h-10 w-full rounded-lg border border-black/10 px-2 text-black"/></label></div>
-          <button type="button" onClick={()=>setDraft((current)=>({...current,componentLibrary:[...(current.componentLibrary||[]),{...selected,id:makeId('component'),isComponent:true,componentName:selected.componentName||selected.label}]}))} className="w-full h-10 rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono font-bold"><Frame size={14}/> SALVAR COMO COMPONENTE</button>
-        </div>}
-      </aside>
-    </main>
-  </div>;
+export default function WireframeStudio({document,designSystem,title='Wireframes',canEdit=true,availableDrawings=[],initialSource=null,onSave,onClose}:Props){
+ const [draft,setDraft]=useState<WireframeDocument>(()=>JSON.parse(JSON.stringify(document)));const [selectedId,setSelectedId]=useState<string|null>(null);const [source,setSource]=useState<WireframeImportSource|null>(initialSource);const [fidelity,setFidelity]=useState<'structure'|'balanced'|'faithful'>('balanced');const [targetDevice,setTargetDevice]=useState<'auto'|'mobile'|'tablet'|'desktop'>('auto');const [isUploading,setIsUploading]=useState(false);const [isInterpreting,setIsInterpreting]=useState(false);const [notes,setNotes]=useState<string[]>([]);const [uncertainties,setUncertainties]=useState<string[]>([]);const [error,setError]=useState('');const fileRef=useRef<HTMLInputElement>(null);
+ const frame=useMemo(()=>draft.frames.find(x=>x.id===draft.activeFrameId)||draft.frames[0],[draft]);const selected=frame?.blocks.find(x=>x.id===selectedId)||null;const compact=typeof window!=='undefined'&&window.innerWidth<1024;const maxPreviewW=compact?Math.min(window.innerWidth-32,440):760;const maxPreviewH=compact?420:680;const scale=frame?Math.min(1,maxPreviewW/frame.width,maxPreviewH/frame.height):1;
+ const patchFrame=(p:Partial<WireframeFrame>)=>frame&&setDraft(d=>({...d,frames:d.frames.map(x=>x.id===frame.id?{...x,...p}:x)}));
+ const patchBlock=(bid:string,p:Partial<WireframeBlock>)=>frame&&patchFrame({blocks:frame.blocks.map(x=>x.id===bid?{...x,...p}:x)});
+ const addBlock=(type:WireframeBlockType)=>{if(!frame)return;const b=blockDefault(type,designSystem);patchFrame({blocks:[...frame.blocks,b]});setSelectedId(b.id)};
+ const addFrame=(p=PRESETS[0])=>{const fid=id('frame');const f:WireframeFrame={id:fid,name:`${p.label} · Nova tela`,preset:p.preset,width:p.width,height:p.height,direction:'column',gap:designSystem?.layoutSpacing?.componentGap||16,padding:designSystem?.layoutSpacing?.pagePadding||24,margin:0,align:'stretch',justify:'start',layoutMode:'flex',gridColumns:p.preset==='desktop'?12:p.preset==='tablet'?8:4,columnGap:16,rowGap:16,background:surface(designSystem),blocks:[]};setDraft(d=>({...d,frames:[...d.frames,f],activeFrameId:fid}));setSelectedId(null)};
+ const duplicateFrame=()=>{if(!frame)return;const fid=id('frame');const f={...JSON.parse(JSON.stringify(frame)),id:fid,name:`${frame.name} · cópia`,blocks:frame.blocks.map(b=>({...b,id:id('block')}))};setDraft(d=>({...d,frames:[...d.frames,f],activeFrameId:fid}))};
+ const move=(bid:string,dir:-1|1)=>{if(!frame)return;const i=frame.blocks.findIndex(x=>x.id===bid),t=i+dir;if(i<0||t<0||t>=frame.blocks.length)return;const a=[...frame.blocks];[a[i],a[t]]=[a[t],a[i]];patchFrame({blocks:a})};
+ const upload=async(file:File)=>{if(!file.type.startsWith('image/'))return setError('Escolha uma imagem, foto ou screenshot.');if(file.size>4*1024*1024)return setError('A imagem precisa ter até 4 MB.');setIsUploading(true);setError('');try{const s=await ensureTursoSession();const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':file.type,'X-File-Name':encodeURIComponent(file.name),...(s?.token?{Authorization:`Bearer ${s.token}`}:{})},body:file});const d=await r.json().catch(()=>({}));if(!r.ok||!d.url)throw new Error(d.error||'Falha no upload');setSource({kind:'image',name:file.name,url:d.url})}catch(e:any){setError(e.message||'Falha no upload')}finally{setIsUploading(false);if(fileRef.current)fileRef.current.value=''}};
+ const interpret=async()=>{if(!source)return;setIsInterpreting(true);setError('');try{const s=await ensureTursoSession().catch(()=>null);const wf=source.kind==='drawing'?{kind:'drawing',name:source.name,svg:drawingToSvgString(source.drawing).slice(0,70000),width:source.drawing.width,height:source.drawing.height}:{kind:'image',name:source.name,url:source.url};const r=await fetch('/api/mediators/think',{method:'POST',headers:{'Content-Type':'application/json',...(s?.token?{Authorization:`Bearer ${s.token}`}:{})},body:JSON.stringify({mode:'wireframe-interpret',wireframeSource:wf,wireframeOptions:{device:targetDevice,fidelity}})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.wireframeInterpretation?.frame)throw new Error(d.error||'A IA não conseguiu interpretar o esboço.');const raw=d.wireframeInterpretation.frame;const blocks=(raw.blocks||[]).map((b:any)=>({...blockDefault(BLOCKS.some(x=>x.type===b.type)?b.type:'card',designSystem),...b,id:id('block')}));const nf:WireframeFrame={id:id('frame'),name:String(raw.name||`${source.name} · interpretado`),preset:['mobile','tablet','desktop','watch','custom'].includes(raw.preset)?raw.preset:'custom',width:Number(raw.width)||393,height:Number(raw.height)||852,direction:raw.direction==='row'?'row':'column',gap:Number(raw.gap)||12,padding:Number(raw.padding)||20,margin:0,align:['start','center','end','stretch'].includes(raw.align)?raw.align:'stretch',justify:'start',layoutMode:'flex',gridColumns:raw.preset==='desktop'?12:raw.preset==='tablet'?8:4,columnGap:16,rowGap:16,background:raw.background||'#FFFFFF',blocks};setDraft(cur=>({...cur,frames:[...cur.frames,nf],activeFrameId:nf.id}));setNotes(d.wireframeInterpretation.notes||[]);setUncertainties(d.wireframeInterpretation.uncertainties||[]);setSelectedId(null)}catch(e:any){setError(e.message||'Não foi possível interpretar')}finally{setIsInterpreting(false)}};
+ return <div className="fixed inset-0 z-[125] bg-[#EDECE8] flex flex-col canvas-control atelier-studio" onPointerDown={e=>e.stopPropagation()}>
+  <header className="shrink-0 min-h-16 bg-white border-b border-black/10 px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}><button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={19}/></button><div className="min-w-0 flex-1"><div className="font-bold truncate">{title}</div><div className="text-[10px] font-mono text-neutral-500 uppercase">frames · grid · auto layout · componentes · interações</div></div><button onClick={()=>onSave(draft)} disabled={!canEdit} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold"><Save size={15}/> SALVAR</button></header>
+  <div className="shrink-0 bg-white border-b border-black/10 p-2 sm:p-3"><div className="text-[9px] font-mono text-neutral-500 mb-2 px-1">NOVO FRAME</div><div className="flex gap-2 overflow-x-auto pb-1">{PRESETS.map(p=>{const I=p.icon;return <button key={p.id} onClick={()=>addFrame(p)} className={`shrink-0 min-w-[132px] h-16 rounded-xl border px-3 flex items-center gap-2 text-left ${['mobile','tablet','desktop','watch'].includes(p.id)?'border-black/25':'border-black/10'}`}><I size={17}/><span><b className="block text-[11px]">{p.label}</b><span className="text-[9px] font-mono text-neutral-400">{p.width}×{p.height}</span></span></button>})}</div></div>
+  <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_310px] overflow-y-auto lg:overflow-hidden">
+   <aside className="bg-white border-b lg:border-b-0 lg:border-r border-black/10 p-3 space-y-4 lg:overflow-y-auto">
+    <div className="rounded-2xl border-2 border-black p-3 bg-[#FAFAF8]"><div className="font-bold text-[11px] flex items-center gap-2"><ImagePlus size={15}/> Transformar desenho em interface</div><input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f)}}/><button onClick={()=>fileRef.current?.click()} className="mt-2 w-full h-10 rounded-xl border border-black flex items-center justify-center gap-2 text-[9px] font-bold">{isUploading?<Loader2 className="animate-spin" size={14}/>:<Upload size={14}/>} IMAGEM / SCREENSHOT</button>{availableDrawings.length>0&&<select onChange={e=>{const d=availableDrawings.find(x=>x.id===e.target.value);if(d)setSource({kind:'drawing',name:d.name,drawing:d.drawing})}} className="mt-2 h-10 w-full rounded-xl border border-black/10 px-2 text-[10px]"><option value="">Desenho do canvas…</option>{availableDrawings.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select>}{source&&<img src={source.kind==='drawing'?drawingUrl(source.drawing):source.url} className="mt-2 w-full max-h-28 object-contain rounded-lg bg-white border"/>}<div className="mt-2 grid grid-cols-2 gap-2"><select value={fidelity} onChange={e=>setFidelity(e.target.value as any)} className="h-9 rounded-lg border border-black/10 text-[9px]"><option value="structure">Estrutura</option><option value="balanced">Equilibrada</option><option value="faithful">Muito fiel</option></select><select value={targetDevice} onChange={e=>setTargetDevice(e.target.value as any)} className="h-9 rounded-lg border border-black/10 text-[9px]"><option value="auto">Automático</option><option value="mobile">Mobile</option><option value="tablet">Tablet</option><option value="desktop">Desktop</option></select></div><button onClick={()=>void interpret()} disabled={!source||isInterpreting} className="mt-2 w-full h-11 rounded-xl bg-black text-white text-[9px] font-bold flex items-center justify-center gap-2">{isInterpreting?<Loader2 size={14} className="animate-spin"/>:<ImagePlus size={14}/>} GERAR EDITÁVEL</button>{notes.map((n,i)=><div key={i} className="mt-1 text-[9px] text-emerald-700">✓ {n}</div>)}{uncertainties.map((n,i)=><div key={i} className="mt-1 text-[9px] text-amber-700">? {n}</div>)}{error&&<div className="mt-2 text-[9px] text-red-700">{error}</div>}</div>
+    <div><div className="text-[9px] font-mono font-bold text-neutral-500">TELAS</div><div className="mt-2 space-y-1.5">{draft.frames.map(f=><button key={f.id} onClick={()=>{setDraft({...draft,activeFrameId:f.id});setSelectedId(null)}} className={`w-full rounded-xl border p-2 text-left ${f.id===frame?.id?'bg-black text-white border-black':'border-black/10'}`}><b className="text-[10px] block truncate">{f.name}</b><span className="text-[9px] font-mono opacity-60">{f.width}×{f.height} · {f.layoutMode||'flex'}</span></button>)}</div></div>
+    <div><div className="text-[9px] font-mono font-bold text-neutral-500">ADICIONAR ELEMENTO</div><div className="mt-2 grid grid-cols-2 gap-1.5">{BLOCKS.map(x=>{const I=x.icon;return <button key={x.type} onClick={()=>addBlock(x.type)} className="min-h-11 rounded-lg border border-black/10 flex items-center gap-2 px-2 text-[9px] text-left"><I size={13}/> {x.label}</button>})}</div></div>
+    {!!draft.componentLibrary?.length&&<div><div className="text-[9px] font-mono font-bold text-neutral-500">COMPONENTES SALVOS</div>{draft.componentLibrary.map(c=><button key={c.id} onClick={()=>frame&&patchFrame({blocks:[...frame.blocks,{...c,id:id('block'),isComponent:false}]})} className="mt-1.5 w-full h-10 rounded-lg border border-black/10 px-2 text-left text-[10px]">{c.componentName||c.label}</button>)}</div>}
+   </aside>
+   <section className="min-h-[52vh] lg:min-h-0 overflow-auto p-6 flex items-start justify-center bg-[#E7E5E0]">{frame&&<div className="relative shrink-0 mt-6" style={{width:frame.width*scale,height:frame.height*scale}}><div className="absolute -top-6 left-0 text-[9px] font-mono text-neutral-500">{frame.name} · {frame.width}×{frame.height}</div><div style={{width:frame.width,height:frame.height,transform:`scale(${scale})`,transformOrigin:'top left',background:frame.background,padding:frame.padding,gap:frame.layoutMode==='grid'?undefined:frame.gap,display:frame.layoutMode==='grid'?'grid':'flex',gridTemplateColumns:frame.layoutMode==='grid'?`repeat(${Math.max(1,frame.gridColumns||4)}, minmax(0,1fr))`:undefined,columnGap:frame.columnGap||frame.gap,rowGap:frame.rowGap||frame.gap,flexDirection:frame.direction,alignItems:frame.align==='stretch'?'stretch':frame.align==='start'?'flex-start':frame.align==='end'?'flex-end':'center',justifyContent:frame.justify==='center'?'center':frame.justify==='end'?'flex-end':frame.justify==='between'?'space-between':'flex-start',fontFamily:font(designSystem,'text'),boxShadow:'0 12px 50px rgba(0,0,0,.14)',borderRadius:frame.preset==='watch'?42:18,overflow:'auto'}}>{frame.blocks.map(b=><button key={b.id} onClick={()=>setSelectedId(b.id)} className={`text-left ${selectedId===b.id?'outline outline-2 outline-blue-500 outline-offset-2':''}`} style={{width:b.width==='fill'?'100%':b.width==='hug'?'auto':b.width,gridColumn:`span ${Math.min(frame.gridColumns||12,Math.max(1,b.gridColumnSpan||1))}`}}><PreviewBlock b={b} ds={designSystem}/></button>)}</div></div>}</section>
+   <aside className="bg-white border-t lg:border-t-0 lg:border-l border-black/10 p-3 space-y-4 lg:overflow-y-auto">{frame&&<><div className="flex items-center justify-between"><div className="text-[9px] font-mono font-bold text-neutral-500">FRAME</div><button onClick={duplicateFrame} className="h-9 px-2 rounded-lg border border-black/10 flex items-center gap-1 text-[9px]"><Copy size={13}/> DUPLICAR</button></div><input value={frame.name} onChange={e=>patchFrame({name:e.target.value})} className="h-10 w-full rounded-xl border border-black/10 px-3 text-xs font-bold"/><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono text-neutral-500">LARGURA<input type="number" value={frame.width} onChange={e=>patchFrame({width:Math.max(120,+e.target.value)})} className="mt-1 h-10 w-full rounded-lg border px-2"/></label><label className="text-[9px] font-mono text-neutral-500">ALTURA<input type="number" value={frame.height} onChange={e=>patchFrame({height:Math.max(120,+e.target.value)})} className="mt-1 h-10 w-full rounded-lg border px-2"/></label></div><label className="text-[9px] font-mono">FUNDO DO FRAME<input value={frame.background} onChange={e=>patchFrame({background:e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2 font-mono uppercase" placeholder="#FFFFFF"/></label><div className="grid grid-cols-2 gap-2"><button onClick={()=>patchFrame({layoutMode:'flex'})} className={`h-10 rounded-lg border text-[9px] ${frame.layoutMode!=='grid'?'bg-black text-white':'border-black/10'}`}>AUTO LAYOUT</button><button onClick={()=>patchFrame({layoutMode:'grid'})} className={`h-10 rounded-lg border text-[9px] ${frame.layoutMode==='grid'?'bg-black text-white':'border-black/10'}`}>GRID</button></div>{frame.layoutMode==='grid'?<div className="grid grid-cols-3 gap-2"><label className="text-[9px] font-mono">COLUNAS<input type="number" min="1" max="24" value={frame.gridColumns||4} onChange={e=>patchFrame({gridColumns:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">GAP X<input type="number" value={frame.columnGap||0} onChange={e=>patchFrame({columnGap:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">GAP Y<input type="number" value={frame.rowGap||0} onChange={e=>patchFrame({rowGap:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label></div>:<><div className="grid grid-cols-2 gap-2"><button onClick={()=>patchFrame({direction:'column'})} className={`h-9 rounded-lg border text-[9px] ${frame.direction==='column'?'bg-black text-white':''}`}>VERTICAL</button><button onClick={()=>patchFrame({direction:'row'})} className={`h-9 rounded-lg border text-[9px] ${frame.direction==='row'?'bg-black text-white':''}`}>HORIZONTAL</button></div><label className="text-[9px] font-mono">GAP<input type="number" value={frame.gap} onChange={e=>patchFrame({gap:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label></>}<div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono">PADDING<input type="number" value={frame.padding} onChange={e=>patchFrame({padding:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">MARGEM<input type="number" value={frame.margin||0} onChange={e=>patchFrame({margin:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label></div><div className="grid grid-cols-4 gap-1">{([['start',AlignLeft],['center',AlignCenter],['end',AlignRight],['stretch',LayoutGrid]] as [WireframeAlign,React.ElementType][]).map(([v,I])=><button key={v} onClick={()=>patchFrame({align:v})} className={`h-9 rounded-lg border flex items-center justify-center ${frame.align===v?'bg-black text-white':''}`}><I size={14}/></button>)}</div></>}
+    {selected&&<div className="pt-3 border-t space-y-3"><div className="flex justify-between"><div className="text-[9px] font-mono font-bold">ELEMENTO · {selected.type}</div><div className="flex gap-1"><button onClick={()=>move(selected.id,-1)} className="h-8 w-8 border rounded"><ArrowUp size={13}/></button><button onClick={()=>move(selected.id,1)} className="h-8 w-8 border rounded"><ArrowDown size={13}/></button><button onClick={()=>{patchFrame({blocks:frame.blocks.filter(x=>x.id!==selected.id)});setSelectedId(null)}} className="h-8 w-8 border border-red-200 text-red-600 rounded"><Trash2 size={13}/></button></div></div><label className="text-[9px] font-mono">CONTEÚDO<input value={selected.label} onChange={e=>patchBlock(selected.id,{label:e.target.value})} className="mt-1 h-10 w-full border rounded-lg px-2"/></label><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono">LARGURA<select value={selected.width==='fill'?'fill':selected.width==='hug'?'hug':'fixed'} onChange={e=>patchBlock(selected.id,{width:e.target.value==='fill'?'fill':e.target.value==='hug'?'hug':160})} className="mt-1 h-9 w-full border rounded-lg px-2"><option value="fill">Preencher</option><option value="hug">Abraçar conteúdo</option><option value="fixed">Fixa</option></select></label>{typeof selected.width==='number'&&<label className="text-[9px] font-mono">PX<input type="number" value={selected.width} onChange={e=>patchBlock(selected.id,{width:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label>}</div><div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono">FUNDO<input value={selected.background||'#FFFFFF'} onChange={e=>patchBlock(selected.id,{background:e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2 font-mono uppercase"/></label><label className="text-[9px] font-mono">TEXTO / TRAÇO<input value={selected.color||'#111111'} onChange={e=>patchBlock(selected.id,{color:e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2 font-mono uppercase"/></label></div>{selected.type==='navbar'&&<label className="text-[9px] font-mono">ITENS DE NAVEGAÇÃO<input value={(selected.items||[]).join(', ')} onChange={e=>patchBlock(selected.id,{items:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)})} className="mt-1 h-10 w-full border rounded-lg px-2" placeholder="Início, Projeto, Sobre"/></label>}<div className="grid grid-cols-2 gap-2"><label className="text-[9px] font-mono">PADDING<input type="number" value={selected.padding||0} onChange={e=>patchBlock(selected.id,{padding:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">MARGEM<input type="number" value={selected.margin||0} onChange={e=>patchBlock(selected.id,{margin:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">ALTURA<input type="number" value={typeof selected.height==='number'?selected.height:44} onChange={e=>patchBlock(selected.id,{height:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label><label className="text-[9px] font-mono">RAIO<input type="number" value={selected.radius||0} onChange={e=>patchBlock(selected.id,{radius:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label>{frame.layoutMode==='grid'&&<label className="text-[9px] font-mono">COLUNAS OCUPADAS<input type="number" min="1" max={frame.gridColumns||12} value={selected.gridColumnSpan||1} onChange={e=>patchBlock(selected.id,{gridColumnSpan:+e.target.value})} className="mt-1 h-9 w-full border rounded-lg px-2"/></label>}</div><div className="rounded-xl border p-3"><div className="text-[9px] font-mono font-bold flex items-center gap-1"><MousePointerClick size={12}/> INTERAÇÃO</div><select value={selected.interaction||'none'} onChange={e=>patchBlock(selected.id,{interaction:e.target.value as any})} className="mt-2 h-9 w-full border rounded-lg px-2 text-[10px]"><option value="none">Nenhuma</option><option value="navigate">Navegar para tela</option><option value="modal">Abrir modal</option><option value="toggle">Alternar estado</option><option value="link">Abrir link</option></select>{selected.interaction&&selected.interaction!=='none'&&<input value={selected.interactionTarget||selected.href||''} onChange={e=>patchBlock(selected.id,{interactionTarget:e.target.value,href:selected.interaction==='link'?e.target.value:selected.href})} placeholder={selected.interaction==='navigate'?'Nome/ID da tela':'Destino / URL'} className="mt-2 h-9 w-full border rounded-lg px-2 text-[10px]"/>}</div><button onClick={()=>setDraft(d=>({...d,componentLibrary:[...(d.componentLibrary||[]),{...selected,id:id('component'),isComponent:true,componentName:selected.label}]}))} className="w-full h-10 rounded-xl border border-black text-[9px] font-bold">SALVAR COMO COMPONENTE</button></div>}
+   </aside>
+  </main>
+ </div>;
 }
