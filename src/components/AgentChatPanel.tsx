@@ -3,6 +3,7 @@ import { X, Send, Loader2, PlusCircle, Trash2, Sparkles, Maximize2, Minimize2 } 
 import { Mediator, Project, ThoughtNode } from '../types';
 import MediatorSticker from './MediatorSticker';
 import { ensureTursoSession } from '../lib/turso';
+import VoiceDictationButton from './VoiceDictationButton';
 
 type ChatMessage = {
   id: string;
@@ -202,6 +203,11 @@ export default function AgentChatPanel({ project, nodes, mediator, onClose, onAd
               rows={3}
               placeholder={`Converse com ${mediator.name} sobre seu projeto…`}
               className="flex-1 resize-none rounded-2xl border-2 border-black px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            />
+            <VoiceDictationButton
+              disabled={isSending}
+              onText={(text) => setInput((current) => `${current}${current && !current.endsWith(' ') ? ' ' : ''}${text}`)}
+              title={`Ditar mensagem para ${mediator.name}`}
             />
             <button
               type="submit"
