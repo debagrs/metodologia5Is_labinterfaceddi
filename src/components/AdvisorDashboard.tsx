@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
-  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, FolderOpen
+  Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, FolderOpen, Layers3
 } from 'lucide-react';
-import { AdminProjectSummary, Classroom, StudentProfile, Project, UserProfile } from '../types';
+import { AdminProjectSummary, Classroom, StudentProfile, Project, UserProfile, SharedProjectSummary } from '../types';
 import { readAuthSession } from '../lib/auth';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
 import { AgendaLauncher } from './Agenda5Is';
+import TutorialCoach from './TutorialCoach';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -23,6 +24,10 @@ interface AdvisorDashboardProps {
   onOpenAdminProject?: (project: AdminProjectSummary) => void;
   loadingStudentWorkspace?: boolean;
   studentWorkspaceError?: string;
+  sharedProjects?: SharedProjectSummary[];
+  sharedProjectsLoading?: boolean;
+  onOpenShared?: (project: SharedProjectSummary) => void;
+  onRefreshShared?: () => void;
 }
 
 export default function AdvisorDashboard({
@@ -38,7 +43,11 @@ export default function AdvisorDashboard({
   onOpenOwnProjects,
   onOpenAdminProject,
   loadingStudentWorkspace = false,
-  studentWorkspaceError = ''
+  studentWorkspaceError = '',
+  sharedProjects = [],
+  sharedProjectsLoading = false,
+  onOpenShared,
+  onRefreshShared
 }: AdvisorDashboardProps) {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(
     classrooms.length > 0 ? classrooms[0].id : null
@@ -257,7 +266,8 @@ export default function AdvisorDashboard({
 
   return (
     <div className="min-h-screen bg-[#FDFDFB] font-sans p-4 sm:p-8 select-none">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <TutorialCoach scope="advisor" userId={advisor.id} />
+      <div className="max-w-6xl mx-auto space-y-6" data-tour="advisor-header">
         
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#E0E0DE] pb-6 gap-4">
@@ -275,15 +285,17 @@ export default function AdvisorDashboard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <AgendaLauncher
+            <div data-tour="advisor-agenda">
+              <AgendaLauncher
               currentUser={advisor}
               className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all shadow-sm"
               textClassName="text-xs font-mono font-bold tracking-wide"
               label="Agenda"
-            />
+              />
+            </div>
             {onOpenOwnProjects && (
               <button
-                onClick={onOpenOwnProjects}
+                onClick={onOpenOwnProjects} data-tour="advisor-own-projects"
                 className="px-4 py-2 border border-[#E0E0DE] hover:border-black text-neutral-700 hover:text-black hover:bg-white rounded-xl text-xs font-mono font-bold tracking-wide transition-all flex items-center gap-2 cursor-pointer shadow-sm"
               >
                 <FolderOpen size={13} />
@@ -367,7 +379,7 @@ export default function AdvisorDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* LEFT PANEL: LIST OF CLASSES */}
-          <div className="lg:col-span-4 bg-white border border-[#E0E0DE] rounded-2xl p-5 space-y-4 shadow-sm">
+          <div data-tour="advisor-classes" className="lg:col-span-4 bg-white border border-[#E0E0DE] rounded-2xl p-5 space-y-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-800 flex items-center gap-2">
                 <BookOpen size={15} />
@@ -651,6 +663,35 @@ export default function AdvisorDashboard({
         </div>
 
       </div>
+      {onOpenShared && (
+        <section data-tour="advisor-shared" className="max-w-6xl mx-auto mt-6 rounded-3xl border border-[#DFDFDC] bg-white p-5 sm:p-6 shadow-sm">
+          <div className="flex items-start sm:items-center justify-between gap-3 mb-5">
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-400">Colaboração</span>
+              <h2 className="text-xl sm:text-2xl font-bold mt-1 flex items-center gap-2"><Users size={21}/> Compartilhados comigo</h2>
+              <p className="text-sm text-neutral-500 mt-1">Convites para visualizar, comentar ou editar aparecem aqui diretamente — sem criar turma ou vincular a pessoa a uma turma.</p>
+            </div>
+            {onRefreshShared && <button onClick={onRefreshShared} className="p-2.5 rounded-xl border border-[#DDD] bg-white cursor-pointer" title="Atualizar projetos compartilhados"><RefreshCw size={16} className={sharedProjectsLoading ? 'animate-spin' : ''}/></button>}
+          </div>
+          {sharedProjectsLoading && sharedProjects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#DDD] p-6 text-center text-sm text-neutral-500">Buscando seus convites...</div>
+          ) : sharedProjects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#DDD] p-6 text-center text-sm text-neutral-500">Quando alguém compartilhar um canvas com seu e-mail, ele aparecerá aqui automaticamente.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {sharedProjects.map((shared) => (
+                <article key={shared.collaborationId} className="rounded-2xl border border-[#DFDFDC] bg-[#FAFAF8] p-4 flex flex-col min-h-[230px]">
+                  <div className="flex items-start justify-between gap-3"><span className="w-10 h-10 rounded-xl bg-emerald-950 text-white flex items-center justify-center"><Users size={19}/></span><span className="text-[9px] font-mono font-bold uppercase px-2 py-1 rounded-full bg-emerald-50 text-emerald-800">{shared.permission === 'edit' ? 'Pode editar' : shared.permission === 'comment' ? 'Pode comentar' : 'Visualizar'}</span></div>
+                  <div className="mt-4 flex-1"><span className="text-[9px] font-mono uppercase text-neutral-400">de {shared.ownerName}</span><h3 className="font-bold text-lg leading-tight mt-1.5 line-clamp-2">{shared.projectName}</h3><p className="text-xs text-neutral-500 mt-2 line-clamp-3">{shared.projectProblem}</p></div>
+                  <div className="pt-3 mt-3 border-t border-[#E7E7E4] text-xs text-neutral-500 flex items-center justify-between"><span className="flex items-center gap-1.5"><Layers3 size={13}/>{shared.nodeCount} cards</span><span>{shared.activePhase}</span></div>
+                  <button onClick={() => onOpenShared(shared)} className="mt-3 w-full py-3 rounded-xl bg-emerald-950 text-white font-mono text-xs font-bold uppercase tracking-wider cursor-pointer">Abrir canvas compartilhado</button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {inviteClassroom && (
         <InviteClassroomPanel
           classroom={inviteClassroom}
