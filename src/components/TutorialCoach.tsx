@@ -27,7 +27,11 @@ const STEPS: Record<TutorialScope, TutorialStep[]> = {
     { selector: '#workspace-top-bar', title: 'Barra principal', description: 'Aqui você volta ao dashboard, abre a agenda, comentários, colaboradores e os painéis da metodologia e dos agentes.' },
     { selector: '#canvas-viewport', title: 'Canvas infinito', description: 'Organize notas, imagens, desenhos e interações. No touch, use dois dedos para aplicar zoom por pinça e navegar pelo espaço.' },
     { selector: '#canvas-actions-panel', title: 'Notas e registros', description: 'Crie notas para registrar decisões, observações, ideias e evidências diretamente no canvas.' },
-    { selector: '#canvas-actions-panel', title: 'Ateliê do Projeto', description: 'No mesmo canvas você pode inserir imagens, desenhar com precisão, transformar desenhos em animação, criar wireframes e componentes, organizar o Design System, montar formatos para mídia/impressão e inserir ou gerar vídeos.' },
+    { selector: '#canvas-actions-panel', title: 'Ateliê do Projeto', description: 'No mesmo canvas você pode inserir imagens, desenhar com precisão, transformar desenhos em animação, criar wireframes e componentes, organizar o Design System, montar formatos para mídia/impressão, vídeo, texto, som, hardware e jogos.' },
+    { selector: '[data-tour="atelier-uxwriting"]', title: 'UX Writing', description: 'Centralize todos os textos da interface, crie versões em linguagem simples, traduza para outros idiomas e prepare roteiro/glosa de apoio para produção em Libras, sempre com validação humana.' },
+    { selector: '[data-tour="atelier-sound"]', title: 'Sonoridade', description: 'Crie pequenos efeitos de feedback, teste presets, envie áudios próprios e organize os gatilhos sonoros do projeto. O som deve sempre ter alternativa visual ou textual.' },
+    { selector: '[data-tour="atelier-hardware"]', title: 'Hardware e sensores', description: 'Teste giroscópio e movimento do dispositivo, conecte microcontroladores compatíveis por Web Serial e mapeie dados físicos para comportamentos da interface.' },
+    { selector: '[data-tour="atelier-game"]', title: 'Game Design', description: 'Estruture GDD, fases, mecânicas, fluxo entre cenas, sprint de produção e um playtest simples antes de partir para implementação.' },
     { selector: '[data-tour="note-formatting"]', title: 'Formatação das notas', description: 'Ao editar uma nota, use estes controles para negrito, itálico, sublinhado, tipografia, tamanho e cor. Os botões possuem área de toque ampliada para acessibilidade.' },
     { selector: '[data-tour="workspace-phases"]', title: 'Fases 5I’s', description: 'Abra a estrutura da Metodologia 5I’s, consulte procedimentos e avance pelas cinco fases sem perder o percurso do projeto.' },
     { selector: '[data-tour="workspace-agents"]', title: 'Agentes 5I’s', description: 'Converse com os agentes especializados. Na Implementação, o DIVULGA ajuda a transformar o projeto em circulação, formatos, canais, experimentos de marketing e caminhos de monetização. O histórico das conversas fica associado ao projeto.' },
@@ -87,6 +91,16 @@ export default function TutorialCoach({ scope, userId = 'local', className = '' 
     setOpen(true);
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const body = document.body;
+    const sync = () => { if (body.classList.contains('atelier-open')) setOpen(false); };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
   const target = open && step ? document.querySelector(step.selector) as HTMLElement | null : null;
   const rect = target?.getBoundingClientRect();
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
@@ -101,12 +115,13 @@ export default function TutorialCoach({ scope, userId = 'local', className = '' 
     : Math.max(24, viewportHeight / 2 - 100);
 
   return <>
+    <style>{`body.atelier-open .tutorial-coach-launcher{display:none!important}`}</style>
     <button
       type="button"
       onClick={restart}
       aria-label="Abrir tutorial da plataforma"
       title="Tutorial"
-      className={`fixed z-[180] right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] w-11 h-11 rounded-full bg-black text-white shadow-xl border-2 border-white flex items-center justify-center cursor-pointer ${className}`}
+      className={`tutorial-coach-launcher fixed z-[180] right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] w-11 h-11 rounded-full bg-black text-white shadow-xl border-2 border-white flex items-center justify-center cursor-pointer ${className}`}
     >
       <HelpCircle size={21} />
     </button>
