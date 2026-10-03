@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections';
 
 export type DrawingElementType =
   | 'brush'
@@ -278,6 +278,21 @@ export interface VideoTimelineItem {
   caption?: string;
 }
 
+export interface VideoOverlay {
+  id: string;
+  mediaId: string;
+  kind: 'image';
+  url: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  opacity: number;
+  start: number;
+  end: number;
+  animation?: 'none' | 'fade' | 'pop' | 'float' | 'spin';
+}
+
 export interface VideoDocument {
   title: string;
   subtitle?: string;
@@ -295,6 +310,7 @@ export interface VideoDocument {
   media?: VideoMediaItem[];
   timeline?: VideoTimelineItem[];
   aiPlan?: string[];
+  overlays?: VideoOverlay[];
 }
 
 
@@ -379,6 +395,9 @@ export interface HardwareDocument {
 
 export type SpriteAnimationKind = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'custom';
 export type SpriteMotionPreset = 'none' | 'bob' | 'bounce' | 'shake' | 'pulse' | 'squash';
+export type CharacterView = 'front' | 'three-quarter' | 'side' | 'back';
+export type CharacterExpression = 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'determined';
+export type CharacterPoseKind = 'neutral' | 'wave' | 'walk' | 'run' | 'jump' | 'sit' | 'action';
 
 export interface SpriteFrame {
   id: string;
@@ -398,6 +417,56 @@ export interface SpriteAnimation {
   frames: SpriteFrame[];
 }
 
+export interface CharacterAppearance {
+  headShape: 'round' | 'oval' | 'square' | 'heart' | 'triangle' | 'wide';
+  faceShape: 'soft' | 'angular' | 'long' | 'wide';
+  eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large';
+  browStyle: 'soft' | 'straight' | 'arched' | 'bold';
+  noseStyle: 'none' | 'small' | 'straight' | 'wide';
+  mouthStyle: 'line' | 'smile' | 'full' | 'small';
+  earStyle: 'simple' | 'round' | 'pointed';
+  hairStyle: 'none' | 'short' | 'bob' | 'long' | 'curly' | 'spiky' | 'bun';
+  bodyShape: 'slim' | 'average' | 'athletic' | 'stocky' | 'chibi';
+  torsoShape: 'rectangle' | 'trapezoid' | 'round' | 'triangle';
+  armStyle: 'thin' | 'regular' | 'strong';
+  legStyle: 'short' | 'regular' | 'long';
+  handStyle: 'mitten' | 'simple' | 'defined';
+  outfitStyle: 'basic' | 'sport' | 'formal' | 'fantasy' | 'tech' | 'street';
+  accessory: 'none' | 'glasses' | 'hat' | 'scarf' | 'backpack' | 'headphones';
+  headToBodyRatio: number;
+  shoulderWidth: number;
+  limbLength: number;
+  bodyWidth: number;
+  skinColor: string;
+  hairColor: string;
+  eyeColor: string;
+  outfitPrimary: string;
+  outfitSecondary: string;
+  lineColor: string;
+}
+
+export interface CharacterProfile {
+  role: string;
+  ageBand: string;
+  personality: string;
+  motivation: string;
+  backstory: string;
+  keywords: string[];
+  silhouetteIntent: string;
+  shapeLanguageRationale: string;
+  proportionRationale: string;
+  colorRationale: string;
+  costumeRationale: string;
+}
+
+export interface CharacterPoseReference {
+  id: string;
+  name: string;
+  kind: CharacterPoseKind;
+  view?: CharacterView;
+  notes?: string;
+}
+
 export interface CharacterSpriteDocument {
   title: string;
   characterName: string;
@@ -409,6 +478,16 @@ export interface CharacterSpriteDocument {
   animations: SpriteAnimation[];
   activeAnimationId?: string;
   palette?: string[];
+  appearance?: CharacterAppearance;
+  profile?: CharacterProfile;
+  prompt?: string;
+  generatedSvg?: string;
+  generatedNotes?: string[];
+  poses?: CharacterPoseReference[];
+  expressions?: CharacterExpression[];
+  activeView?: CharacterView;
+  activeExpression?: CharacterExpression;
+  activePose?: CharacterPoseKind;
   updatedAt?: string;
 }
 
@@ -475,6 +554,36 @@ export interface GameDesignDocument {
   updatedAt?: string;
 }
 
+export type ApiCostModel = 'no-key' | 'free-tier' | 'open-self-hosted';
+export type ApiConnectionStatus = 'available' | 'configured' | 'needs-config' | 'error';
+
+export interface ApiConnectionItem {
+  id: string;
+  catalogId?: string;
+  name: string;
+  category: string;
+  summary: string;
+  costModel: ApiCostModel;
+  auth: string;
+  docsUrl: string;
+  envVars: string[];
+  capabilities: string[];
+  status: ApiConnectionStatus;
+  notes?: string;
+  customSpec?: {
+    endpoints: Array<{ method: string; path: string; purpose: string }>;
+    code?: string;
+    fileName?: string;
+  };
+}
+
+export interface ApiConnectionsDocument {
+  title: string;
+  connections: ApiConnectionItem[];
+  builderPrompt?: string;
+  updatedAt?: string;
+}
+
 export interface NodeComment {
   id: string;
   authorId: string;
@@ -529,6 +638,8 @@ export interface ThoughtNode {
   spriteName?: string;
   gameDesign?: GameDesignDocument;
   gameDesignName?: string;
+  apiConnections?: ApiConnectionsDocument;
+  apiConnectionsName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
