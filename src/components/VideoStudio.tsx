@@ -1,202 +1,39 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink, Film, Loader2, Play, Save, Upload, WandSparkles, X } from 'lucide-react';
-import { DesignSystemDocument, VideoDocument, VideoFormatPreset } from '../types';
+import { ArrowDown, ArrowUp, Download, ExternalLink, Film, Image as ImageIcon, Loader2, Plus, Play, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
+import { DesignSystemDocument, VideoDocument, VideoFormatPreset, VideoMediaItem, VideoTimelineItem, VideoTransition } from '../types';
+import VoiceDictationButton from './VoiceDictationButton';
 import { ensureTursoSession } from '../lib/turso';
 
-interface VideoStudioProps {
-  document: VideoDocument;
-  designSystem?: DesignSystemDocument;
-  title?: string;
-  canEdit?: boolean;
-  onSave: (document: VideoDocument) => void;
-  onClose: () => void;
+interface Props{document:VideoDocument;designSystem?:DesignSystemDocument;title?:string;canEdit?:boolean;availableMedia?:VideoMediaItem[];onSave:(document:VideoDocument)=>void;onClose:()=>void;}
+const FORMATS:Array<{id:VideoFormatPreset;label:string;hint:string;width:number;height:number}>=[{id:'reel',label:'Reels / Shorts',hint:'Instagram · YouTube',width:1080,height:1920},{id:'tiktok',label:'TikTok',hint:'vertical 9:16',width:1080,height:1920},{id:'story',label:'Stories',hint:'Instagram · Facebook · Snapchat',width:1080,height:1920},{id:'feed',label:'Feed 4:5',hint:'Instagram · LinkedIn',width:1080,height:1350},{id:'square',label:'Quadrado',hint:'cards sociais',width:1080,height:1080},{id:'youtube',label:'YouTube',hint:'horizontal 16:9',width:1920,height:1080},{id:'facebook',label:'Facebook',hint:'landscape',width:1200,height:630},{id:'linkedin',label:'LinkedIn',hint:'post visual',width:1200,height:1200}];
+const id=(p:string)=>`${p}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+export const blankVideo=(ds?:DesignSystemDocument):VideoDocument=>({title:'Vídeo do projeto',subtitle:'Uma ideia pode ganhar tempo, movimento e circulação.',format:'reel',width:1080,height:1920,duration:6,background:ds?.colors.find(x=>x.role==='brand')?.value||'#111111',accent:ds?.colors.find(x=>x.role==='accent')?.value||'#FF13F0',textColor:ds?.colors.find(x=>x.role==='text')?.value==='#111111'?'#FFFFFF':ds?.colors.find(x=>x.role==='text')?.value||'#FFFFFF',prompt:'',media:[],timeline:[],aiPlan:[]});
+const normalizeHex=(v:string,f='#000000')=>{const c=String(v||'').trim().replace(/^#/,'').toUpperCase();if(/^[0-9A-F]{3}$/.test(c))return `#${c.split('').map(x=>x+x).join('')}`;if(/^[0-9A-F]{6}$/.test(c))return `#${c}`;return f;};
+function HexField({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){const safe=normalizeHex(value);return <label className="text-[9px] font-mono text-neutral-500">{label}<div className="mt-1 flex gap-2"><input type="color" value={safe} onChange={e=>onChange(e.target.value.toUpperCase())} className="h-11 w-12 rounded-lg border p-1 bg-white"/><input value={value} onChange={e=>onChange(e.target.value)} onBlur={e=>onChange(normalizeHex(e.target.value,safe))} className="h-11 min-w-0 flex-1 rounded-xl border border-black/10 px-3 font-mono text-xs uppercase" placeholder="#FF13F0"/></div></label>}
+const safeScale=(w:number,h:number)=>Math.min(520/w,620/h,1);
+
+export function VideoPreview({document,className=''}:{document:VideoDocument;className?:string}){const first=document.timeline?.[0];const url=first?.url||document.generatedUrl||document.sourceUrl;if(url&&first?.kind==='image')return <div className={`relative bg-black overflow-hidden ${className}`}><img src={url} className="w-full h-full object-cover"/><div className="absolute inset-x-0 bottom-0 p-4 text-white bg-gradient-to-t from-black/70"><b>{document.title}</b><div className="text-xs opacity-70">{document.subtitle}</div></div></div>;if(url)return <video src={url} controls playsInline className={`bg-black object-contain ${className}`}/>;return <div className={`flex items-center justify-center p-4 ${className}`} style={{background:normalizeHex(document.background,'#111111'),color:normalizeHex(document.textColor||'#FFFFFF','#FFFFFF')}}><div className="text-center max-w-[85%]"><div className="text-xl font-bold">{document.title}</div><div className="mt-2 text-xs opacity-70">{document.subtitle}</div><div className="mt-4 h-1 w-16 mx-auto rounded-full" style={{background:document.accent}}/></div></div>}
+
+export default function VideoStudio({document,designSystem,title='Vídeo',canEdit=true,availableMedia=[],onSave,onClose}:Props){
+ const initial=JSON.parse(JSON.stringify(document)) as VideoDocument;initial.media||=[];initial.timeline||=[];initial.aiPlan||=[];
+ const [draft,setDraft]=useState(initial);const [library,setLibrary]=useState<VideoMediaItem[]>(()=>{const map=new Map<string,VideoMediaItem>();[...availableMedia,...(initial.media||[])].forEach(m=>m?.url&&map.set(m.url,m));if(initial.sourceUrl&&!map.has(initial.sourceUrl))map.set(initial.sourceUrl,{id:id('media'),kind:'video',url:initial.sourceUrl,name:initial.sourceName||'Vídeo existente',source:'project',duration:4});return [...map.values()]});const [isUploading,setIsUploading]=useState(false);const [isGenerating,setIsGenerating]=useState(false);const [isPlanning,setIsPlanning]=useState(false);const [error,setError]=useState('');const fileRef=useRef<HTMLInputElement>(null);const canvasRef=useRef<HTMLCanvasElement>(null);const scale=useMemo(()=>safeScale(draft.width,draft.height),[draft.width,draft.height]);const totalDuration=Math.max(1,(draft.timeline||[]).reduce((s,x)=>s+(Number(x.duration)||0),0)||draft.duration);
+ const uploadBlob=async(blob:Blob,name:string)=>{const s=await ensureTursoSession();const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':blob.type||'application/octet-stream','X-File-Name':encodeURIComponent(name),...(s?.token?{Authorization:`Bearer ${s.token}`}:{})},body:blob});const d=await r.json().catch(()=>({}));if(!r.ok||!d.url)throw new Error(d.error||'Não foi possível salvar a mídia.');return d.url as string};
+ const uploadMedia=async(file:File)=>{if(!file.type.startsWith('video/')&&!file.type.startsWith('image/'))return setError('Escolha uma imagem ou vídeo.');setIsUploading(true);setError('');try{const url=await uploadBlob(file,file.name);const m:VideoMediaItem={id:id('media'),kind:file.type.startsWith('video/')?'video':'image',url,name:file.name,source:'upload',duration:file.type.startsWith('image/')?2.5:4};setLibrary(x=>[m,...x]);setDraft(d=>({...d,media:[m,...(d.media||[])]}))}catch(e:any){setError(e.message||'Falha no upload')}finally{setIsUploading(false);if(fileRef.current)fileRef.current.value=''}};
+ const addToTimeline=(m:VideoMediaItem)=>{const t:VideoTimelineItem={id:id('clip'),mediaId:m.id,kind:m.kind,url:m.url,name:m.name,duration:m.duration|| (m.kind==='image'?2.5:4),transition:'fade',fit:'cover'};setDraft(d=>({...d,timeline:[...(d.timeline||[]),t],duration:Math.ceil((d.timeline||[]).reduce((s,x)=>s+x.duration,0)+t.duration)}))};
+ const patchClip=(cid:string,p:Partial<VideoTimelineItem>)=>setDraft(d=>({...d,timeline:(d.timeline||[]).map(x=>x.id===cid?{...x,...p}:x)}));
+ const moveClip=(cid:string,dir:-1|1)=>setDraft(d=>{const a=[...(d.timeline||[])],i=a.findIndex(x=>x.id===cid),j=i+dir;if(i<0||j<0||j>=a.length)return d;[a[i],a[j]]=[a[j],a[i]];return {...d,timeline:a}});
+ const chooseFormat=(fid:VideoFormatPreset)=>{const f=FORMATS.find(x=>x.id===fid);if(f)setDraft(d=>({...d,format:fid,width:f.width,height:f.height}))};
+ const askAI=async()=>{if(!draft.prompt?.trim())return setError('Escreva o que deseja montar no vídeo.');setIsPlanning(true);setError('');try{const s=await ensureTursoSession().catch(()=>null);const r=await fetch('/api/mediators/think',{method:'POST',headers:{'Content-Type':'application/json',...(s?.token?{Authorization:`Bearer ${s.token}`}:{})},body:JSON.stringify({mode:'video-compose',prompt:draft.prompt,video:{title:draft.title,subtitle:draft.subtitle,format:draft.format,width:draft.width,height:draft.height,media:library.map(m=>({id:m.id,name:m.name,kind:m.kind,url:m.url}))},project:{name:title}})});const d=await r.json().catch(()=>({}));if(!r.ok||!d.videoPlan)throw new Error(d.error||'A IA não conseguiu montar o plano.');const plan=d.videoPlan;const timeline:VideoTimelineItem[]=(plan.timeline||[]).map((p:any)=>{const m=library.find(x=>x.id===p.mediaId)||library.find(x=>x.name===p.name);return m?{id:id('clip'),mediaId:m.id,kind:m.kind,url:m.url,name:m.name,duration:Math.max(.5,Math.min(12,Number(p.duration)||2.5)),transition:['cut','fade','slide','zoom'].includes(p.transition)?p.transition:'fade',fit:p.fit==='contain'?'contain':'cover',caption:String(p.caption||'')}:null}).filter(Boolean);setDraft(cur=>{const fmt=FORMATS.find(f=>f.id===(plan.format||cur.format));return {...cur,title:plan.title||cur.title,subtitle:plan.subtitle||cur.subtitle,format:plan.format||cur.format,width:fmt?.width||cur.width,height:fmt?.height||cur.height,timeline:timeline.length?timeline:cur.timeline,aiPlan:Array.isArray(plan.notes)?plan.notes:[],duration:timeline.length?Math.ceil(timeline.reduce((s,x)=>s+x.duration,0)):cur.duration}})}catch(e:any){setError(e.message||'Falha na IA de vídeo')}finally{setIsPlanning(false)}};
+ const generate=async()=>{const canvas=canvasRef.current;if(!canvas||typeof MediaRecorder==='undefined'||!(canvas as any).captureStream)return setError('Este navegador não oferece geração local WebM.');setIsGenerating(true);setError('');try{const outW=draft.width>=draft.height?960:540,outH=Math.round(outW*draft.height/draft.width);canvas.width=outW;canvas.height=outH;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas indisponível');const timeline=(draft.timeline||[]);const assets=new Map<string,HTMLImageElement|HTMLVideoElement>();for(const clip of timeline){try{if(clip.kind==='image'){const img=new Image();img.crossOrigin='anonymous';img.src=clip.url;await new Promise((res,rej)=>{img.onload=res;img.onerror=rej});assets.set(clip.id,img)}else{const v=window.document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.playsInline=true;v.src=clip.url;await new Promise((res,rej)=>{v.onloadeddata=res;v.onerror=rej});assets.set(clip.id,v)}}catch{}}
+ const stream=(canvas as any).captureStream(30);const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:2_500_000});const chunks:BlobPart[]=[];recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);const stopped=new Promise<void>((res,rej)=>{recorder.onstop=()=>res();recorder.onerror=()=>rej(new Error('Falha ao gravar'))});recorder.start(250);const duration=Math.max(2,Math.min(30,totalDuration));const start=performance.now();let activeVideo:HTMLVideoElement|null=null;const draw=(now:number)=>{const sec=(now-start)/1000,t=Math.min(1,sec/duration);ctx.fillStyle=normalizeHex(draft.background,'#111111');ctx.fillRect(0,0,outW,outH);let cursor=0,clip=timeline[0],local=sec;for(const c of timeline){if(sec<cursor+c.duration){clip=c;local=sec-cursor;break}cursor+=c.duration}if(clip){const el=assets.get(clip.id);if(el){try{const sw=(el as any).videoWidth||(el as HTMLImageElement).naturalWidth||outW,sh=(el as any).videoHeight||(el as HTMLImageElement).naturalHeight||outH;const cover=clip.fit!=='contain';const ratio=cover?Math.max(outW/sw,outH/sh):Math.min(outW/sw,outH/sh);const dw=sw*ratio,dh=sh*ratio,dx=(outW-dw)/2,dy=(outH-dh)/2;if(el instanceof HTMLVideoElement){if(activeVideo!==el){activeVideo?.pause();activeVideo=el;el.currentTime=Math.min(local,Math.max(0,(el.duration||local)-.05));void el.play().catch(()=>{})}}ctx.drawImage(el,dx,dy,dw,dh)}catch{}}}
+ const alpha=Math.min(1,sec/.3,(duration-sec)/.3);ctx.globalAlpha=Math.max(0,alpha);ctx.fillStyle=normalizeHex(draft.textColor||'#FFFFFF','#FFFFFF');ctx.textAlign='center';ctx.font=`700 ${Math.round(outW*.065)}px ${designSystem?.fontFamilies?.display||designSystem?.primaryFont||'Arial'}`;wrapText(ctx,draft.title,outW/2,outH*.13,outW*.82,outW*.075);if(clip?.caption){ctx.font=`500 ${Math.round(outW*.032)}px ${designSystem?.fontFamilies?.text||'Arial'}`;wrapText(ctx,clip.caption,outW/2,outH*.88,outW*.82,outW*.04)}ctx.globalAlpha=1;if(t<1)requestAnimationFrame(draw);else{activeVideo?.pause();recorder.stop()}};requestAnimationFrame(draw);await stopped;const blob=new Blob(chunks,{type:'video/webm'});const url=await uploadBlob(blob,`video-atelie-${Date.now()}.webm`);setDraft(d=>({...d,generatedUrl:url,sourceName:'composição gerada no Ateliê'}))}catch(e:any){setError(e.message||'Não foi possível gerar a composição')}finally{setIsGenerating(false)}};
+ const preview=draft.timeline?.[0];
+ return <div className="fixed inset-0 z-[125] bg-[#EEEDE9] flex flex-col canvas-control atelier-studio" onPointerDown={e=>e.stopPropagation()}><header className="shrink-0 min-h-16 bg-white border-b px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}><button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={19}/></button><div className="min-w-0 flex-1"><b className="block truncate">{title}</b><div className="text-[10px] font-mono text-neutral-500 uppercase">mídia do projeto · timeline · IA · motion · publicação</div></div><button onClick={()=>onSave({...draft,media:library})} className="h-11 px-4 rounded-xl bg-black text-white text-xs font-bold flex gap-2 items-center"><Save size={15}/> SALVAR</button></header>
+ <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[450px_minmax(0,1fr)] overflow-y-auto xl:overflow-hidden"><section className="bg-white border-r p-4 space-y-5 xl:overflow-y-auto"><div><div className="text-[9px] font-mono font-bold text-neutral-500">FORMATO</div><div className="mt-2 flex gap-2 overflow-x-auto">{FORMATS.map(f=><button key={f.id} onClick={()=>chooseFormat(f.id)} className={`shrink-0 w-32 rounded-xl border p-2 text-left ${draft.format===f.id?'bg-black text-white':'border-black/10'}`}><b className="text-[10px]">{f.label}</b><div className="text-[8px] opacity-60">{f.width}×{f.height}</div></button>)}</div></div>
+ <div className="rounded-2xl border p-4"><div className="font-bold text-sm">Mídia do projeto</div><div className="text-[10px] text-neutral-500 mt-1">Escolha exatamente quais imagens e vídeos entram. Você pode usar itens já existentes no canvas ou subir novos.</div><input ref={fileRef} type="file" accept="image/*,video/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)void uploadMedia(f)}}/><button onClick={()=>fileRef.current?.click()} className="mt-3 h-10 w-full rounded-xl border border-black flex items-center justify-center gap-2 text-[9px] font-bold">{isUploading?<Loader2 className="animate-spin" size={14}/>:<Upload size={14}/>} IMAGEM OU VÍDEO</button><div className="mt-3 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">{library.map(m=><div key={m.id} className="rounded-xl border overflow-hidden"><div className="aspect-video bg-neutral-100 flex items-center justify-center overflow-hidden">{m.kind==='image'?<img src={m.url} className="w-full h-full object-cover"/>:<video src={m.url} className="w-full h-full object-cover" muted/>}</div><div className="p-2"><div className="text-[9px] font-bold truncate">{m.name}</div><button onClick={()=>addToTimeline(m)} className="mt-1 h-8 w-full rounded-lg bg-black text-white text-[8px] font-bold flex items-center justify-center gap-1"><Plus size={11}/> USAR NO VÍDEO</button></div></div>)}</div></div>
+ <div className="rounded-2xl border p-4"><div className="font-bold text-sm">Timeline / cenas</div><div className="text-[10px] text-neutral-500">Arraste conceitualmente pela ordem usando ↑ ↓. Cada item tem duração, transição e legenda.</div><div className="mt-3 space-y-2">{(draft.timeline||[]).map((c,i)=><div key={c.id} className="rounded-xl border p-2"><div className="flex gap-2 items-center"><span className="text-[9px] font-mono w-5">{i+1}</span><div className="h-12 w-16 rounded-lg overflow-hidden bg-neutral-100">{c.kind==='image'?<img src={c.url} className="w-full h-full object-cover"/>:<video src={c.url} className="w-full h-full object-cover" muted/>}</div><div className="min-w-0 flex-1"><b className="text-[9px] truncate block">{c.name}</b><div className="mt-1 flex gap-1"><input type="number" min="0.5" step="0.5" value={c.duration} onChange={e=>patchClip(c.id,{duration:+e.target.value})} className="h-8 w-16 border rounded px-1 text-[9px]"/><select value={c.transition||'fade'} onChange={e=>patchClip(c.id,{transition:e.target.value as VideoTransition})} className="h-8 min-w-0 flex-1 border rounded text-[8px]"><option value="cut">Corte</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="zoom">Zoom</option></select></div></div><div className="flex flex-col gap-1"><button onClick={()=>moveClip(c.id,-1)}><ArrowUp size={13}/></button><button onClick={()=>moveClip(c.id,1)}><ArrowDown size={13}/></button><button onClick={()=>setDraft(d=>({...d,timeline:(d.timeline||[]).filter(x=>x.id!==c.id)}))} className="text-red-600"><Trash2 size={13}/></button></div></div><input value={c.caption||''} onChange={e=>patchClip(c.id,{caption:e.target.value})} placeholder="Legenda / texto desta cena" className="mt-2 h-8 w-full rounded-lg border px-2 text-[9px]"/></div>)}{!(draft.timeline||[]).length&&<div className="rounded-xl border border-dashed p-4 text-center text-[10px] text-neutral-400">Adicione mídia acima para começar.</div>}</div></div>
+ <div className="rounded-2xl border-2 border-black p-4"><div className="font-bold flex items-center gap-2"><Sparkles size={15}/> Montar com IA</div><div className="mt-1 text-[10px] text-neutral-500">A IA usa a mídia que você disponibilizou e devolve uma seleção/ordem editável. Ela não escolhe arquivos escondidos do projeto.</div><div className="mt-2 flex gap-2 items-start"><textarea value={draft.prompt||''} onChange={e=>setDraft({...draft,prompt:e.target.value})} placeholder="Ex.: use as fotos do protótipo, comece pela tela inicial, depois mostre o teste com usuários; vídeo vertical de 12 s, ritmo rápido..." className="min-h-24 min-w-0 flex-1 rounded-xl border p-3 text-sm"/><VoiceDictationButton onText={t=>setDraft(d=>({...d,prompt:`${d.prompt||''}${d.prompt&&!d.prompt.endsWith(' ')?' ':''}${t}`}))}/></div><button onClick={()=>void askAI()} disabled={isPlanning} className="mt-2 h-11 w-full rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-2">{isPlanning?<Loader2 size={14} className="animate-spin"/>:<WandSparkles size={14}/>} GERAR ROTEIRO + TIMELINE</button>{draft.aiPlan?.map((n,i)=><div key={i} className="mt-1 text-[9px] text-neutral-600">• {n}</div>)}</div>
+ <div className="rounded-2xl border p-4 space-y-3"><b className="text-sm">Visual do vídeo</b><label className="block text-[9px] font-mono">TÍTULO<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})} className="mt-1 h-10 w-full border rounded-lg px-2"/></label><label className="block text-[9px] font-mono">SUBTÍTULO<textarea value={draft.subtitle||''} onChange={e=>setDraft({...draft,subtitle:e.target.value})} className="mt-1 min-h-16 w-full border rounded-lg p-2"/></label><div className="grid sm:grid-cols-2 gap-2"><HexField label="FUNDO · HEX" value={draft.background} onChange={v=>setDraft({...draft,background:v})}/><HexField label="DESTAQUE · HEX" value={draft.accent} onChange={v=>setDraft({...draft,accent:v})}/><HexField label="TEXTO · HEX" value={draft.textColor||'#FFFFFF'} onChange={v=>setDraft({...draft,textColor:v})}/></div><button onClick={()=>void generate()} disabled={isGenerating} className="h-12 w-full rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[10px] font-bold">{isGenerating?<Loader2 size={15} className="animate-spin"/>:<Play size={15}/>} GERAR COMPOSIÇÃO WEBM</button>{draft.generatedUrl&&<a href={draft.generatedUrl} target="_blank" rel="noreferrer" className="h-10 w-full rounded-xl border flex items-center justify-center gap-2 text-[9px] font-mono"><Download size={13}/> ABRIR / BAIXAR</a>}</div>{error&&<div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div>}</section>
+ <section className="min-h-[55vh] xl:min-h-0 overflow-auto p-4 sm:p-7 flex flex-col items-center justify-start gap-4"><div className="text-[9px] font-mono text-neutral-500">PRÉVIA · {draft.width}×{draft.height} · {totalDuration.toFixed(1)}s</div><div className="overflow-hidden rounded-2xl border shadow-2xl bg-black" style={{width:draft.width*scale,height:draft.height*scale,maxWidth:'92vw'}}><VideoPreview document={draft} className="w-full h-full"/></div>{preview&&<div className="text-[10px] text-neutral-500">Cena inicial: <b>{preview.name}</b></div>}{draft.generatedUrl&&<a href={draft.generatedUrl} target="_blank" rel="noreferrer" className="h-10 px-3 rounded-xl bg-white border flex items-center gap-2 text-[10px] font-mono"><ExternalLink size={14}/> ABRIR VÍDEO GERADO</a>}<canvas ref={canvasRef} className="hidden"/></section></main></div>
 }
-
-const FORMATS: Array<{ id: VideoFormatPreset; label: string; hint: string; width: number; height: number }> = [
-  { id: 'reel', label: 'Reels / Shorts', hint: 'Instagram · YouTube', width: 1080, height: 1920 },
-  { id: 'tiktok', label: 'TikTok', hint: 'vertical 9:16', width: 1080, height: 1920 },
-  { id: 'story', label: 'Stories', hint: 'Instagram · Facebook · Snapchat', width: 1080, height: 1920 },
-  { id: 'feed', label: 'Feed 4:5', hint: 'Instagram · LinkedIn', width: 1080, height: 1350 },
-  { id: 'square', label: 'Quadrado', hint: 'cards sociais', width: 1080, height: 1080 },
-  { id: 'youtube', label: 'YouTube', hint: 'horizontal 16:9', width: 1920, height: 1080 },
-  { id: 'facebook', label: 'Facebook', hint: 'landscape', width: 1200, height: 630 },
-  { id: 'linkedin', label: 'LinkedIn', hint: 'post visual', width: 1200, height: 1200 },
-];
-
-export const blankVideo = (designSystem?: DesignSystemDocument): VideoDocument => ({
-  title: 'Vídeo do projeto',
-  subtitle: 'Uma ideia pode ganhar tempo, movimento e circulação.',
-  format: 'reel',
-  width: 1080,
-  height: 1920,
-  duration: 6,
-  background: designSystem?.colors.find((item)=>item.role==='brand')?.value || '#111111',
-  accent: designSystem?.colors.find((item)=>item.role==='accent')?.value || '#FF13F0',
-  textColor: designSystem?.colors.find((item)=>item.role==='text')?.value || '#FFFFFF',
-  prompt: '',
-});
-
-const safeScale = (width: number, height: number, maxW = 520, maxH = 620) => Math.min(maxW / width, maxH / height, 1);
-
-export function VideoPreview({ document, className = '' }: { document: VideoDocument; className?: string }) {
-  const url = document.generatedUrl || document.sourceUrl;
-  if (url) return <video src={url} controls playsInline className={`bg-black object-contain ${className}`} />;
-  return (
-    <div className={`flex items-center justify-center p-4 ${className}`} style={{background:normalizeHex(document.background, '#111111'),color:normalizeHex(document.textColor || '#FFFFFF', '#FFFFFF')}}>
-      <div className="text-center max-w-[85%]"><div className="text-xl font-bold">{document.title}</div><div className="mt-2 text-xs opacity-70">{document.subtitle}</div><div className="mt-4 h-1 w-16 mx-auto rounded-full" style={{background:document.accent}}/></div>
-    </div>
-  );
-}
-
-
-const normalizeHex = (value: string, fallback: string) => {
-  const clean = String(value || '').trim().replace(/^#/, '').toUpperCase();
-  if (/^[0-9A-F]{3}$/.test(clean)) return `#${clean.split('').map((c)=>c+c).join('')}`;
-  if (/^[0-9A-F]{6}$/.test(clean)) return `#${clean}`;
-  return fallback;
-};
-
-function HexColorField({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
-  const safe = normalizeHex(value, '#000000');
-  return <label className="text-[9px] font-mono text-neutral-500 block">
-    {label}
-    <div className="mt-1 flex items-center gap-2">
-      <input type="color" value={safe} disabled={disabled} onChange={(e)=>onChange(e.target.value.toUpperCase())} className="h-11 w-12 shrink-0 rounded-lg border border-black/10 bg-white p-1"/>
-      <input
-        value={value}
-        disabled={disabled}
-        onChange={(e)=>onChange(e.target.value)}
-        onBlur={(e)=>onChange(normalizeHex(e.target.value, safe))}
-        placeholder="#FF13F0"
-        className="h-11 min-w-0 flex-1 rounded-xl border border-black/10 px-3 text-xs font-mono uppercase text-black"
-        inputMode="text"
-        spellCheck={false}
-      />
-    </div>
-  </label>;
-}
-
-export default function VideoStudio({ document, designSystem, title = 'Vídeo', canEdit = true, onSave, onClose }: VideoStudioProps) {
-  const [draft, setDraft] = useState<VideoDocument>(()=>JSON.parse(JSON.stringify(document)));
-  const [isUploading, setIsUploading] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const previewScale = useMemo(()=>safeScale(draft.width,draft.height),[draft.width,draft.height]);
-
-  const chooseFormat = (id: VideoFormatPreset) => {
-    const format = FORMATS.find((item)=>item.id===id);
-    if (!format) return;
-    setDraft((current)=>({...current,format:id,width:format.width,height:format.height}));
-  };
-
-  const uploadBlob = async (blob: Blob, name: string) => {
-    const session = await ensureTursoSession();
-    const response = await fetch('/api/upload', { method:'POST', headers:{ 'Content-Type':blob.type || 'video/webm','X-File-Name':encodeURIComponent(name), ...(session?.token?{Authorization:`Bearer ${session.token}`}:{}) }, body:blob });
-    const data = await response.json().catch(()=>({}));
-    if (!response.ok || !data.url) throw new Error(data.error || 'Não foi possível salvar o vídeo.');
-    return data.url as string;
-  };
-
-  const uploadVideo = async (file: File) => {
-    if (!canEdit) return;
-    if (!file.type.startsWith('video/')) { setError('Escolha um arquivo de vídeo.'); return; }
-    setIsUploading(true); setError('');
-    try {
-      const url = await uploadBlob(file, file.name);
-      setDraft((current)=>({...current,sourceUrl:url,sourceName:file.name,generatedUrl:undefined}));
-    } catch (err:any) { setError(err?.message || 'Falha no upload.'); }
-    finally { setIsUploading(false); if(fileRef.current) fileRef.current.value=''; }
-  };
-
-  const generateMotionVideo = async () => {
-    if (!canEdit) return;
-    const canvas = canvasRef.current;
-    if (!canvas || typeof MediaRecorder === 'undefined' || !(canvas as any).captureStream) {
-      setError('Este navegador não oferece geração local de vídeo WebM. Tente Chrome/Edge desktop ou Android atualizado.');
-      return;
-    }
-    setIsGenerating(true); setError('');
-    try {
-      const outW = draft.width >= draft.height ? 960 : 540;
-      const outH = Math.round(outW * draft.height / draft.width);
-      canvas.width = outW; canvas.height = outH;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas de vídeo indisponível.');
-      const stream = (canvas as any).captureStream(30);
-      const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
-      const recorder = new MediaRecorder(stream, { mimeType:mime, videoBitsPerSecond:2_500_000 });
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (event)=>{ if(event.data.size) chunks.push(event.data); };
-      const stopped = new Promise<void>((resolve,reject)=>{ recorder.onstop=()=>resolve(); recorder.onerror=()=>reject(new Error('Falha ao gravar o motion.')); });
-      recorder.start(250);
-      const durationMs = Math.max(2,Math.min(12,draft.duration || 6))*1000;
-      const started = performance.now();
-      const family = designSystem?.primaryFont || 'Inter';
-      const draw = (now:number) => {
-        const t = Math.min(1,(now-started)/durationMs);
-        ctx.fillStyle=normalizeHex(draft.background, '#111111'); ctx.fillRect(0,0,outW,outH);
-        const pulse = 0.5 + 0.5*Math.sin(t*Math.PI*4);
-        const cx=outW*.5, cy=outH*.52;
-        for(let i=0;i<18;i++){
-          const angle=(Math.PI*2*i/18)+t*Math.PI*.8;
-          const radius=Math.min(outW,outH)*(.18+.055*Math.sin(t*Math.PI*2+i));
-          const x=cx+Math.cos(angle)*radius, y=cy+Math.sin(angle)*radius;
-          ctx.globalAlpha=.12+.18*pulse; ctx.fillStyle=normalizeHex(draft.accent, '#FF13F0'); ctx.beginPath(); ctx.arc(x,y,6+(i%3)*4,0,Math.PI*2); ctx.fill();
-        }
-        ctx.globalAlpha=1;
-        const enter=Math.min(1,t/.22); const exit=Math.min(1,(1-t)/.16); const alpha=Math.min(enter,exit);
-        ctx.globalAlpha=alpha; ctx.fillStyle=normalizeHex(draft.textColor || '#FFFFFF', '#FFFFFF'); ctx.textAlign='center';
-        ctx.font=`700 ${Math.round(outW*.075)}px ${family}, Arial, sans-serif`; wrapText(ctx,draft.title,cx,cy-outH*.05,outW*.78,outW*.085);
-        ctx.font=`400 ${Math.round(outW*.032)}px ${family}, Arial, sans-serif`; ctx.globalAlpha=alpha*.75; wrapText(ctx,draft.subtitle||'',cx,cy+outH*.10,outW*.72,outW*.045);
-        ctx.globalAlpha=1; ctx.fillStyle=normalizeHex(draft.accent, '#FF13F0'); ctx.fillRect(cx-outW*.12,cy+outH*.18,outW*.24,Math.max(5,outH*.004));
-        if(t<1) requestAnimationFrame(draw); else recorder.stop();
-      };
-      requestAnimationFrame(draw);
-      await stopped;
-      const blob = new Blob(chunks,{type:'video/webm'});
-      const url = await uploadBlob(blob,`motion-${Date.now()}.webm`);
-      setDraft((current)=>({...current,generatedUrl:url,sourceName:'motion gerado no Ateliê'}));
-    } catch (err:any) { setError(err?.message || 'Não foi possível gerar o vídeo.'); }
-    finally { setIsGenerating(false); }
-  };
-
-  const downloadGenerated = () => {
-    const url = draft.generatedUrl || draft.sourceUrl;
-    if (!url) return;
-    const a=window.document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; a.download='video-5is.webm'; window.document.body.appendChild(a); a.click(); a.remove();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[125] bg-[#EEEDE9] flex flex-col canvas-control" onPointerDown={(event)=>event.stopPropagation()}>
-      <header className="shrink-0 min-h-16 bg-white border-b border-black/10 px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}>
-        <button type="button" onClick={onClose} className="h-11 w-11 rounded-xl hover:bg-black/5 flex items-center justify-center" aria-label="Fechar Vídeo"><X size={19}/></button>
-        <div className="min-w-0 flex-1"><div className="font-bold truncate">{title}</div><div className="text-[10px] font-mono text-neutral-500 uppercase">vídeo · motion · formatos sociais · publicação</div></div>
-        <button type="button" disabled={!canEdit} onClick={()=>onSave(draft)} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15}/> SALVAR</button>
-      </header>
-      <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[420px_minmax(0,1fr)]">
-        <section className="min-h-0 overflow-y-auto bg-white border-b xl:border-b-0 xl:border-r border-black/10 p-4 sm:p-5 space-y-5">
-          <div><div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Formato de saída</div><div className="mt-2 grid grid-cols-2 gap-2">{FORMATS.map((format)=><button key={format.id} type="button" onClick={()=>chooseFormat(format.id)} className={`rounded-xl border p-3 text-left ${draft.format===format.id?'bg-black text-white border-black':'border-black/10'}`}><div className="text-[11px] font-bold">{format.label}</div><div className={`text-[9px] mt-1 ${draft.format===format.id?'text-white/60':'text-neutral-400'}`}>{format.hint} · {format.width}×{format.height}</div></button>)}</div></div>
-          <div className="rounded-2xl border border-black/10 p-4 space-y-3"><div className="text-sm font-bold">Conteúdo do motion</div><label className="block text-[9px] font-mono text-neutral-500">TÍTULO<input value={draft.title} onChange={(e)=>setDraft({...draft,title:e.target.value})} className="mt-1 h-11 w-full rounded-xl border border-black/10 px-3 text-black"/></label><label className="block text-[9px] font-mono text-neutral-500">SUBTÍTULO<textarea value={draft.subtitle||''} onChange={(e)=>setDraft({...draft,subtitle:e.target.value})} className="mt-1 min-h-20 w-full rounded-xl border border-black/10 p-3 text-black"/></label><div className="grid grid-cols-1 sm:grid-cols-2 gap-2"><HexColorField label="FUNDO · HEX" value={draft.background} disabled={!canEdit} onChange={(value)=>setDraft({...draft,background:value})}/><HexColorField label="DESTAQUE · HEX" value={draft.accent} disabled={!canEdit} onChange={(value)=>setDraft({...draft,accent:value})}/><HexColorField label="TEXTO · HEX" value={draft.textColor || '#FFFFFF'} disabled={!canEdit} onChange={(value)=>setDraft({...draft,textColor:value})}/></div><label className="block text-[9px] font-mono text-neutral-500">DURAÇÃO · {draft.duration}s<input type="range" min={2} max={12} value={draft.duration} onChange={(e)=>setDraft({...draft,duration:Number(e.target.value)})} className="mt-1 w-full h-8"/></label></div>
-          <div className="rounded-2xl border border-black/10 p-4"><div className="text-sm font-bold flex items-center gap-2"><Film size={16}/> Inserir vídeo existente</div><input ref={fileRef} type="file" accept="video/*" className="hidden" onChange={(e)=>{const f=e.target.files?.[0];if(f)void uploadVideo(f)}}/><button type="button" disabled={isUploading} onClick={()=>fileRef.current?.click()} className="mt-3 w-full h-11 rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono font-bold disabled:opacity-50">{isUploading?<Loader2 size={15} className="animate-spin"/>:<Upload size={15}/>} UPLOAD</button><div className="mt-2 text-[9px] text-neutral-500">Uploads grandes podem depender do limite do provedor. Para vídeos pesados, use uma URL pública e deixe o projeto referenciá-la.</div><input value={draft.sourceUrl||''} onChange={(e)=>setDraft({...draft,sourceUrl:e.target.value})} placeholder="https://.../video.mp4" className="mt-3 h-10 w-full rounded-xl border border-black/10 px-3 text-xs"/></div>
-          <div className="rounded-2xl border-2 border-black p-4"><div className="text-sm font-bold flex items-center gap-2"><WandSparkles size={16}/> Gerar motion dentro do Ateliê</div><div className="mt-1 text-[10px] leading-relaxed text-neutral-500">Gera localmente um vídeo WebM curto com o formato, cores e conteúdo acima. Não depende de uma API externa de vídeo.</div><button type="button" disabled={isGenerating} onClick={()=>void generateMotionVideo()} className="mt-3 w-full min-h-12 rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[11px] font-bold disabled:opacity-50">{isGenerating?<Loader2 size={16} className="animate-spin"/>:<Play size={16}/>} {isGenerating?'GERANDO E ENVIANDO…':'GERAR VÍDEO EXPERIMENTAL'}</button>{(draft.generatedUrl||draft.sourceUrl)&&<button type="button" onClick={downloadGenerated} className="mt-2 w-full h-10 rounded-xl border border-black flex items-center justify-center gap-2 text-[10px] font-mono"><Download size={14}/> ABRIR / BAIXAR</button>}</div>
-          <label className="block"><span className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Prompt / roteiro para geradores externos</span><textarea value={draft.prompt||''} onChange={(e)=>setDraft({...draft,prompt:e.target.value})} placeholder="Ex.: vídeo vertical de 8 segundos, câmera aproxima lentamente..." className="mt-2 min-h-28 w-full rounded-xl border border-black/10 p-3 text-sm"/></label>
-          {error&&<div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-        </section>
-        <section className="min-h-[50vh] xl:min-h-0 overflow-auto p-4 sm:p-7 flex flex-col items-center justify-center gap-4">
-          <div className="text-[9px] font-mono text-neutral-500">PRÉVIA · {draft.width}×{draft.height}</div>
-          <div className="overflow-hidden rounded-2xl border border-black/10 shadow-2xl bg-black" style={{width:draft.width*previewScale,height:draft.height*previewScale,maxWidth:'92vw'}}><VideoPreview document={draft} className="w-full h-full"/></div>
-          {(draft.generatedUrl||draft.sourceUrl)&&<a href={draft.generatedUrl||draft.sourceUrl} target="_blank" rel="noreferrer" className="h-10 px-3 rounded-xl bg-white border border-black/10 flex items-center gap-2 text-[10px] font-mono"><ExternalLink size={14}/> ABRIR VÍDEO</a>}
-          <canvas ref={canvasRef} className="hidden"/>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
-  const words=String(text||'').split(/\s+/); const lines:string[]=[]; let line='';
-  for(const word of words){const test=line?`${line} ${word}`:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word}else line=test} if(line)lines.push(line);
-  const start=y-((lines.length-1)*lineHeight)/2; lines.slice(0,4).forEach((value,index)=>ctx.fillText(value,x,start+index*lineHeight));
-}
+function wrapText(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,maxWidth:number,lineHeight:number){const words=String(text||'').split(/\s+/),lines:string[]=[];let line='';for(const word of words){const t=line?`${line} ${word}`:word;if(ctx.measureText(t).width>maxWidth&&line){lines.push(line);line=word}else line=t}if(line)lines.push(line);const start=y-((lines.length-1)*lineHeight)/2;lines.slice(0,4).forEach((v,i)=>ctx.fillText(v,x,start+i*lineHeight))}
