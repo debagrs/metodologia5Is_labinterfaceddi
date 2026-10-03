@@ -229,6 +229,7 @@ export interface VideoDocument {
   duration: number;
   background: string;
   accent: string;
+  textColor?: string;
   sourceUrl?: string;
   sourceName?: string;
   generatedUrl?: string;
