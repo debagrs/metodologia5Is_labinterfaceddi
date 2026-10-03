@@ -14,6 +14,7 @@ import AllCommentsPanel from './AllCommentsPanel';
 import AgentChatPanel from './AgentChatPanel';
 import ProjectCollaboratorsPanel from './ProjectCollaboratorsPanel';
 import { AgendaLauncher } from './Agenda5Is';
+import TutorialCoach from './TutorialCoach';
 import { ensureTursoSession } from '../lib/turso';
 
 interface MethodologyTechnique {
@@ -2095,6 +2096,7 @@ export default function Workspace({
 
   return (
     <div id="project-workspace" className="h-[100dvh] flex flex-col bg-brand-beige font-sans select-none overflow-hidden">
+      {currentUser && <TutorialCoach scope="workspace" userId={currentUser.id} />}
       
       {/* Role Banner notifications */}
       {collaborationPermission && (
@@ -2184,6 +2186,7 @@ export default function Workspace({
               onClick={() => setIsCollaboratorsOpen(true)}
               className="p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
               title="Convidar colaboradores"
+              data-tour="workspace-collaborators"
             >
               <Users size={15} />
               <span className="hidden md:inline text-[12px] font-mono font-bold uppercase tracking-wider">Colaboradores</span>
@@ -2193,6 +2196,7 @@ export default function Workspace({
             onClick={() => setIsCommentsOpen(true)}
             className="relative p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
             title="Ver todos os comentários"
+            data-tour="workspace-comments"
           >
             <MessageCircle size={15} />
             <span className="hidden sm:inline text-[11px] font-mono font-bold uppercase">Comentários</span>
@@ -2221,6 +2225,7 @@ export default function Workspace({
                   : 'bg-[#F5F5F3] text-neutral-600 border-[#E0E0DE] hover:bg-neutral-100'
               }`}
               title="Metodologia 5I’s"
+              data-tour="workspace-phases"
             >
               <Compass size={14} />
               <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden xl:inline">Fases</span>
@@ -2237,6 +2242,7 @@ export default function Workspace({
                   : 'bg-[#F5F5F3] text-neutral-600 border-[#E0E0DE] hover:bg-neutral-100'
               }`}
               title="Agentes 5I’s"
+              data-tour="workspace-agents"
             >
               <Sparkles size={14} />
               <span className="text-[9px] font-mono font-bold tracking-wider uppercase hidden xl:inline">Agentes</span>
