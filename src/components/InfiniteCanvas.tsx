@@ -3,14 +3,17 @@ import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
-  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
-import DrawingStudio, { DrawingPreview } from './DrawingStudio';
+import DrawingStudio, { DrawingPreview, drawingToSvgString } from './DrawingStudio';
 import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
+import WireframeStudio, { WireframePreview, blankWireframe } from './WireframeStudio';
+import DesignSystemStudio, { DesignSystemPreview, blankDesignSystem } from './DesignSystemStudio';
+import VideoStudio, { VideoPreview, blankVideo } from './VideoStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -18,16 +21,6 @@ export interface InfiniteCanvasHandle {
   focusNode: (nodeId: string, openCollaboration?: boolean) => void;
 }
 
-
-
-const INTERACTIVE_ENGINE_SHORT_LABEL: Record<InteractiveDocument['engine'], string> = {
-  p5: 'P5.JS',
-  three: 'THREE.JS',
-  gsap: 'GSAP',
-  anime: 'ANIME.JS',
-  matter: 'MATTER.JS',
-  svg: 'SVG.JS',
-};
 
 const PHASE_NOTE_PALETTE: Record<Phase, { body: string; header: string; border: string; dot: string }> = {
   'Ideação': { body: '#FFF9E8', header: '#FFF0B8', border: '#E7C75C', dot: '#E4AC16' },
@@ -105,10 +98,17 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [interactiveEditorNodeId, setInteractiveEditorNodeId] = useState<string | null>(null);
   const [newInteractive, setNewInteractive] = useState<InteractiveDocument | null>(null);
   const [activeInteractiveNodeId, setActiveInteractiveNodeId] = useState<string | null>(null);
+  const [wireframeEditorNodeId, setWireframeEditorNodeId] = useState<string | null>(null);
+  const [newWireframe, setNewWireframe] = useState<WireframeDocument | null>(null);
+  const [designSystemEditorNodeId, setDesignSystemEditorNodeId] = useState<string | null>(null);
+  const [newDesignSystem, setNewDesignSystem] = useState<DesignSystemDocument | null>(null);
+  const [videoEditorNodeId, setVideoEditorNodeId] = useState<string | null>(null);
+  const [newVideo, setNewVideo] = useState<VideoDocument | null>(null);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
+  const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
 
   const getNodeDimensions = (node: ThoughtNode) => {
     const compactCanvas = typeof window !== 'undefined' && window.innerWidth < 640;
@@ -120,6 +120,15 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
     if (node.type === 'interactive-lab') {
       return { width: node.width || (compactCanvas ? 320 : 440), height: node.height || (compactCanvas ? 240 : 320) };
+    }
+    if (node.type === 'wireframe-board') {
+      return { width: node.width || (compactCanvas ? 320 : 420), height: node.height || (compactCanvas ? 260 : 320) };
+    }
+    if (node.type === 'design-system') {
+      return { width: node.width || (compactCanvas ? 320 : 400), height: node.height || (compactCanvas ? 250 : 300) };
+    }
+    if (node.type === 'video-board') {
+      return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 360 : 430) };
     }
     if (node.type === 'core') {
       return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
@@ -267,7 +276,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab';
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'video-board';
     const minWidth = isVisualNode ? 100 : 240;
     const minHeight = isVisualNode ? 80 : 150;
     const maxWidth = isVisualNode ? 1400 : 820;
@@ -503,6 +512,25 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     document.addEventListener('pointermove', move, { passive: false });
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', finish);
+  };
+
+  const interactiveFromDrawing = (drawing: DrawingDocument, name = 'Desenho animado'): InteractiveDocument => {
+    const svg = drawingToSvgString(drawing);
+    return {
+      ...blankInteractiveDocument('svg'),
+      engine: 'svg',
+      title: name,
+      prompt: 'Anime os elementos vetoriais deste desenho preservando sua composição. Use o chat para definir movimento, loop, sequência e resposta ao toque.',
+      asset: {
+        url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+        name: `${name.replace(/\s+/g, '-').toLowerCase()}.svg`,
+        contentType: 'image/svg+xml',
+        kind: 'svg',
+      },
+      preserveBrand: true,
+      effectPreset: 'drift',
+      interactionMode: 'pointer',
+    };
   };
 
   const blankDrawing = (): DrawingDocument => ({
@@ -949,6 +977,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isCanvasImage = node.type === 'canvas-image';
             const isDrawingSheet = node.type === 'drawing-sheet';
             const isInteractiveLab = node.type === 'interactive-lab';
+            const isWireframeBoard = node.type === 'wireframe-board';
+            const isDesignSystem = node.type === 'design-system';
+            const isVideoBoard = node.type === 'video-board';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
             const phasePalette = PHASE_NOTE_PALETTE[node.phase];
@@ -1104,7 +1135,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                   <div className="absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded-lg border border-black/10 bg-white/90 px-2 py-1 shadow-sm pointer-events-none">
                     <Code2 size={11} />
-                    <span className="text-[9px] font-mono font-bold uppercase tracking-wide">{INTERACTIVE_ENGINE_SHORT_LABEL[interactiveDocument.engine] || 'INTERAÇÃO'}</span>
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-wide">{interactiveDocument.engine === 'three' ? 'THREE.JS' : 'P5.JS'}</span>
                   </div>
 
                   {isConnectionTarget && (
@@ -1292,6 +1323,54 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                       </div>
                     </>
                   )}
+                </motion.div>
+              );
+            }
+
+
+            if (isWireframeBoard || isDesignSystem || isVideoBoard) {
+              const label = isWireframeBoard ? (node.wireframeName || 'Wireframes') : isDesignSystem ? (node.designSystemName || 'Design System') : (node.videoName || 'Vídeo');
+              const edit = () => {
+                if (isWireframeBoard) setWireframeEditorNodeId(node.id);
+                else if (isDesignSystem) setDesignSystemEditorNodeId(node.id);
+                else setVideoEditorNodeId(node.id);
+              };
+              return (
+                <motion.div
+                  key={node.id}
+                  data-node-id={node.id}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`absolute thought-card pointer-events-auto rounded-xl bg-white shadow-lg select-none overflow-visible ${
+                    isDragDropTarget ? 'ring-4 ring-blue-500/70' : isConnectionSource ? 'ring-4 ring-black/20' : isSelected ? 'ring-2 ring-black' : 'ring-1 ring-black/10'
+                  }`}
+                  style={{ left: node.x, top: node.y, width: dimensions.width, height: dimensions.height, touchAction: 'none' }}
+                  onPointerDown={(event) => handleNodePointerDown(event, node.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (isConnectionTarget) { toggleConnection(node.id); return; }
+                    setSelectedNodeId(node.id); setSelectedConnection(null);
+                  }}
+                  onDoubleClick={(event) => { event.stopPropagation(); edit(); }}
+                >
+                  <div className="h-full w-full rounded-xl overflow-hidden bg-white pointer-events-none">
+                    {isWireframeBoard && node.wireframe && <WireframePreview document={node.wireframe} designSystem={projectDesignSystem} className="h-full w-full" />}
+                    {isDesignSystem && node.designSystem && <DesignSystemPreview document={node.designSystem} className="h-full w-full" />}
+                    {isVideoBoard && node.video && <VideoPreview document={node.video} className="h-full w-full" />}
+                  </div>
+                  <div className="absolute left-2 bottom-2 rounded-lg bg-black/75 text-white px-2 py-1 text-[9px] font-mono pointer-events-none">{label}</div>
+                  {isConnectionTarget && <button type="button" onClick={(event)=>{event.stopPropagation();toggleConnection(node.id)}} className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair" aria-label={`Conectar com ${label}`} />}
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && <div className="absolute -top-11 right-0 z-30 flex items-center gap-1 rounded-xl border border-[#E0E0DE] bg-white/95 p-1 shadow-lg canvas-control">
+                    <button type="button" onClick={(event)=>{event.stopPropagation();edit()}} className="h-8 px-2 rounded-lg flex items-center gap-1 hover:bg-black/5 text-[10px] font-mono"><Pencil size={13}/> EDITAR</button>
+                    <button type="button" onClick={(event)=>{event.stopPropagation();setConnectingFromId(isConnectionSource?null:node.id)}} className={`h-8 w-8 rounded-lg flex items-center justify-center ${isConnectionSource?'bg-black text-white':'hover:bg-black/5'}`}>{isConnectionSource?<X size={14}/>:<Link2 size={14}/>}</button>
+                    <button type="button" onClick={(event)=>{event.stopPropagation();onDeleteNode(node.id)}} className="h-8 w-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50"><Trash2 size={14}/></button>
+                  </div>}
+                  {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && <>
+                    <button type="button" className="absolute -left-4 top-1/2 z-40 h-8 w-8 -translate-y-1/2 rounded-full border-2 border-black bg-white shadow-lg flex items-center justify-center touch-none canvas-control" onPointerDown={(event)=>beginConnectionDrag(event,'new',node.id)}><Link2 size={13}/></button>
+                    <div className="resize-handle absolute right-[-7px] top-1/2 z-30 h-11 w-4 -translate-y-1/2 rounded-full border border-black/20 bg-white shadow cursor-ew-resize" onPointerDown={(event)=>handleResizePointerDown(event,node,'x',false)} />
+                    <div className="resize-handle absolute bottom-[-7px] left-1/2 z-30 h-4 w-11 -translate-x-1/2 rounded-full border border-black/20 bg-white shadow cursor-ns-resize" onPointerDown={(event)=>handleResizePointerDown(event,node,'y',false)} />
+                    <div className="resize-handle absolute bottom-[-7px] right-[-7px] z-30 h-6 w-6 rounded-full border border-black/30 bg-white shadow cursor-nwse-resize flex items-center justify-center" onPointerDown={(event)=>handleResizePointerDown(event,node,'both',false)}><MoveDiagonal2 size={9}/></div>
+                  </>}
                 </motion.div>
               );
             }
@@ -1724,11 +1803,14 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 type="button"
                 onClick={() => setNewInteractive(blankInteractiveDocument('p5'))}
                 className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
-                title="Criar uma camada interativa com imagem/SVG, p5.js, Three.js, GSAP, Anime.js, Matter.js ou SVG.js"
+                title="Criar uma camada interativa com p5.js ou Three.js por prompt"
               >
                 <Code2 size={14} />
                 <span className="hidden sm:inline">INTERAÇÃO</span>
               </button>
+              <button type="button" onClick={() => setNewWireframe(blankWireframe(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="hidden sm:inline">WIREFRAME</span></button>
+              <button type="button" onClick={() => setNewDesignSystem(blankDesignSystem())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · tipografia, paleta, tokens e acessibilidade"><Palette size={14}/><span className="hidden sm:inline">DESIGN SYSTEM</span></button>
+              <button type="button" onClick={() => setNewVideo(blankVideo(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · inserir e gerar motion para vídeo e redes"><Film size={14}/><span className="hidden sm:inline">VÍDEO</span></button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -1763,6 +1845,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
             drawing: item.drawing!,
           }))}
+          onAnimate={(drawing) => { setNewInteractive(interactiveFromDrawing(drawing, 'Desenho animado')); setNewDrawing(null); }}
           onSave={(drawing) => {
             const startWidth = typeof window !== 'undefined' && window.innerWidth < 640 ? 300 : 420;
             const startHeight = startWidth / (drawing.width / drawing.height);
@@ -1801,6 +1884,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               name: item.drawingName || item.title || `desenho-${item.id.slice(-4)}`,
               drawing: item.drawing!,
             }))}
+            onAnimate={(drawing) => { setNewInteractive(interactiveFromDrawing(drawing, `${drawingNode.drawingName || 'Desenho'} · animação`)); setDrawingEditorNodeId(null); }}
             onSave={(drawing) => onUpdateNode({
               ...drawingNode,
               drawing,
@@ -1865,6 +1949,28 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           />
         );
       })()}
+
+      {newWireframe && <WireframeStudio document={newWireframe} designSystem={projectDesignSystem} title="Novo wireframe" canEdit={canEditCanvas} onSave={(wireframe)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:420; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:320; const position=getCenteredPosition(startWidth,startHeight);
+        onAddNode({type:'wireframe-board',title:'Wireframes',wireframeName:`Wireframes ${nodes.filter((item)=>item.type==='wireframe-board').length+1}`,content:'Frames, auto layout e componentes do projeto.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,wireframe,connections:[]}); setNewWireframe(null);
+      }} onClose={()=>setNewWireframe(null)}/>} 
+
+      {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
+
+      {newDesignSystem && <DesignSystemStudio document={newDesignSystem} title="Novo Design System" canEdit={canEditCanvas} onSave={(designSystem)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:400; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?250:300; const position=getCenteredPosition(startWidth,startHeight);
+        onAddNode({type:'design-system',title:'Design System',designSystemName:designSystem.name||`Design System ${nodes.filter((item)=>item.type==='design-system').length+1}`,content:'Paleta, tipografia, tokens e critérios de acessibilidade.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,designSystem,connections:[]}); setNewDesignSystem(null);
+      }} onClose={()=>setNewDesignSystem(null)}/>} 
+
+      {designSystemEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===designSystemEditorNodeId&&item.type==='design-system'); if(!node)return null; return <DesignSystemStudio key={node.id} document={node.designSystem||blankDesignSystem()} title={node.designSystemName||'Design System'} canEdit={canEditCanvas} onSave={(designSystem)=>onUpdateNode({...node,designSystem,designSystemName:designSystem.name||node.designSystemName})} onClose={()=>setDesignSystemEditorNodeId(null)}/>})()}
+
+      {newVideo && <VideoStudio document={newVideo} designSystem={projectDesignSystem} title="Novo vídeo" canEdit={canEditCanvas} onSave={(video)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?300:380; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?360:430; const position=getCenteredPosition(startWidth,startHeight);
+        onAddNode({type:'video-board',title:video.title||'Vídeo',videoName:video.title||`Vídeo ${nodes.filter((item)=>item.type==='video-board').length+1}`,content:video.prompt||video.subtitle||'',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,video,connections:[]}); setNewVideo(null);
+      }} onClose={()=>setNewVideo(null)}/>} 
+
+      {videoEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===videoEditorNodeId&&item.type==='video-board'); if(!node)return null; return <VideoStudio key={node.id} document={node.video||blankVideo(projectDesignSystem)} designSystem={projectDesignSystem} title={node.videoName||'Vídeo'} canEdit={canEditCanvas} onSave={(video)=>onUpdateNode({...node,video,videoName:video.title||node.videoName,title:video.title||node.title,content:video.prompt||video.subtitle||node.content})} onClose={()=>setVideoEditorNodeId(null)}/>})()}
+
     </div>
   );
 });
