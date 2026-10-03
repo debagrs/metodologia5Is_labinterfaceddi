@@ -32,6 +32,7 @@ import {
   ThoughtNode,
 } from '../types';
 import { ensureTursoSession } from '../lib/turso';
+import VoiceDictationButton from './VoiceDictationButton';
 
 interface InteractiveStudioProps {
   document: InteractiveDocument;
@@ -797,7 +798,14 @@ export default function InteractiveStudio({
           ) : null}
 
           <label className="block">
-            <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">{draft.asset?.kind === 'svg' ? '3. refinar o efeito com a Forja (opcional)' : 'descreva a interação / converse com a Forja'}</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">{draft.asset?.kind === 'svg' ? '3. refinar o efeito com a Forja (opcional)' : 'descreva a interação / converse com a Forja'}</span>
+              <VoiceDictationButton
+                disabled={!canEdit || isGenerating}
+                onText={(text) => setDraft((current) => ({ ...current, prompt: `${current.prompt}${current.prompt && !current.prompt.endsWith(' ') ? ' ' : ''}${text}` }))}
+                title="Ditar comando de animação"
+              />
+            </div>
             <textarea
               value={draft.prompt}
               onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))}
