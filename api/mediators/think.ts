@@ -746,8 +746,17 @@ function cleanCharacterSvgJson(text) {
 }
 function buildCharacterSvgMessages(body) {
   const c = body?.character || {};
-  const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. Preserve as escolhas modulares recebidas e trate proporção, shape language, silhueta, roupa, pose e expressão como decisões visuais contextualizadas — nunca como diagnóstico psicológico. Use viewBox 0 0 360 520. O personagem deve ser legível em silhueta e reutilizável em jogos/animação. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
-  const user = `PEDIDO: ${String(body?.prompt || '')}\nNOME: ${String(c.name || '')}\nDESCRIÇÃO: ${String(c.description || '')}\nVISTA: ${String(c.view || 'front')}\nEXPRESSÃO: ${String(c.expression || 'neutral')}\nPOSE: ${String(c.pose || 'neutral')}\nAPARÊNCIA MODULAR: ${JSON.stringify(c.appearance || {})}\nFICHA/INTENÇÃO: ${JSON.stringify(c.profile || {})}`;
+  const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. O ser pode ser HUMANO, ANIMAL, CRIATURA, MASCOTE ou HÍBRIDO. Quando species="hybrid", trate hybridPrimaryPreset, hybridSecondaryPreset e hybridBlend como um DNA visual explícito: preserve sinais reconhecíveis das duas bases sem simplesmente somar todas as partes. Respeite rigorosamente species, bodyPlan e partes opcionais recebidas: se browStyle, earStyle, muzzleStyle, tailStyle, wingStyle ou hornStyle forem "none", NÃO desenhe essa parte. Não force anatomia humana em quadrúpedes, aves, peixes, répteis, artrópodes ou seres serpentinos. Preserve locomoção, centro de massa e silhueta compatíveis com o plano corporal. Para animais estilizados, use anatomia observável como base antes de simplificar. Em híbridos, priorize silhueta coerente, centro de massa plausível e 2–4 traços fortes de cada origem; o valor hybridBlend indica qual base domina a morfologia.
+
+Princípios de projeto: silhueta clara, shape language coerente, leitura em tamanho pequeno, model sheet consistente, pose compatível com a espécie e acessibilidade cromática. Forma não determina personalidade de modo universal e não deve ser usada para estereotipar corpo, gênero, raça, deficiência, idade ou espécie. Use viewBox 0 0 360 520. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
+  const user = `PEDIDO: ${String(body?.prompt || '')}
+NOME: ${String(c.name || '')}
+DESCRIÇÃO: ${String(c.description || '')}
+VISTA: ${String(c.view || 'front')}
+EXPRESSÃO: ${String(c.expression || 'neutral')}
+POSE: ${String(c.pose || 'neutral')}
+APARÊNCIA MODULAR: ${JSON.stringify(c.appearance || {})}
+FICHA/INTENÇÃO: ${JSON.stringify(c.profile || {})}`;
   return { system, user };
 }
 function cleanCharacterSheetJson(text) {
@@ -756,8 +765,12 @@ function cleanCharacterSheetJson(text) {
 }
 function buildCharacterSheetMessages(body) {
   const c=body?.character||{};
-  const system=`Você é concept artist e pesquisador(a) de character design. Complete uma ficha de personagem utilizável por equipe de design/animação/jogos. Fundamente em silhueta, proporção, line of action, model sheet, expression sheet, costume, paleta e consistência. Shape language é convenção visual contextualizada, não psicologia universal. Não invente estereótipos sobre gênero, raça, deficiência ou personalidade a partir do corpo. Retorne SOMENTE JSON: {"description":"...","profile":{"role":"...","ageBand":"...","personality":"...","motivation":"...","backstory":"...","keywords":["..."],"silhouetteIntent":"...","shapeLanguageRationale":"...","proportionRationale":"...","colorRationale":"...","costumeRationale":"..."},"notes":["..."]}.`;
-  const user=`PERSONAGEM: ${String(c.name||'')}\nDESCRIÇÃO ATUAL: ${String(c.description||'')}\nPEDIDO: ${String(body?.prompt||'Complete a ficha sem apagar a autoria do usuário.')}\nAPARÊNCIA: ${JSON.stringify(c.appearance||{})}\nFICHA ATUAL: ${JSON.stringify(c.profile||{})}`;
+  const system=`Você é concept artist e pesquisador(a) de character design de humanos, animais e criaturas. Complete uma ficha utilizável por equipe de design/animação/jogos. Fundamente em silhueta, proporção, anatomia ou plano corporal, locomoção, line of action, model sheet, expression sheet, superfície, acessórios, paleta e consistência. Para animais, considere anatomia/locomoção da espécie antes da estilização. Para híbridos, explicite quais sinais vêm de cada base, qual plano corporal organiza o centro de massa e por que a mistura continua legível como uma única criatura. Shape language é convenção visual contextualizada, não psicologia universal. Não invente estereótipos sobre gênero, raça, deficiência, corpo ou espécie. Retorne SOMENTE JSON: {"description":"...","profile":{"role":"...","ageBand":"...","personality":"...","motivation":"...","backstory":"...","keywords":["..."],"silhouetteIntent":"...","shapeLanguageRationale":"...","proportionRationale":"...","colorRationale":"...","costumeRationale":"..."},"notes":["..."]}.`;
+  const user=`SER: ${String(c.name||'')}
+DESCRIÇÃO ATUAL: ${String(c.description||'')}
+PEDIDO: ${String(body?.prompt||'Complete a ficha sem apagar a autoria do usuário.')}
+APARÊNCIA: ${JSON.stringify(c.appearance||{})}
+FICHA ATUAL: ${JSON.stringify(c.profile||{})}`;
   return {system,user};
 }
 function cleanApiBuilderJson(text) {
