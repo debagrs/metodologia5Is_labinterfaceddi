@@ -1125,3 +1125,4 @@ export default function SpriteStudio({ document, title = 'Novo personagem', canE
     </div>
   );
 }
+
