@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
   Code2,
@@ -15,6 +15,9 @@ import {
   Trash2,
   Upload,
   WandSparkles,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
   X,
 } from 'lucide-react';
 import {
@@ -40,13 +43,13 @@ interface InteractiveStudioProps {
   onClose: () => void;
 }
 
-const ENGINE_META: Array<{ id: InteractiveEngine; name: string; tag: string; description: string }> = [
-  { id: 'p5', name: 'p5.js', tag: '2D', description: 'partículas, desenho generativo e toque' },
-  { id: 'three', name: 'Three.js', tag: '3D', description: 'profundidade, cenas e partículas 3D' },
-  { id: 'gsap', name: 'GSAP', tag: 'Motion', description: 'logos, UI, timelines e movimentos suaves' },
-  { id: 'anime', name: 'Anime.js', tag: 'Motion', description: 'SVG, transformações e microinterações' },
-  { id: 'matter', name: 'Matter.js', tag: 'Física', description: 'bolas, colisões, gravidade e explosões' },
-  { id: 'svg', name: 'SVG.js', tag: 'Vetor', description: 'traços, formas, conexões e SVG vivo' },
+const ENGINE_META: Array<{ id: InteractiveEngine; name: string; tag: string; description: string; guide: string }> = [
+  { id: 'p5', name: 'p5.js', tag: '2D', description: 'partículas, desenho generativo e toque', guide: 'Use quando a experiência nasce de pontos, linhas, ruído, desenho algorítmico, partículas ou interação 2D. É excelente para experimentação visual e interfaces generativas.' },
+  { id: 'three', name: 'Three.js', tag: '3D', description: 'profundidade, cenas e partículas 3D', guide: 'Use para objetos e cenas tridimensionais, câmeras, luzes, materiais, profundidade, partículas 3D e experiências espaciais. É a escolha principal quando o elemento precisa existir em um espaço 3D.' },
+  { id: 'gsap', name: 'GSAP', tag: 'Motion', description: 'logos, UI, timelines e movimentos suaves', guide: 'Use para motion de interface com controle fino de tempo: entradas, saídas, sequências, timelines, scroll, microinterações e animações de marca muito suaves.' },
+  { id: 'anime', name: 'Anime.js', tag: 'Motion', description: 'SVG, transformações e microinterações', guide: 'Use para animações leves de DOM e SVG, transformações, opacidade, escala, rotação e sequências simples. É ótimo para motion vetorial sem montar uma cena 3D.' },
+  { id: 'matter', name: 'Matter.js', tag: 'Física', description: 'bolas, colisões, gravidade e explosões', guide: 'Use quando o movimento precisa obedecer a física: gravidade, colisão, impulso, queda, bouncing, explosões e objetos que se empurram ou se acumulam.' },
+  { id: 'svg', name: 'SVG.js', tag: 'Vetor', description: 'traços, formas, conexões e SVG vivo', guide: 'Use para animar desenhos vetoriais preservando seus elementos: paths, círculos, linhas, ícones e marcas. É o caminho mais direto para transformar um desenho do próprio canvas em uma animação editável.' },
 ];
 
 const MODE_META: Array<{ id: InteractiveMode; label: string; hint: string }> = [
@@ -358,6 +361,18 @@ export default function InteractiveStudio({
   const [previewKey, setPreviewKey] = useState(0);
   const [assetUrl, setAssetUrl] = useState(document.asset?.url || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [engineTourIndex, setEngineTourIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem('5is-interaction-engine-tour-v1')) setEngineTourIndex(0);
+    } catch { /* armazenamento pode estar indisponível */ }
+  }, []);
+
+  const finishEngineTour = () => {
+    try { window.localStorage.setItem('5is-interaction-engine-tour-v1', 'done'); } catch { /* ignore */ }
+    setEngineTourIndex(null);
+  };
 
   const setEngine = (engine: InteractiveEngine) => {
     if (engine === draft.engine) return;
@@ -595,6 +610,22 @@ export default function InteractiveStudio({
                 </button>
               ))}
             </div>
+            <div className="mt-2 rounded-xl border border-[#D8D7D2] bg-[#F7F7F4] px-3 py-2.5 text-[10px] leading-relaxed text-neutral-600 flex gap-2">
+              <CircleHelp size={14} className="shrink-0 mt-0.5"/>
+              <span><strong className="text-black">{ENGINE_META.find((item)=>item.id===draft.engine)?.name}:</strong> {ENGINE_META.find((item)=>item.id===draft.engine)?.guide}</span>
+            </div>
+            {engineTourIndex !== null && ENGINE_META[engineTourIndex] && (
+              <div className="mt-3 rounded-2xl border-2 border-black bg-white p-3 shadow-lg">
+                <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Primeira visita · {engineTourIndex + 1}/{ENGINE_META.length}</div>
+                <div className="mt-1 text-sm font-bold">{ENGINE_META[engineTourIndex].name} · {ENGINE_META[engineTourIndex].tag}</div>
+                <div className="mt-1 text-[11px] leading-relaxed text-neutral-600">{ENGINE_META[engineTourIndex].guide}</div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button type="button" disabled={engineTourIndex===0} onClick={()=>setEngineTourIndex(Math.max(0,engineTourIndex-1))} className="h-9 px-3 rounded-lg border border-black/10 disabled:opacity-30 flex items-center gap-1 text-[10px] font-mono"><ChevronLeft size={13}/> VOLTAR</button>
+                  <button type="button" onClick={()=>engineTourIndex >= ENGINE_META.length-1 ? finishEngineTour() : setEngineTourIndex(engineTourIndex+1)} className="h-9 px-3 rounded-lg bg-black text-white flex items-center gap-1 text-[10px] font-mono font-bold">{engineTourIndex >= ENGINE_META.length-1 ? 'ENTENDI' : 'PRÓXIMO'}<ChevronRight size={13}/></button>
+                  <button type="button" onClick={finishEngineTour} className="ml-auto h-9 px-2 text-[9px] font-mono text-neutral-500">FECHAR</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
