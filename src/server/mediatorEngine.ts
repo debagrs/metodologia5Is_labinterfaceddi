@@ -20,7 +20,10 @@ export interface MediatorRequestBody {
   prompt?: string;
   implementationPlan?: any;
   requestedFiles?: Array<{ path: string; purpose?: string }>;
+  wireframeSource?: { kind?: 'image' | 'drawing' | string; name?: string; url?: string; svg?: string; width?: number; height?: number };
+  wireframeOptions?: { device?: 'auto' | 'mobile' | 'tablet' | 'desktop' | string; fidelity?: 'structure' | 'balanced' | 'faithful' | string };
 }
+
 
 export interface MediatorInsight {
   title: string;
@@ -59,7 +62,7 @@ const REFERENCES: Record<string, string> = {
   documentacao: 'Design tokens; documentação de decisões; ADRs; handoff; rastreabilidade; requisitos; critérios de aceite.',
   heuristicas: 'Dez heurísticas de Jakob Nielsen; leis de UX; consistência; prevenção de erros; reconhecimento em vez de memorização.',
   implementacao: 'Arquitetura de informação; requisitos funcionais e não funcionais; segurança; LGPD; desempenho; testes; critérios de aceite.',
-  divulgacao: 'Marketing orientado por evidências; proposta de valor; posicionamento; canais próprios, conquistados e pagos; conteúdo e formatos; SEO/ASO; comunidades; imprensa; parcerias; funil; aquisição, ativação, retenção e indicação; métricas; experimentos; modelos de receita; acessibilidade, privacidade e prevenção de dark patterns.',
+  divulgacao: 'Philip Kotler e Kevin Lane Keller; Kotler, Kartajaya e Setiawan (Marketing 4.0, 5.0 e 6.0); Byron Sharp e Ehrenberg-Bass; Les Binet e Peter Field; Robert Cialdini; Jonah Berger; Dave Chaffey e Fiona Ellis-Chadwick; Tracy Tuten e Michael Solomon; Simon Kingsnorth; Joe Pulizzi; Ann Handley; Avinash Kaushik; Sean Ellis e Morgan Brown; April Dunford. Proposta de valor; posicionamento; marca; canais próprios/conquistados/pagos; conteúdo; social media; SEO/ASO; comunidades; creators; imprensa; parcerias; aquisição, ativação, retenção, indicação; analytics; experimentação; monetização.',
   cosmotecnica: 'Gilbert Simondon; Yuk Hui; individuação técnica; concretização; tecnodiversidade; cosmotécnica; relação tecnologia-cultura; repertórios hi-low; apropriação crítica de tecnologias antigas, intermediárias e emergentes.',
   futuros: 'Referência prioritária: HARTMANN HINDRICHSON, Patricia. Memórias do Futuro: uma tecnologia para projetar por cenários. Tese (Doutorado em Design), UFRGS, 2022. Conceitos centrais: projetar por cenários como prática dinâmica, social, participativa e iterativa; deslocamento do problema para possibilidades; memórias do futuro; construção retrospectiva; cenários articulando atores, trama, trajetória, evidências e espaço-tempo. Referências mobilizadas na tese, conforme pertinência: Nigel Cross; Herbert Simon; Donald Schön; Rittel e Webber; Richard Buchanan; Sanders e Stappers; Kensing e Blomberg; Krippendorff; Ezio Manzini; François Jégou; Celaschi e Deserti; Paulo Reyes; Manuela Celi; Carlo Franzato; Herman Kahn e Anthony Wiener; Michel Godet; Peter Schwartz; Kees van der Heijden; Ute von Reibnitz; Pieter Desmet; Marc Hassenzahl; Anna Pohlmeyer; Roberto Verganti; David Ingvar; Michel Thiollent; Laurence Bardin. Complementares do Mago: André Coutinho e Anderson Penha; Anthony Dunne e Fiona Raby; speculative design; futures thinking; sinais e tendências; contratendências; futuros prováveis, possíveis e desejáveis; design fiction; props; narrativas; participatory futures; backcasting.'
 };
@@ -85,7 +88,7 @@ function buildMessages(body: MediatorRequestBody) {
     : 'Ainda não há registros no canvas.';
 
   const divulgaRule = body.mediator.id === 'agent-divulga'
-    ? ' Para DIVULGA: proponha estratégias fortes, mas verificáveis. Relacione cada ideia a público, mensagem, formato, canal/ferramenta, métrica e hipótese de monetização quando pertinente. Não invente audiência, receita ou resultados e não use spam/dark patterns.'
+    ? ' Para DIVULGA: seja direto e generoso em possibilidades. Entregue o plano antes de fazer perguntas. Traga marketing forte, lançamento, formatos, canais, creators, imprensa, comunidade, SEO/ASO, conteúdo, growth, métricas e monetização. Use Kotler/Keller, Marketing 4.0–6.0, Byron Sharp/Ehrenberg-Bass, Binet & Field, Cialdini, Berger, Chaffey, Tuten & Solomon, Kingsnorth, Pulizzi, Handley, Kaushik, Ellis/Brown e Dunford conforme pertinência. Relacione ideias a público, mensagem, formato, canal/ferramenta e métrica. Só não invente audiência/receita/resultados nem sugira spam, fraude ou dark patterns.'
     : '';
   const system = `Você integra a Metodologia 5I’s: Ideação, Inambulação, Instauração, Inspeção e Implementação.
 Você é ${body.mediator.name}, agente de ${body.mediator.role}. ${body.mediator.bio}
@@ -103,7 +106,13 @@ Fase: ${body.phase}
 REGISTROS
 ${thoughts}
 
-Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas.`;
+${body.mode === 'chat' ? `CONVERSA RECENTE
+${(body.conversation || []).slice(-12).map((item) => `${item.role}: ${item.text}`).join('\n\n')}
+
+MENSAGEM ATUAL
+${body.message || ''}
+
+Responda à mensagem atual de forma prática e contextualizada.` : 'Crie uma reflexão inédita. Título com até seis palavras, uma pergunta central e duas ou três ações investigativas curtas.'}`;
 
   return { system, user };
 }
@@ -452,6 +461,77 @@ function cleanInteractiveResponse(text: string, fallbackEngine: string = 'p5') {
   };
 }
 
+
+function cleanWireframeInterpretationJson(text: string) {
+  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start < 0 || end < start) throw new Error('A interpretação do wireframe não retornou JSON válido.');
+  const data = JSON.parse(stripped.slice(start, end + 1));
+  const frame = data?.frame;
+  if (!frame || !Array.isArray(frame.blocks)) throw new Error('A interpretação do wireframe veio incompleta.');
+  const allowedTypes = new Set(['text','button','input','image','card','navbar','list-item','spacer']);
+  const cleanColor = (value: any, fallback: string) => /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
+  return {
+    frame: {
+      name: String(frame.name || 'Interface interpretada'),
+      preset: ['mobile','tablet','desktop','watch','custom'].includes(frame.preset) ? frame.preset : 'custom',
+      width: Math.max(120, Math.min(2400, Number(frame.width) || 393)),
+      height: Math.max(120, Math.min(4000, Number(frame.height) || 852)),
+      direction: frame.direction === 'row' ? 'row' : 'column',
+      gap: Math.max(0, Math.min(120, Number(frame.gap) || 12)),
+      padding: Math.max(0, Math.min(160, Number(frame.padding) || 20)),
+      align: ['start','center','end','stretch'].includes(frame.align) ? frame.align : 'stretch',
+      background: cleanColor(frame.background, '#FFFFFF'),
+      blocks: frame.blocks.slice(0, 40).map((block: any) => ({
+        type: allowedTypes.has(block?.type) ? block.type : 'card', label: String(block?.label || 'Elemento').slice(0, 180),
+        width: block?.width === 'hug' || block?.width === 'fill' || Number.isFinite(Number(block?.width)) ? block.width : 'fill',
+        height: block?.height === 'hug' || Number.isFinite(Number(block?.height)) ? block.height : 'hug',
+        padding: Math.max(0, Math.min(80, Number(block?.padding) || 0)), radius: Math.max(0, Math.min(999, Number(block?.radius) || 0)),
+        background: cleanColor(block?.background, '#F4F4F2'), color: cleanColor(block?.color, '#111111'),
+      }))
+    },
+    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 6).map(String) : [],
+    uncertainties: Array.isArray(data?.uncertainties) ? data.uncertainties.slice(0, 6).map(String) : [],
+  };
+}
+
+function buildWireframeInterpretationMessages(body: MediatorRequestBody) {
+  const source = body.wireframeSource || {};
+  const device = ['auto','mobile','tablet','desktop'].includes(String(body.wireframeOptions?.device)) ? String(body.wireframeOptions?.device) : 'auto';
+  const fidelity = ['structure','balanced','faithful'].includes(String(body.wireframeOptions?.fidelity)) ? String(body.wireframeOptions?.fidelity) : 'balanced';
+  const system = `Converta rabiscos, screenshots e desenhos vetoriais em uma interface EDITÁVEL. Reconheça navbar, texto, botão, input, imagem, card, item de lista e spacer. Não produza imagem final. Fidelidade: ${fidelity}. Dispositivo: ${device}. Retorne somente JSON: {"frame":{"name":"...","preset":"mobile|tablet|desktop|watch|custom","width":393,"height":852,"direction":"column|row","gap":16,"padding":24,"align":"start|center|end|stretch","background":"#FFFFFF","blocks":[{"type":"navbar|text|button|input|image|card|list-item|spacer","label":"...","width":"fill|hug ou número","height":"hug ou número","padding":12,"radius":12,"background":"#F4F4F2","color":"#111111"}]},"notes":["..."],"uncertainties":["..."]}. Cores somente em HEX de 6 dígitos.`;
+  const user = `Origem: ${source.name || 'esboço'}. Tipo: ${source.kind || 'image'}. Converta a estrutura visual em blocos editáveis. Quando houver dúvida, gere a hipótese mais útil e registre-a em uncertainties.`;
+  return { system, user };
+}
+
+async function callGeminiWireframe(system: string, user: string, source: any, maxOutputTokens = 3600, timeoutMs = 45000) {
+  if (source?.kind !== 'image' || !source?.url) {
+    return callGeminiStructured(system, `${user}\n\nSVG DO DESENHO:\n${String(source?.svg || '').slice(0, 70000)}`, maxOutputTokens, timeoutMs, 0.12);
+  }
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) throw new Error('GEMINI_API_KEY ausente.');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+  const imageResponse = await fetchWithTimeout(String(source.url), {}, 12000);
+  if (!imageResponse.ok) throw new Error('Não foi possível ler a imagem do esboço.');
+  const mimeType = String(imageResponse.headers.get('content-type') || 'image/png').split(';')[0];
+  const bytes = Buffer.from(await imageResponse.arrayBuffer());
+  if (bytes.length > 4 * 1024 * 1024) throw new Error('A imagem é grande demais para interpretação.');
+  const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: 'user', parts: [{ text: user }, { inlineData: { mimeType, data: bytes.toString('base64') } }] }],
+      generationConfig: { temperature: 0.12, responseMimeType: 'application/json', maxOutputTokens }
+    })
+  }, timeoutMs);
+  const data = await parseResponse(response);
+  if (!response.ok) throw new Error(data?.error?.message || `Falha Gemini HTTP ${response.status}.`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((part: any) => part?.text || '').join('').trim() || '';
+  if (!text) throw new Error('O Gemini não devolveu a estrutura do wireframe.');
+  return { text, provider: 'Gemini', model };
+}
+
 function cleanPublicationJson(text: string): PublicationArticle {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = stripped.indexOf('{');
@@ -743,6 +823,12 @@ function offlineInsight(body: MediatorRequestBody): MediatorInsight {
 }
 
 export async function generateMediatorInsight(body: MediatorRequestBody): Promise<any> {
+  if (body?.mode === 'wireframe-interpret') {
+    if (!body.wireframeSource) throw new Error('Escolha um desenho ou imagem para interpretar.');
+    const { system, user } = buildWireframeInterpretationMessages(body);
+    const result = await callGeminiWireframe(system, user, body.wireframeSource, 3600, Number(process.env.AI_WIREFRAME_TIMEOUT_MS || 45000));
+    return { wireframeInterpretation: cleanWireframeInterpretationJson(result.text), provider: result.provider, model: result.model };
+  }
   if (!body?.project || !body?.mediator || !body?.phase) {
     throw new Error('Parâmetros obrigatórios ausentes.');
   }
