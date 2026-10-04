@@ -712,13 +712,18 @@ function extractJsonObject(text) {
   return JSON.parse(stripped.slice(start, end + 1));
 }
 function sanitizeCharacterSvg(svg) {
-  const clean = String(svg || '').trim()
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
-    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, '')
-    .replace(/javascript:/gi, '');
+  const clean = String(svg || '').trim().replace(/^<\?xml[^>]*>\s*/i, '');
+  if (clean.length > 160000) throw new Error('O SVG excedeu o tamanho permitido. Gere uma versão mais leve.');
   if (!/^<svg[\s>]/i.test(clean) || !/<\/svg>\s*$/i.test(clean)) throw new Error('A IA não devolveu um SVG completo.');
-  return clean.slice(0, 80000);
+  if (/<(?:script|foreignObject|image|iframe|object|embed|audio|video)\b|<!DOCTYPE|<!ENTITY|\son[a-z]+\s*=|javascript:|@import/i.test(clean)) throw new Error('O SVG contém conteúdo não permitido.');
+  for (const match of clean.matchAll(/\b(?:href|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
+    if (!String(match[1] ?? match[2] ?? match[3]).startsWith('#')) throw new Error('O SVG deve ser autocontido, sem recursos externos.');
+  }
+  for (const match of clean.matchAll(/url\(([^)]*)\)/gi)) {
+    if (!match[1].trim().replace(/^["']|["']$/g,'').startsWith('#')) throw new Error('O SVG deve ser autocontido, sem recursos externos.');
+  }
+  if (!/<(?:path|ellipse|circle|rect|polygon|polyline|line)\b/i.test(clean)) throw new Error('A IA devolveu uma ilustração vazia.');
+  return clean;
 }
 function cleanCharacterSvgJson(text) {
   const data = extractJsonObject(text);
@@ -728,6 +733,8 @@ function buildCharacterSvgMessages(body) {
   const c = body?.character || {};
   const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. O ser pode ser HUMANO, ANIMAL, CRIATURA, MASCOTE ou HÍBRIDO. Quando species="hybrid", trate hybridPrimaryPreset, hybridSecondaryPreset e hybridBlend como um DNA visual explícito: preserve sinais reconhecíveis das duas bases sem simplesmente somar todas as partes. Respeite rigorosamente species, bodyPlan e partes opcionais recebidas: se browStyle, earStyle, muzzleStyle, tailStyle, wingStyle ou hornStyle forem "none", NÃO desenhe essa parte. Não force anatomia humana em quadrúpedes, aves, peixes, répteis, artrópodes ou seres serpentinos. Preserve locomoção, centro de massa e silhueta compatíveis com o plano corporal. Para animais estilizados, use anatomia observável como base antes de simplificar. Em híbridos, priorize silhueta coerente, centro de massa plausível e 2–4 traços fortes de cada origem; o valor hybridBlend indica qual base domina a morfologia.
 
+O campo artStyle define a linguagem visual: illustrated=realismo ilustrado com volume e íris detalhada; cartoon=cartoon expressivo; anime=anime com cel shading; manga=mangá monocromático; comic=quadrinhos; storybook=livro ilustrado; watercolor=aquarela vetorial; pencil=lápis/hachuras; ink=nanquim; chibi=proporções compactas. Não entregue apenas figuras geométricas: use curvas anatômicas, articulações contínuas, mãos/patas coerentes, conexão do pescoço e cabelo com o rosto e acabamento consistente. Se houver bico, não desenhe nariz humano.
+Quando modo=refine, edite o SVG atual e preserve identidade, paleta, acessórios e partes não mencionadas no pedido. Quando modo=reference, as imagens enviadas são a fonte principal: preserve seus traços identificadores, silhueta e intenção autoral; a aparência modular é secundária. Quando modo=new, crie a partir do prompt e estilo selecionado. Nunca diga que leu uma imagem quando nenhuma foi enviada. O resultado é uma ilustração SVG, não uma reconstrução ou rig de animação automático.
 Princípios de projeto: silhueta clara, shape language coerente, leitura em tamanho pequeno, model sheet consistente, pose compatível com a espécie e acessibilidade cromática. Forma não determina personalidade de modo universal e não deve ser usada para estereotipar corpo, gênero, raça, deficiência, idade ou espécie. Use viewBox 0 0 360 520. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
   const user = `PEDIDO: ${String(body?.prompt || '')}
 NOME: ${String(c.name || '')}
@@ -736,7 +743,10 @@ VISTA: ${String(c.view || 'front')}
 EXPRESSÃO: ${String(c.expression || 'neutral')}
 POSE: ${String(c.pose || 'neutral')}
 APARÊNCIA MODULAR: ${JSON.stringify(c.appearance || {})}
-FICHA/INTENÇÃO: ${JSON.stringify(c.profile || {})}`;
+FICHA/INTENÇÃO: ${JSON.stringify(c.profile || {})}
+MODO: ${String(body.characterSourceMode || 'refine')}
+REFERÊNCIAS VISUAIS: ${JSON.stringify(body.referenceNames || [])}
+SVG ATUAL PARA EDITAR (somente modo refine): ${body.characterSourceMode !== 'new' && body.characterSourceMode !== 'reference' && body.currentSvg ? sanitizeCharacterSvg(body.currentSvg) : 'não enviado'}`;
   return { system, user };
 }
 function cleanCharacterSheetJson(text) {
@@ -1104,7 +1114,7 @@ async function callGeminiPublication(system, user) {
   return { article: cleanPublicationJson(text), provider: 'Gemini', model };
 }
 
-async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2) {
+async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeoutMs = 45000, temperature = 0.2, visualReferences = []) {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
   const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
@@ -1114,7 +1124,7 @@ async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeou
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
+      contents: [{ role: 'user', parts: [{ text: user }, ...sketchVisualParts(visualReferences)] }],
       generationConfig: { temperature, responseMimeType: 'application/json', maxOutputTokens }
     })
   }, timeoutMs);
@@ -1221,8 +1231,21 @@ CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma 
   if (body?.mode === 'character-svg') {
     if (!String(body?.prompt || '').trim()) throw new Error('Descreva como deseja criar ou refinar o personagem.');
     const { system, user } = buildCharacterSvgMessages(body);
-    const result = await callGeminiStructured(system, user, 7000, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 45000), 0.22);
-    return { characterSvg: cleanCharacterSvgJson(result.text), provider: result.provider, model: result.model };
+    const refs = body.visualReferences || [];
+    if (body.characterSourceMode === 'reference' && !refs.length) throw new Error('Escolha ou envie um desenho como referência.');
+    sketchVisualParts(refs);
+    const startedAt = Date.now();
+    const timeout = Math.min(45000, Math.max(2000, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 45000)));
+    let result = await callGeminiStructured(system, user, 10000, timeout, 0.22, refs);
+    let characterSvg;
+    try { characterSvg = cleanCharacterSvgJson(result.text); }
+    catch (error) {
+      const remaining = 52000 - (Date.now() - startedAt);
+      if (remaining < 3000) throw error;
+      result = await callGeminiStructured(system, user + '\nCORREÇÃO: retorne JSON puro com svg completo, autocontido, não vazio, sem scripts ou imagens externas. Não corte o SVG.', 10000, Math.min(timeout, remaining), 0.15, refs);
+      characterSvg = cleanCharacterSvgJson(result.text);
+    }
+    return { characterSvg, provider: result.provider, model: result.model };
   }
   if (body?.mode === 'character-sheet') {
     const { system, user } = buildCharacterSheetMessages(body);
