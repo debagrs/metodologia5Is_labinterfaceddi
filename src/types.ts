@@ -272,13 +272,32 @@ export interface VideoMediaItem {
 export interface VideoTimelineItem {
   id: string;
   mediaId: string;
-  kind: VideoMediaKind;
+  kind: VideoMediaKind | 'color';
   url: string;
   name: string;
   duration: number;
   transition?: VideoTransition;
   fit?: 'cover' | 'contain';
   caption?: string;
+  transitionDuration?: number;
+  trimStart?: number;
+  muted?: boolean;
+  volume?: number;
+  background?: string;
+  backgroundStyle?: 'plain' | 'gradient' | 'particles';
+  motion?: 'none' | 'pan-left' | 'pan-right' | 'zoom-in' | 'zoom-out' | 'float' | 'pulse' | 'rotate';
+  effect?: 'none' | 'grayscale' | 'warm' | 'cool' | 'contrast' | 'blur';
+}
+
+export interface VideoTextLayer {
+  id: string; text: string; x: number; y: number; width: number;
+  fontSize: number; fontFamily: string; color: string; background?: string;
+  align: 'left' | 'center' | 'right'; bold: boolean; start: number; end: number;
+  animation?: 'none' | 'fade' | 'pop' | 'float';
+}
+
+export interface VideoAudioTrack {
+  id: string; url: string; name: string; start: number; end: number; offset: number; volume: number;
 }
 
 export interface VideoOverlay {
@@ -314,6 +333,9 @@ export interface VideoDocument {
   timeline?: VideoTimelineItem[];
   aiPlan?: string[];
   overlays?: VideoOverlay[];
+  texts?: VideoTextLayer[];
+  audioTracks?: VideoAudioTrack[];
+  exportWidth?: number;
 }
 
 
