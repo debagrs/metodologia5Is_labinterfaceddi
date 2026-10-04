@@ -253,3 +253,23 @@ select {
 .studio-tools .character-swatches button { min-height:28px; width:28px; height:28px; border-radius:50%; border:1px solid #00000020; }
 .character-swatches button[aria-pressed=true] { outline:2px solid #23877d; outline-offset:3px; }
 @media(max-width:479px) { .studio-tools .character-preset-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* Design System editor: contain fields and type samples within their tracks. */
+.design-system-editor .studio-tools :is(section,div,label),
+.design-system-editor .studio-preview :is(aside,div,label) { min-width:0; max-width:100%; }
+.design-system-editor .studio-tools .ds-color-library { grid-template-columns:repeat(auto-fill,minmax(28px,1fr)); }
+.design-system-editor .ds-color-library button { min-height:28px; padding:0; }
+.design-system-editor .studio-tools .ds-type-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.design-system-editor .ds-type-controls > div:first-child { grid-column:1 / -1; }
+.design-system-editor .ds-type-sample { white-space:normal; overflow-wrap:anywhere; overflow:hidden; }
+.design-system-editor .studio-preview { padding:0; }
+.design-system-editor .studio-preview > aside { width:100%; border:0; padding:16px; }
+.design-system-editor .studio-preview .ds-contrast-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.design-system-editor .studio-preview :is(input,select) { min-width:0; max-width:100%; font-size:16px; }
+.design-system-editor .studio-preview input[type=color] { flex-shrink:0; }
+.design-system-editor .studio-preview :is(p,.ds-preview-title,.space-y-2 > div) { overflow-wrap:anywhere; white-space:normal; }
+@media(max-width:479px) {
+ .design-system-editor .studio-preview .ds-contrast-controls { grid-template-columns:minmax(0,1fr); }
+ .design-system-editor .studio-tools > section { padding:0; }
+ .design-system-editor .studio-preview > aside { padding:12px; }
+}
