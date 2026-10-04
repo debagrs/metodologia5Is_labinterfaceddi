@@ -1,3 +1,7 @@
+import ImageLibrary from './ImageLibrary';
+import PhotopeaEditor from './PhotopeaEditor';
+import {imageCredit} from '../lib/openImages';
+import { EFFECT_CATALOG, LIBRARY_DOCS, buildLibraryEffect } from '../lib/interactiveEffects';
 import { normalizeSketchCode, character3DHelper, characterSceneCode } from '../lib/interactiveRuntime';
 import { buildCharacterSvg } from './SpriteStudio';
 import { StudioWorkspace } from './StudioWorkspace';
@@ -140,7 +144,7 @@ function analyzeSvgSource(source: string): InteractiveAssetProfile {
   return { palette, counts, sourceType: 'svg' };
 }
 
-function buildSvgPresetCode(effect: InteractiveEffect, intensity: InteractiveIntensity, profile?: InteractiveAssetProfile) {
+export function buildSvgPresetCode(effect: InteractiveEffect, intensity: InteractiveIntensity, profile?: InteractiveAssetProfile) {
   const amp = intensity === 'subtle' ? 5 : intensity === 'strong' ? 16 : 10;
   const scale = intensity === 'subtle' ? 1.035 : intensity === 'strong' ? 1.11 : 1.065;
   const palette = profile?.palette?.length ? profile.palette : ['#9500FF', '#FF13F0'];
@@ -298,19 +302,14 @@ export const interactiveToSrcDoc = (document: InteractiveDocument) => {
   const bodyOpen = `<body><div id="stage"></div>${runtimePrelude(document)}`;
 
   if (document.engine === 'three') {
-    return `<!doctype html><html><head>${head}</head>${bodyOpen}<script type="module">try { const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js');\nconst ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE; const CHARACTER = window.INTERACTIVE_CHARACTER;\n${character3DHelper}\n${code}\n} catch(error) { parent.postMessage({type:'sketch-error',message:String(error?.message || error)}, '*'); }</script></body></html>`;
+    return `<!doctype html><html><head>${head}</head>${bodyOpen}<script type="module">try { const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js').catch(()=>import('https://unpkg.com/three@0.180.0/build/three.module.js'));\nconst ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE; const CHARACTER = window.INTERACTIVE_CHARACTER;\n${character3DHelper}\n${code}\n} catch(error) { parent.postMessage({type:'sketch-error',message:String(error?.message || error)}, '*'); }</script></body></html>`;
   }
 
-  const libraries: Record<Exclude<InteractiveEngine, 'three'>, string> = {
-    p5: `<script src="https://cdn.jsdelivr.net/npm/p5@1.11.11/lib/p5.min.js"></script>`,
-    gsap: `<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>`,
-    anime: `<script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>`,
-    matter: `<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>`,
-    svg: `<script src="https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.2.5/dist/svg.min.js"></script><script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>`,
-  };
-
-  const library = libraries[document.engine as Exclude<InteractiveEngine, 'three'>] || libraries.p5;
-  return `<!doctype html><html><head>${head}${library}</head>${bodyOpen}<script>const ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE;\n${code}</script></body></html>`;
+  const libraries:Record<string,string[]>={p5:['p5@1.11.11/lib/p5.min.js'],gsap:['gsap@3.13.0/dist/gsap.min.js'],anime:['animejs@3.2.2/lib/anime.min.js'],matter:['matter-js@0.20.0/build/matter.min.js'],svg:['@svgdotjs/svg.js@3.2.5/dist/svg.min.js','gsap@3.13.0/dist/gsap.min.js']};
+  const packages=libraries[document.engine]||libraries.p5;
+  // Load dependencies before inserting user code; a second CDN handles transient failures.
+  const loader=`async function dependency(path){for(const host of ['https://cdn.jsdelivr.net/npm/','https://unpkg.com/']){try{await new Promise((resolve,reject)=>{const s=document.createElement('script');const timer=setTimeout(()=>{s.remove();reject(Error('tempo de carregamento excedido'))},10000);s.src=host+path;s.onload=()=>{clearTimeout(timer);resolve()};s.onerror=()=>{clearTimeout(timer);s.remove();reject(Error('falha no CDN'))};document.head.appendChild(s)});return}catch(e){}}throw Error('Não foi possível carregar a biblioteca. Verifique sua conexão e execute novamente.')} (async()=>{try{for(const path of ${JSON.stringify(packages)})await dependency(path);const script=document.createElement('script');script.textContent=${escapeScript(JSON.stringify('const ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE;\n'+normalized))};document.body.appendChild(script);if(${JSON.stringify(document.engine)}==='p5' && !p5.instance && (typeof window.setup==='function'||typeof window.draw==='function'))new p5();}catch(error){parent.postMessage({type:'sketch-error',message:String(error.message||error)},'*')}})();`;
+  return `<!doctype html><html><head>${head}</head>${bodyOpen}<script>${loader}</script></body></html>`;
 };
 
 export function InteractivePreview({
@@ -376,6 +375,8 @@ export default function InteractiveStudio({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [imageLibraryOpen,setImageLibraryOpen]=useState(false);
+  const [photoEditorOpen,setPhotoEditorOpen]=useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
   const [runtimeError, setRuntimeError] = useState('');
   const [previewCode, setPreviewCode] = useState(document.code);
@@ -476,9 +477,12 @@ export default function InteractiveStudio({
         contentType: String(data.contentType || contentType),
         kind: inferAssetKind(file.name, data.contentType || contentType),
         profile: svgProfile,
+        credit:draft.asset?.credit,
       });
+      return true;
     } catch (err: any) {
       setError(err?.message || 'Não foi possível enviar o asset.');
+      return false;
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -530,9 +534,20 @@ export default function InteractiveStudio({
       engine: 'svg',
       code: buildSvgPresetCode(effect, intensity, current.asset?.profile),
     }));
+    setPreviewCode(buildSvgPresetCode(effect,intensity,draft.asset?.profile));
     setPreviewKey((value) => value + 1);
   };
 
+  const selectedLibraryEffect=EFFECT_CATALOG[draft.engine].find(item=>item.id===draft.libraryEffect) || EFFECT_CATALOG[draft.engine][0];
+  const applyLibraryEffect=()=>{
+    if(!canEdit)return;
+    try {
+      const code=draft.engine==='svg'?buildSvgPresetCode(selectedLibraryEffect.id as InteractiveEffect,draft.intensity || 'subtle',draft.asset?.profile):draft.engine==='three' && selectedLibraryEffect.id==='character'?characterSceneCode:buildLibraryEffect(draft.engine,selectedLibraryEffect.id);
+      if(draft.engine==='svg' && draft.asset?.kind!=='svg')throw new Error('Escolha um arquivo SVG para animar seus elementos.');
+      if(draft.engine==='three' && selectedLibraryEffect.id==='character' && !draft.characterReference)throw new Error('Selecione um personagem do projeto para criar o modelo 3D.');
+      setDraft(current=>({...current,code,effectPreset:draft.engine==='svg'?selectedLibraryEffect.id as InteractiveEffect:current.effectPreset,revisions:[...(current.revisions || []).slice(-9),{code:current.code,title:current.title,engine:current.engine}]}));setPreviewCode(code);setRuntimeError('');setError('');setPreviewKey(value=>value+1);
+    }catch(error:any){setError(error.message);}
+  };
   const generateFromPrompt = async (repair = false) => {
     const requestPrompt = repair ? `Corrija este erro do sketch e devolva o código completo: ${runtimeError}` : draft.prompt.trim();
     if (!requestPrompt || !canEdit || isGenerating) return;
@@ -633,6 +648,8 @@ export default function InteractiveStudio({
       onPointerUp={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
+      {imageLibraryOpen && <ImageLibrary onChoose={image=>{setAsset({url:image.url,name:image.title,kind:'image',contentType:'image/*',credit:imageCredit(image)});setImageLibraryOpen(false);}} onClose={()=>setImageLibraryOpen(false)}/>}
+      {photoEditorOpen && <PhotopeaEditor url={draft.asset?.url} name={draft.asset?.name || 'Novo projeto'} onSave={async file=>{if(!await uploadAsset(file))throw new Error('Não foi possível salvar esta imagem. Verifique sua sessão e o tamanho do arquivo.');}} onClose={()=>setPhotoEditorOpen(false)}/>}
       <header className="shrink-0 border-b border-[#D8D7D2] bg-white px-3 sm:px-5 py-3 flex items-center gap-3">
         <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar laboratório"><X size={20} /></button>
         <div className="min-w-0 flex-1">
@@ -642,7 +659,7 @@ export default function InteractiveStudio({
         <button
           type="button"
           disabled={!canEdit}
-          onClick={() => onSave(draft)}
+          aria-label="Salvar interação" onClick={() => onSave(draft)}
           className="h-10 px-3 sm:px-4 rounded-xl bg-black text-white disabled:opacity-40 flex items-center gap-2 text-xs font-bold cursor-pointer"
         >
           <Save size={15} /><span className="hidden sm:inline">SALVAR NO CANVAS</span>
@@ -650,6 +667,7 @@ export default function InteractiveStudio({
       </header>
 
       <StudioWorkspace tools={<section className="min-h-0 xl:border-r border-[#D8D7D2] bg-white overflow-y-auto p-4 sm:p-5 space-y-5">
+          <div className="image-integration-actions"><button type="button" disabled={!canEdit} onClick={()=>setImageLibraryOpen(true)}><ImagePlus size={16}/>Pesquisar imagens livres</button><button type="button" disabled={!canEdit} onClick={()=>setPhotoEditorOpen(true)}><Palette size={16}/>Editar imagem com camadas</button>{draft.asset?.credit && <a href={draft.asset.credit.sourceUrl} target="_blank" rel="noreferrer">{draft.asset.credit.author} · {draft.asset.credit.license} ↗</a>}</div>
           <div>
             <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">motor da interação</span>
             <div className="grid grid-cols-2 gap-2 mt-2">
@@ -669,6 +687,7 @@ export default function InteractiveStudio({
               <CircleHelp size={14} className="shrink-0 mt-0.5"/>
               <span><strong className="text-black">{ENGINE_META.find((item)=>item.id===draft.engine)?.name}:</strong> {ENGINE_META.find((item)=>item.id===draft.engine)?.guide}</span>
             </div>
+            <div className="interactive-effect-catalog"><label>Efeitos de {ENGINE_LABELS[draft.engine]}<select aria-label="Efeito da biblioteca" value={selectedLibraryEffect.id} onChange={event=>setDraft(current=>({...current,libraryEffect:event.target.value}))}>{[...new Set(EFFECT_CATALOG[draft.engine].map(item=>item.category))].map(category=><optgroup key={category} label={category}>{EFFECT_CATALOG[draft.engine].filter(item=>item.category===category).map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label><p>{selectedLibraryEffect.hint}</p><button type="button" disabled={!canEdit} onClick={applyLibraryEffect}><Play size={16}/>Aplicar efeito</button><a href={LIBRARY_DOCS[draft.engine]} target="_blank" rel="noreferrer">Referência completa da biblioteca ↗</a><p>Escolha um efeito pronto ou descreva outra combinação à IA. O código fica disponível em Dev.</p></div>
             {engineTourIndex !== null && ENGINE_META[engineTourIndex] && (
               <div className="mt-3 rounded-2xl border-2 border-black bg-white p-3 shadow-lg">
                 <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-neutral-500">Primeira visita · {engineTourIndex + 1}/{ENGINE_META.length}</div>
@@ -894,20 +913,7 @@ export default function InteractiveStudio({
 
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
-          {developerMode && <div className="border border-[#D8D7D2] rounded-xl overflow-hidden">
-            <div className="h-10 px-3 bg-[#F7F7F4] border-b border-[#D8D7D2] flex items-center justify-between">
-              <span className="text-[10px] font-mono font-bold uppercase flex items-center gap-1.5"><Code2 size={13} /> código · {ENGINE_LABELS[draft.engine]}</span>
-              <button type="button" onClick={copyCode} className="h-8 px-2 rounded-lg hover:bg-black/5 flex items-center gap-1 text-[10px] font-mono cursor-pointer">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'COPIADO' : 'COPIAR'}</button>
-            </div>
-            <textarea
-              value={draft.code}
-              onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))}
-              disabled={!canEdit}
-              spellCheck={false}
-              className="w-full min-h-[300px] p-3 font-mono text-[11px] leading-relaxed outline-none resize-y bg-[#101010] text-[#F5F5F5] disabled:opacity-70 select-text"
-              style={{ touchAction: 'manipulation' }}
-            />
-          </div>}
+
         </section>}>
 
         <section className="interactive-workbench min-h-0 flex flex-col bg-[#ECEBE7]">
@@ -916,6 +922,21 @@ export default function InteractiveStudio({
             <button type="button" aria-pressed={developerMode} aria-label="Modo desenvolvedor" onClick={() => setDeveloperMode(value => !value)} className="h-9 px-3 rounded-lg border flex items-center gap-2"><Code2 size={16}/><span>Dev</span></button>
             <button type="button" onClick={() => { setPreviewCode(draft.code); setRuntimeError(''); setPreviewKey((value) => value + 1); }} className="h-8 px-3 rounded-lg border border-[#D8D7D2] bg-white hover:border-black text-[10px] font-mono font-bold cursor-pointer">EXECUTAR</button>
           </div>
+          {developerMode && <div className="interactive-code-editor">
+            <div className="h-10 px-3 bg-[#F7F7F4] border-b border-[#D8D7D2] flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold uppercase flex items-center gap-1.5"><Code2 size={13} /> código · {ENGINE_LABELS[draft.engine]}</span>
+              <button type="button" onClick={copyCode} className="h-8 px-2 rounded-lg hover:bg-black/5 flex items-center gap-1 text-[10px] font-mono cursor-pointer">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'COPIADO' : 'COPIAR'}</button>
+            </div>
+            <textarea
+              aria-label="Código do efeito" value={draft.code}
+              onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))}
+              disabled={!canEdit}
+              spellCheck={false}
+              onKeyDown={event=>{if(event.key==='Tab'){event.preventDefault();const input=event.currentTarget,start=input.selectionStart,end=input.selectionEnd;setDraft(current=>({...current,code:current.code.slice(0,start)+'  '+current.code.slice(end)}));requestAnimationFrame(()=>{input.selectionStart=input.selectionEnd=start+2;});}if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();setPreviewCode(draft.code);setRuntimeError('');setPreviewKey(value=>value+1);}}}
+              className="interactive-code-input"
+              style={{ touchAction: 'manipulation' }}
+            />
+          </div>}
           {runtimeError && <div role="alert" className="m-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm"><b>O sketch encontrou um erro</b><p className="break-words mt-1">{runtimeError}</p><button type="button" disabled={isGenerating || !canEdit} onClick={() => void generateFromPrompt(true)} className="mt-2 border rounded-lg px-3 py-2 disabled:opacity-50">{isGenerating ? 'Corrigindo…' : 'Corrigir com IA'}</button></div>}
           <div className="interactive-sketch-container flex-1 min-h-0 p-3 sm:p-5">
             <div className="interactive-sketch-surface h-full rounded-2xl overflow-hidden border border-[#D0CFCB] bg-white shadow-sm">
