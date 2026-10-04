@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { parseVideoComposition, videoCompositionRules } from '../../src/lib/videoComposition';
 import { sketchVisualParts, sketchContext, threeSketchRules } from '../../src/lib/interactiveAI';
 import crypto from 'node:crypto';
 
@@ -693,37 +694,14 @@ function cleanInteractiveResponse(text, fallbackEngine = 'p5') {
 }
 
 
-function cleanVideoPlanJson(text) {
-  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const start = stripped.indexOf('{');
-  const end = stripped.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('A IA de vídeo não retornou JSON válido.');
-  const data = JSON.parse(stripped.slice(start, end + 1));
-  const allowedFormats = new Set(['reel','story','tiktok','square','feed','youtube','facebook','linkedin','custom']);
-  const allowedTransitions = new Set(['cut','fade','slide','zoom']);
-  const timeline = Array.isArray(data?.timeline) ? data.timeline.slice(0, 24).map((item) => ({
-    mediaId: String(item?.mediaId || ''),
-    name: String(item?.name || ''),
-    duration: Math.max(0.5, Math.min(12, Number(item?.duration) || 2.5)),
-    transition: allowedTransitions.has(String(item?.transition)) ? String(item.transition) : 'fade',
-    fit: item?.fit === 'contain' ? 'contain' : 'cover',
-    caption: String(item?.caption || '').slice(0, 240),
-  })).filter((item) => item.mediaId || item.name) : [];
-  return {
-    title: String(data?.title || '').slice(0, 160),
-    subtitle: String(data?.subtitle || '').slice(0, 260),
-    format: allowedFormats.has(String(data?.format)) ? String(data.format) : undefined,
-    timeline,
-    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 8).map(String) : [],
-  };
-}
+function cleanVideoPlanJson(text) { return parseVideoComposition(text); }
 
 function buildVideoPlanMessages(body) {
   const video = body?.video || {};
   const media = Array.isArray(video.media) ? video.media.slice(0, 60) : [];
-  const system = `Você é montador(a), diretor(a) de motion e estrategista de conteúdo audiovisual dentro do Ateliê 5I’s. Sua tarefa é transformar a instrução do usuário e a mídia DISPONÍVEL em uma timeline editável — nunca inventar arquivos inexistentes. Priorize ritmo, clareza, legibilidade mobile, acessibilidade e coerência com o formato social escolhido. Use apenas mediaId/name presentes na lista. Retorne SOMENTE JSON válido com este formato: {"title":"...","subtitle":"...","format":"reel|story|tiktok|square|feed|youtube|facebook|linkedin|custom","timeline":[{"mediaId":"id existente","name":"nome existente","duration":2.5,"transition":"cut|fade|slide|zoom","fit":"cover|contain","caption":"texto opcional"}],"notes":["decisão de montagem"]}. Se houver pouca mídia, monte uma versão curta com o que existe em vez de inventar cenas.`;
+  const system = videoCompositionRules;
   const user = `PEDIDO: ${String(body?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m)=>`- ${m.id} | ${m.kind} | ${m.name}`).join('\n') || 'nenhuma mídia'}`;
-  return { system, user };
+  return { system, user: user + `\nCURRENT_TIMELINE: ${JSON.stringify(video.currentTimeline || [])}` };
 }
 
 
@@ -1234,7 +1212,7 @@ async function generateMediatorInsight(body) {
     } catch {
       result = await callGeminiStructured(system, `${user}
 
-CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e use pelo menos 1 mediaId EXATAMENTE como listado na mídia disponível.`, 2600, timeout, 0.12);
+CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma cena executável. Use mediaId EXATAMENTE como listado quando houver mídia; para cenas gráficas ou biblioteca vazia, use mediaId vazio.`, 2600, timeout, 0.12);
       return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
     }
   }
