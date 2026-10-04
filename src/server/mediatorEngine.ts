@@ -1,3 +1,4 @@
+import { parseVideoComposition, videoCompositionRules } from '../lib/videoComposition';
 import { sketchVisualParts, sketchContext, threeSketchRules } from '../lib/interactiveAI';
 export type AiProvider = 'groq' | 'gemini' | 'offline';
 
@@ -572,40 +573,14 @@ function buildUXWritingMessages(body: MediatorRequestBody) {
 }
 
 
-function cleanVideoPlanJson(text: string) {
-  const stripped = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const start = stripped.indexOf('{');
-  const end = stripped.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error('A IA de vídeo não retornou JSON válido.');
-  const data = JSON.parse(stripped.slice(start, end + 1));
-  const allowedFormats = new Set(['reel','story','tiktok','square','feed','youtube','facebook','linkedin','custom']);
-  const allowedTransitions = new Set(['cut','fade','slide','zoom']);
-  const allowedMotions = new Set(['none','pan-left','pan-right','zoom-in','zoom-out','float','pulse','rotate']);
-  const timeline = Array.isArray(data?.timeline) ? data.timeline.slice(0, 24).map((item: any) => ({
-    mediaId: String(item?.mediaId || ''),
-    name: String(item?.name || ''),
-    duration: Math.max(0.5, Math.min(12, Number(item?.duration) || 2.5)),
-    transition: allowedTransitions.has(String(item?.transition)) ? String(item.transition) : 'fade',
-    fit: item?.fit === 'contain' ? 'contain' : 'cover',
-    caption: String(item?.caption || '').slice(0, 240),
-    overlayText: String(item?.overlayText || '').slice(0, 160),
-    motion: allowedMotions.has(String(item?.motion)) ? String(item.motion) : 'none',
-  })).filter((item: any) => item.mediaId || item.name) : [];
-  return {
-    title: String(data?.title || '').slice(0, 160),
-    subtitle: String(data?.subtitle || '').slice(0, 260),
-    format: allowedFormats.has(String(data?.format)) ? String(data.format) : undefined,
-    timeline,
-    notes: Array.isArray(data?.notes) ? data.notes.slice(0, 8).map(String) : [],
-  };
-}
+function cleanVideoPlanJson(text: string) { return parseVideoComposition(text); }
 
 function buildVideoPlanMessages(body: MediatorRequestBody) {
   const video = (body as any)?.video || {};
   const media = Array.isArray(video.media) ? video.media.slice(0, 60) : [];
-  const system = `Você é montador(a), diretor(a) de motion e estrategista de conteúdo audiovisual dentro do Ateliê 5I’s. Sua tarefa é transformar a instrução do usuário e a mídia DISPONÍVEL em uma timeline editável — nunca inventar arquivos inexistentes. Priorize ritmo, clareza, legibilidade mobile, acessibilidade e coerência com o formato social escolhido. Use apenas mediaId/name presentes na lista. Retorne SOMENTE JSON válido com este formato: {"title":"...","subtitle":"...","format":"reel|story|tiktok|square|feed|youtube|facebook|linkedin|custom","timeline":[{"mediaId":"id existente","name":"nome existente","duration":2.5,"transition":"cut|fade|slide|zoom","fit":"cover|contain","motion":"none|pan-left|pan-right|zoom-in|zoom-out|float|pulse|rotate","overlayText":"texto curto opcional","caption":"texto opcional"}],"notes":["decisão de montagem"]}. Se houver pouca mídia, monte uma versão curta com o que existe em vez de inventar cenas.`;
+  const system = videoCompositionRules;
   const user = `PEDIDO: ${String((body as any)?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m:any)=>`- ${m.id} | ${m.kind} | ${m.name}`).join('\n') || 'nenhuma mídia'}`;
-  return { system, user };
+  return { system, user: user + `\nCURRENT_TIMELINE: ${JSON.stringify(video.currentTimeline || [])}` };
 }
 
 function cleanPublicationJson(text: string): PublicationArticle {
