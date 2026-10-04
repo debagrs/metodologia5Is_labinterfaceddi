@@ -1,3 +1,4 @@
+import {recordLocalVersion} from './workspaceHistory';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ensureTursoSession,
@@ -78,6 +79,8 @@ export function useCloudWorkspace(options: Options): CloudState {
   const saveInFlightRef = useRef(false);
   const saveAgainRef = useRef(false);
 
+  const previousHistoryRef=useRef<WorkspaceSnapshot|null>(null);
+  const historyAtRef=useRef(0);
   const accountId = options.activeProfile?.id || null;
 
   const currentSnapshot = useMemo(
@@ -106,6 +109,15 @@ export function useCloudWorkspace(options: Options): CloudState {
     () => serializeSnapshot(currentSnapshot),
     [currentSnapshot],
   );
+
+  useEffect(()=>{const publish=()=>window.dispatchEvent(new CustomEvent('5is-history-state',{detail:currentSnapshot}));publish();const restore=(event:Event)=>{const detail=(event as CustomEvent).detail;if(detail?.ownerId===accountId && detail.snapshot){applySnapshotRef.current({...normalizeSnapshot(detail.snapshot),activeProfile:currentSnapshot.activeProfile,classrooms:currentSnapshot.classrooms,students:currentSnapshot.students});previousHistoryRef.current=null;}};window.addEventListener('5is-history-request',publish);window.addEventListener('5is-history-restore',restore);return()=>{window.removeEventListener('5is-history-request',publish);window.removeEventListener('5is-history-restore',restore)}},[currentSnapshot,accountId]);
+  useEffect(()=>{
+    if(!accountId || (isTursoConfigured && hydratedOwnerId!==accountId))return;
+    const previous=previousHistoryRef.current;
+    const ids=(s:WorkspaceSnapshot)=>new Set([...s.projectWorkspaces.flatMap(w=>[w.project.id,...w.nodes.map(n=>n.id)]),s.soloProject?.id,...s.soloNodes.map(n=>n.id)].filter(Boolean));
+    if(previous?.activeProfile?.id===accountId && JSON.stringify(previous)!==currentSerialized){const oldIds=ids(previous),newIds=ids(currentSnapshot);const removed=[...oldIds].some(id=>!newIds.has(id));if(removed||Date.now()-historyAtRef.current>30000){historyAtRef.current=Date.now();void recordLocalVersion(accountId,previous).catch(e=>console.error('[Histórico local]',e));}}
+    previousHistoryRef.current=currentSnapshot;
+  },[accountId,hydratedOwnerId,currentSerialized]);
 
   useEffect(() => {
     applySnapshotRef.current = options.applySnapshot;
