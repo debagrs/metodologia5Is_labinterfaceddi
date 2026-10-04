@@ -1,3 +1,4 @@
+import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
@@ -571,7 +572,7 @@ export default function InteractiveStudio({
 
   return (
     <div
-      className="fixed inset-0 z-[120] bg-[#F4F3EF] flex flex-col select-text"
+      className="studio-editor fixed inset-0 z-[120] bg-[#F4F3EF] flex flex-col select-text"
       style={{ touchAction: 'auto' }}
       onPointerDown={(event) => event.stopPropagation()}
       onPointerMove={(event) => event.stopPropagation()}
@@ -594,8 +595,7 @@ export default function InteractiveStudio({
         </button>
       </header>
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[430px_minmax(0,1fr)]">
-        <section className="min-h-0 xl:border-r border-[#D8D7D2] bg-white overflow-y-auto p-4 sm:p-5 space-y-5">
+      <StudioWorkspace tools={<section className="min-h-0 xl:border-r border-[#D8D7D2] bg-white overflow-y-auto p-4 sm:p-5 space-y-5">
           <div>
             <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">motor da interação</span>
             <div className="grid grid-cols-2 gap-2 mt-2">
@@ -849,7 +849,7 @@ export default function InteractiveStudio({
               style={{ touchAction: 'manipulation' }}
             />
           </div>
-        </section>
+        </section>}>
 
         <section className="min-h-[48vh] xl:min-h-0 flex flex-col bg-[#ECEBE7]">
           <div className="h-11 px-4 border-b border-[#D8D7D2] bg-white/90 flex items-center justify-between shrink-0">
@@ -862,7 +862,7 @@ export default function InteractiveStudio({
             </div>
           </div>
         </section>
-      </main>
+      </StudioWorkspace>
     </div>
   );
 }
