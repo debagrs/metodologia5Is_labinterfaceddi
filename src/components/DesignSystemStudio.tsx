@@ -1,3 +1,4 @@
+import {loadGraphicFont} from '../lib/graphicFonts';
 import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Eye, Plus, Save, Search, ShieldCheck, Trash2, Type, X } from 'lucide-react';
@@ -28,7 +29,7 @@ export const blankDesignSystem=():DesignSystemDocument=>({
   ],spacing:[4,8,12,16,24,32,48,64],radii:[0,4,8,12,16,24,999],layoutSpacing:{pagePadding:24,sectionGap:32,componentGap:16,controlHeight:44},updatedAt:new Date().toISOString()
 });
 
-const loadGoogleFont=(family:string)=>{if(typeof document==='undefined'||!family)return;const id=`gf-${family.replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;if(document.getElementById(id))return;const link=document.createElement('link');link.id=id;link.rel='stylesheet';link.href=`https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g,'+')}:wght@300;400;500;600;700;800;900&display=swap`;document.head.appendChild(link);};
+const loadGoogleFont=(family:string)=>{void loadGraphicFont(family).catch(()=>{})};
 const luminance=(hex:string)=>{const c=normalizeHex(hex).slice(1);const rgb=[0,2,4].map(i=>parseInt(c.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
 const contrastRatio=(a:string,b:string)=>{const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
 type Vision='normal'|'protanopia'|'deuteranopia'|'tritanopia'|'achromatopsia';
