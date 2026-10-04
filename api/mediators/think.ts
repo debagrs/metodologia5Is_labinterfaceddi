@@ -700,7 +700,7 @@ function buildVideoPlanMessages(body) {
   const video = body?.video || {};
   const media = Array.isArray(video.media) ? video.media.slice(0, 60) : [];
   const system = videoCompositionRules;
-  const user = `PEDIDO: ${String(body?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m)=>`- ${m.id} | ${m.kind} | ${m.name}`).join('\n') || 'nenhuma mídia'}`;
+  const user = `PEDIDO: ${String(body?.prompt || '')}\nFORMATO ATUAL: ${String(video.format || '')}\nTÍTULO ATUAL: ${String(video.title || '')}\nSUBTÍTULO ATUAL: ${String(video.subtitle || '')}\nMÍDIA DISPONÍVEL:\n${media.map((m)=>`- ${m.id} | ${m.kind} | ${m.name}${m.fitHint==='contain'?' | preserve a arte inteira com fit contain':''}`).join('\n') || 'nenhuma mídia'}`;
   return { system, user: user + `\nCURRENT_TIMELINE: ${JSON.stringify(video.currentTimeline || [])}` };
 }
 
@@ -1203,7 +1203,8 @@ async function generateMediatorInsight(body) {
   if (body?.mode === 'video-compose') {
     if (!String(body?.prompt || '').trim()) throw new Error('Descreva o vídeo que deseja montar.');
     const { system, user } = buildVideoPlanMessages(body);
-    const timeout = Number(process.env.AI_VIDEO_TIMEOUT_MS || 35000);
+    const startedAt=Date.now();
+    const timeout = Math.min(35000,Math.max(5000,Number(process.env.AI_VIDEO_TIMEOUT_MS || 35000)));
     let result = await callGeminiStructured(system, user, 3600, timeout, 0.22);
     try {
       const plan = cleanVideoPlanJson(result.text);
@@ -1212,7 +1213,7 @@ async function generateMediatorInsight(body) {
     } catch {
       result = await callGeminiStructured(system, `${user}
 
-CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma cena executável. Use mediaId EXATAMENTE como listado quando houver mídia; para cenas gráficas ou biblioteca vazia, use mediaId vazio.`, 2600, timeout, 0.12);
+CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma cena executável. Use mediaId EXATAMENTE como listado quando houver mídia; para cenas gráficas ou biblioteca vazia, use mediaId vazio.`, 2600, Math.max(2000,Math.min(timeout,52000-(Date.now()-startedAt))), 0.12);
       return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
     }
   }
