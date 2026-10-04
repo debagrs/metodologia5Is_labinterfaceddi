@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { sketchVisualParts, sketchContext, threeSketchRules } from '../../src/lib/interactiveAI';
 import crypto from 'node:crypto';
 
 export const maxDuration = 60;
@@ -485,6 +486,7 @@ Se ASSET.kind === 'svg', monte e manipule o SVG ORIGINAL usando window.loadInter
 
 MOTOR: ${engine}
 ${engineRules}
+${engine === 'three' ? threeSketchRules : ''}
 
 RUNTIME COMUM
 - STAGE ocupa toda a área da prévia e já existe.
@@ -496,7 +498,7 @@ ${modeRules}
 EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
 INTENSIDADE: ${intensity}
 PROTEÇÃO DA MARCA: ${preserveBrand ? 'ATIVA' : 'desativada'}
-${preserveBrand && asset?.kind === 'svg' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
+${preserveBrand && asset?.kind === 'svg' && engine !== 'three' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
 - O SVG enviado é a fonte visual final. NÃO recrie, redesenhe ou substitua seus elementos.
 - NÃO altere fill, stroke, gradientes, viewBox, proporções, tipografia ou ordem visual dos elementos.
 - Preserve exatamente as cores detectadas: ${JSON.stringify(asset.profile?.palette || [])}.
@@ -549,7 +551,7 @@ PEDIDO / NOVA INSTRUÇÃO:
 ${String(body.prompt || '')}
 
 Gere o experimento completo usando ${engine}.`;
-  return { system, user };
+  return { system, user: user + sketchContext(body) };
 }
 
 function cleanImplementationPromptJson(text) {
@@ -1147,7 +1149,7 @@ async function callGeminiStructured(system, user, maxOutputTokens = 6000, timeou
   return { text, provider: 'Gemini', model };
 }
 
-async function callGeminiInteractive(system, user, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35) {
+async function callGeminiInteractive(system, user, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35, visualReferences = []) {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
   const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
@@ -1157,7 +1159,7 @@ async function callGeminiInteractive(system, user, maxOutputTokens = 5000, timeo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
+      contents: [{ role: 'user', parts: [{ text: user }, ...sketchVisualParts(visualReferences)] }],
       generationConfig: { temperature, maxOutputTokens }
     })
   }, timeoutMs);
@@ -1292,7 +1294,7 @@ CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e use pelo menos 1 med
     const { system, user } = buildInteractiveCodeMessages(body);
     const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
     const engine = allowedEngines.includes(body.engine) ? body.engine : 'p5';
-    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35, body.visualReferences || []);
     return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
   }
 
