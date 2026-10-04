@@ -1,3 +1,8 @@
+import {useGraphicFonts} from '../lib/graphicFonts';
+import {Search as ImageSearch} from 'lucide-react';
+import ImageLibrary from './ImageLibrary';
+import PhotopeaEditor from './PhotopeaEditor';
+import { imageCredit, type OpenImage } from '../lib/openImages';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { 
@@ -9,7 +14,7 @@ import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, Draw
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
-import DrawingStudio, { DrawingPreview, drawingToSvgString } from './DrawingStudio';
+import DrawingStudio, { DrawingPreview, drawingToSvgString, drawingToVideoSvg } from './DrawingStudio';
 import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
 import WireframeStudio, { WireframePreview, blankWireframe, WireframeImportSource } from './WireframeStudio';
 import DesignSystemStudio, { DesignSystemPreview, blankDesignSystem } from './DesignSystemStudio';
@@ -39,7 +44,7 @@ const PHASE_NOTE_PALETTE: Record<Phase, { body: string; header: string; border: 
 
 const xmlEscape = (value: any) => String(value ?? '').replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m] || m));
 const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-function wireframeToSvgString(document: WireframeDocument) {
+function wireframeToSvgString(document: WireframeDocument, defaultFont="Inter") {
   const frame = document.frames.find((item) => item.id === document.activeFrameId) || document.frames[0];
   if (!frame) return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600"><rect width="400" height="600" fill="#fff"/></svg>';
   const w = Math.max(240, frame.width || 393), h = Math.max(320, frame.height || 852);
@@ -53,7 +58,7 @@ function wireframeToSvgString(document: WireframeDocument) {
     let body = `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${r}" fill="${bg}" stroke="#D8D8D4" stroke-width="1"/>`;
     if (block.type === 'image') body += `<path d="M ${x+bw*.18} ${y+bh*.68} L ${x+bw*.4} ${y+bh*.42} L ${x+bw*.52} ${y+bh*.56} L ${x+bw*.7} ${y+bh*.32} L ${x+bw*.84} ${y+bh*.68} Z" fill="#CFCFCA"/>`;
     else if (block.type === 'divider') body = `<line x1="${x}" y1="${y+bh/2}" x2="${x+bw}" y2="${y+bh/2}" stroke="#333"/>`;
-    else body += `<text x="${x+12*scale}" y="${y+bh/2+4*scale}" font-family="Arial,sans-serif" font-size="${Math.max(9,14*scale)}" fill="${fg}">${label}</text>`;
+    else body += `<text x="${x+12*scale}" y="${y+bh/2+4*scale}" font-family="${xmlEscape(block.fontFamily || defaultFont)}" font-size="${Math.max(9,(block.fontSize || 14)*scale)}" fill="${fg}">${label}</text>`;
     y += bh + gap; return body;
   }).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${outW} ${outH}"><rect width="${outW}" height="${outH}" fill="${frame.background || '#FFFFFF'}"/>${pieces}</svg>`;
@@ -124,6 +129,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     currentY: number;
   } | null>(null);
   const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
+  const [imageLibraryOpen,setImageLibraryOpen]=useState(false);
+  const [photoEditor,setPhotoEditor]=useState<{url?:string;name:string;nodeId?:string}|null>(null);
   const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
   const [interactiveEditorNodeId, setInteractiveEditorNodeId] = useState<string | null>(null);
   const [newInteractive, setNewInteractive] = useState<InteractiveDocument | null>(null);
@@ -161,11 +168,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     return () => document.body.classList.remove('atelier-open');
   }, [atelierOpen]);
 
+  useGraphicFonts([projectDesignSystem?.primaryFont,...Object.values(projectDesignSystem?.fontFamilies || {})]);
   const projectVideoMedia = nodes.flatMap((item) => {
     const media: Array<{ id: string; kind: 'image' | 'video'; url: string; name: string; source: 'project' }> = [];
     if (item.type === 'canvas-image' && item.imageUrl) media.push({ id: item.id, kind: 'image', url: item.imageUrl, name: item.imageName || item.title || 'Imagem do projeto', source: 'project' });
-    if (item.type === 'drawing-sheet' && item.drawing) media.push({ id: item.id, kind: 'image', url: svgDataUrl(drawingToSvgString(item.drawing)), name: item.drawingName || item.title || 'Desenho do projeto', source: 'project' });
-    if (item.type === 'wireframe-board' && item.wireframe) media.push({ id: item.id, kind: 'image', url: svgDataUrl(wireframeToSvgString(item.wireframe)), name: item.wireframeName || item.title || 'Wireframe do projeto', source: 'project' });
+    if (item.type === 'drawing-sheet' && item.drawing) media.push({ id: item.id, kind: 'image', url: svgDataUrl(drawingToVideoSvg(item.drawing)), name: item.drawingName || item.title || 'Desenho do projeto', source: 'project' });
+    if (item.type === 'wireframe-board' && item.wireframe) media.push({ id: item.id, kind: 'image', url: svgDataUrl(wireframeToSvgString(item.wireframe, projectDesignSystem?.fontFamilies?.text || projectDesignSystem?.primaryFont)), name: item.wireframeName || item.title || 'Wireframe do projeto', source: 'project' });
     if (item.type === 'interactive-lab' && item.interactive?.asset?.url) media.push({ id: item.id, kind: 'image', url: item.interactive.asset.url, name: item.interactiveName || item.title || 'Asset da interação', source: 'project' });
     if (item.type === 'sprite-character' && item.sprite) media.push({ id: item.id, kind: 'image', url: svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')), name: item.spriteName || item.title || 'Personagem do projeto', source: 'project' });
     if (item.type === 'video-board' && item.video) { const url = item.video.generatedUrl || item.video.sourceUrl; if (url) media.push({ id: item.id, kind: 'video', url, name: item.videoName || item.video.title || 'Vídeo do projeto', source: 'project' }); (item.video.media || []).forEach((m) => { if (m.url) media.push({ ...m, id: `${item.id}:${m.id}`, source: 'project' }); }); }
@@ -279,7 +287,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     image.src = url;
   });
 
-  const uploadCanvasImage = async (file: File) => {
+  const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageLibraryOpen(false);};
+  const uploadCanvasImage = async (file: File,replaceNodeId?:string) => {
     if (!canEditCanvas) return;
     if (!file.type.startsWith('image/')) {
       setCanvasImageError('Escolha um arquivo de imagem.');
@@ -327,8 +336,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       }
 
       const position = getCenteredPosition(startWidth, startHeight);
-      onAddNode({
-        type: 'canvas-image',
+      const existing=replaceNodeId?nodes.find(item=>item.id===replaceNodeId):undefined;
+      const imageNode={
+        type: 'canvas-image' as const,
         title: data.name || file.name,
         content: '',
         phase: activePhase,
@@ -341,9 +351,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         imageContentType: data.contentType || file.type,
         aspectRatio,
         connections: [],
-      });
+      };
+      if(existing)onUpdateNode({...existing,imageUrl:data.url,imageName:data.name || file.name,imageContentType:data.contentType || file.type,aspectRatio,height:existing.width/aspectRatio});else onAddNode(imageNode);
+      return true;
     } catch (error: any) {
       setCanvasImageError(error?.message || 'Não foi possível adicionar a imagem ao canvas.');
+      return false;
     } finally {
       setUploadingCanvasImage(false);
       if (canvasImageInputRef.current) canvasImageInputRef.current.value = '';
@@ -1142,6 +1155,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
                   {(isSelected || isConnectionSource) && canEditCanvas && !isConnectionTarget && (
                     <div className="absolute -top-11 right-0 z-30 flex items-center gap-1 rounded-xl border border-[#E0E0DE] bg-white/95 p-1 shadow-lg canvas-control">
+                      <button type="button" aria-label="Editar imagem" title="Editar imagem: camadas, recorte, máscaras, texto e filtros" onClick={event=>{event.stopPropagation();setPhotoEditor({url:node.imageUrl,name:node.imageName || 'imagem',nodeId:node.id});}} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-black/5"><Pencil size={14}/></button>
+                      {node.imageCredit && <a href={node.imageCredit.sourceUrl} target="_blank" rel="noreferrer" title={`${node.imageCredit.author} · ${node.imageCredit.license}`} aria-label="Créditos e licença da imagem" className="h-8 w-8 rounded-lg flex items-center justify-center" onClick={event=>event.stopPropagation()}><BookOpen size={14}/></a>}
                       <button
                         type="button"
                         onClick={(event) => {
@@ -1735,7 +1750,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                         <span className="text-[9px] font-mono text-black font-semibold tracking-wider uppercase">Bloco de Notas</span>
                         <span className="text-[10px] text-gray-400 font-mono">#{node.id.substring(0, 4)}</span>
                       </div>
-                      <RichNote content={node.content} onChange={(value) => onUpdateNodeContent(node.id, value)} disabled={!canEditCanvas} />
+                      <RichNote defaultFontFamily={projectDesignSystem?.fontFamilies?.notes || projectDesignSystem?.primaryFont} content={node.content} onChange={(value) => onUpdateNodeContent(node.id, value)} disabled={!canEditCanvas} />
                     </div>
                   )}
 
@@ -1897,6 +1912,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           {canEditCanvas && (
             <>
               <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
+              <button type="button" onClick={()=>setImageLibraryOpen(true)} title="Pesquisar imagens livres" aria-label="Pesquisar imagens livres" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><ImageSearch size={14}/><span className="hidden sm:inline">BUSCAR IMAGEM</span></button>
+              <button type="button" onClick={()=>setPhotoEditor({name:'Novo projeto'})} title="Criar e editar imagem com camadas" aria-label="Editor de imagem com camadas" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><Pencil size={14}/><span className="hidden sm:inline">EDITAR IMAGEM</span></button>
               <input
                 ref={canvasImageInputRef}
                 type="file"
@@ -1967,8 +1984,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
 
+      {imageLibraryOpen && <ImageLibrary onChoose={addOpenImage} onClose={()=>setImageLibraryOpen(false)}/>}
+      {photoEditor && <PhotopeaEditor key={photoEditor.nodeId || photoEditor.name} url={photoEditor.url} name={photoEditor.name} onSave={async file=>{const result=await uploadCanvasImage(file,photoEditor.nodeId);if(!result)throw new Error('Não foi possível salvar a imagem. Verifique sua sessão e envie uma versão PNG de até 4 MB.');}} onClose={()=>setPhotoEditor(null)}/>}
       {newDrawing && (
         <DrawingStudio
+          defaultFontFamily={projectDesignSystem?.fontFamilies?.text || projectDesignSystem?.primaryFont}
           key="new-drawing"
           drawing={newDrawing}
           title="Novo desenho"
@@ -2009,6 +2029,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         if (!drawingNode) return null;
         return (
           <DrawingStudio
+          defaultFontFamily={projectDesignSystem?.fontFamilies?.text || projectDesignSystem?.primaryFont}
             key={drawingNode.id}
             drawing={drawingNode.drawing || blankDrawing()}
             title={drawingNode.drawingName || drawingNode.title || 'Folha de desenho'}
