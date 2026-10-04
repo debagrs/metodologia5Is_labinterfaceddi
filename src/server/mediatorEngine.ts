@@ -1,3 +1,4 @@
+import { sketchVisualParts, sketchContext, threeSketchRules } from '../lib/interactiveAI';
 export type AiProvider = 'groq' | 'gemini' | 'offline';
 
 export interface MediatorRequestBody {
@@ -6,7 +7,7 @@ export interface MediatorRequestBody {
   phase: string;
   mode?: 'chat' | 'publication' | string;
   message?: string;
-  conversation?: Array<{ role: string; text: string }>;
+  conversation?: Array<{ role: string; text?: string; content?: string }>;
   conversations?: Array<{ mediatorId: string; mediatorName: string; messages: Array<{ role: string; text: string; createdAt?: string }> }>;
   existingThoughts?: Array<{ type: string; title: string; content: string; phase: string; [key: string]: any }>;
   engine?: 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg' | string;
@@ -25,6 +26,9 @@ export interface MediatorRequestBody {
   uxWriting?: { action?: string; sourceText?: string; originalText?: string; context?: string; screen?: string; tone?: string; sourceLocale?: string; targetLocale?: string; prompt?: string; glossary?: string[] };
   video?: any;
   character?: any;
+  characterReference?: any;
+  visualReferences?: Array<{mimeType: string; data: string}>;
+  runtimeError?: string;
   existingApis?: any[];
 }
 
@@ -302,6 +306,7 @@ Se ASSET.kind === 'svg', monte e manipule o SVG ORIGINAL usando window.loadInter
 
 MOTOR: ${engine}
 ${engineRules[engine]}
+${engine === 'three' ? threeSketchRules : ''}
 
 RUNTIME COMUM
 - STAGE ocupa toda a área da prévia e já existe.
@@ -313,7 +318,7 @@ ${modeRules[interactionMode] || modeRules.pointer}
 EFEITO PRÉ-SELECIONADO: ${effectPreset || 'nenhum'}
 INTENSIDADE: ${intensity}
 PROTEÇÃO DA MARCA: ${preserveBrand ? 'ATIVA' : 'desativada'}
-${preserveBrand && asset?.kind === 'svg' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
+${preserveBrand && asset?.kind === 'svg' && engine !== 'three' ? `REGRAS DE FIDELIDADE OBRIGATÓRIAS:
 - O SVG enviado é a fonte visual final. NÃO recrie, redesenhe ou substitua seus elementos.
 - NÃO altere fill, stroke, gradientes, viewBox, proporções, tipografia ou ordem visual dos elementos.
 - Preserve exatamente as cores detectadas: ${JSON.stringify(asset.profile?.palette || [])}.
@@ -364,7 +369,7 @@ PEDIDO / NOVA INSTRUÇÃO:
 ${body.prompt || ''}
 
 Gere o experimento completo usando ${engine}.`;
-  return { system, user };
+  return { system, user: user + sketchContext(body) };
 }
 
 function parseJsonObject(text: string, errorMessage: string) {
@@ -825,7 +830,7 @@ async function callGeminiStructured(system: string, user: string, maxOutputToken
   return { text, provider: 'Gemini', model };
 }
 
-async function callGeminiInteractive(system: string, user: string, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35) {
+async function callGeminiInteractive(system: string, user: string, maxOutputTokens = 5000, timeoutMs = 35000, temperature = 0.35, visualReferences = []) {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY ausente.');
   const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
@@ -836,7 +841,7 @@ async function callGeminiInteractive(system: string, user: string, maxOutputToke
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: user }] }],
+        contents: [{ role: 'user', parts: [{ text: user }, ...sketchVisualParts(visualReferences)] }],
         generationConfig: { temperature, maxOutputTokens }
       })
     },
@@ -979,7 +984,7 @@ export async function generateMediatorInsight(body: MediatorRequestBody): Promis
     const { system, user } = buildInteractiveCodeMessages(body);
     const allowedEngines = ['p5', 'three', 'gsap', 'anime', 'matter', 'svg'];
     const engine = allowedEngines.includes(String(body.engine)) ? String(body.engine) : 'p5';
-    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35);
+    const result = await callGeminiInteractive(system, user, 5000, Number(process.env.AI_INTERACTIVE_TIMEOUT_MS || 35000), 0.35, body.visualReferences || []);
     return { interactive: cleanInteractiveResponse(result.text, engine), provider: result.provider, model: result.model };
   }
 
