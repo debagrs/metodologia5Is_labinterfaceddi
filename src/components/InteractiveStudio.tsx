@@ -1,3 +1,5 @@
+import { normalizeSketchCode, character3DHelper, characterSceneCode } from '../lib/interactiveRuntime';
+import { buildCharacterSvg } from './SpriteStudio';
 import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -239,6 +241,10 @@ const runtimePrelude = (document: InteractiveDocument) => {
   const mode = document.interactionMode || 'pointer';
   return `
 <script>
+window.addEventListener('error', function(event){ parent.postMessage({type:'sketch-error',message:event.message || 'Falha ao carregar uma biblioteca do sketch.'}, '*'); });
+window.addEventListener('unhandledrejection', function(event){ parent.postMessage({type:'sketch-error',message:String(event.reason?.message || event.reason || 'Falha na execução')}, '*'); });
+window.setTimeout(function(){ if (!window.INTERACTIVE_STAGE?.childElementCount) parent.postMessage({type:'sketch-error',message:'O código executou sem criar uma cena visível. Peça à IA para montar o sketch dentro de STAGE.'}, '*'); }, 8000);
+window.INTERACTIVE_CHARACTER = ${escapeJsonForScript(document.characterReference || null)};
 window.INTERACTIVE_ASSET = ${escapeJsonForScript(asset)};
 window.INTERACTION_MODE = ${escapeJsonForScript(mode)};
 window.INTERACTIVE_STAGE = document.getElementById('stage');
@@ -284,13 +290,15 @@ export const blankInteractiveDocument = (engine: InteractiveEngine = 'p5'): Inte
 });
 
 export const interactiveToSrcDoc = (document: InteractiveDocument) => {
-  const code = escapeScript(document.code);
+  let normalized = '';
+  try { normalized = normalizeSketchCode(document.code); } catch (error) { normalized = `throw new Error(${JSON.stringify(String(error))});`; }
+  const code = escapeScript(normalized);
   const baseStyle = `html,body,#stage{width:100%;height:100%;margin:0;overflow:hidden}body{background:#f8f7f3;font-family:Arial,sans-serif}#stage{position:relative;isolation:isolate}canvas,svg{display:block;touch-action:none}img{max-width:100%}`;
   const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><style>${baseStyle}</style>`;
   const bodyOpen = `<body><div id="stage"></div>${runtimePrelude(document)}`;
 
   if (document.engine === 'three') {
-    return `<!doctype html><html><head>${head}</head>${bodyOpen}<script type="module">import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';\nconst ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE;\n${code}</script></body></html>`;
+    return `<!doctype html><html><head>${head}</head>${bodyOpen}<script type="module">try { const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js');\nconst ASSET = window.INTERACTIVE_ASSET; const STAGE = window.INTERACTIVE_STAGE; const MODE = window.INTERACTION_MODE; const CHARACTER = window.INTERACTIVE_CHARACTER;\n${character3DHelper}\n${code}\n} catch(error) { parent.postMessage({type:'sketch-error',message:String(error?.message || error)}, '*'); }</script></body></html>`;
   }
 
   const libraries: Record<Exclude<InteractiveEngine, 'three'>, string> = {
@@ -309,11 +317,19 @@ export function InteractivePreview({
   document,
   className = '',
   interactive = true,
+  onRuntimeError,
 }: {
   document: InteractiveDocument;
   className?: string;
   interactive?: boolean;
+  onRuntimeError?: (message: string) => void;
 }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const receive = (event: MessageEvent) => { if (event.source === frameRef.current?.contentWindow && event.data?.type === 'sketch-error') onRuntimeError?.(String(event.data.message).slice(0, 1200)); };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, [onRuntimeError]);
   const hasCode = Boolean(document.code?.trim());
   const srcDoc = useMemo(() => interactiveToSrcDoc(document), [document]);
 
@@ -332,7 +348,7 @@ export function InteractivePreview({
   }
 
   return (
-    <iframe
+    <iframe ref={frameRef}
       title={document.title || 'Experimento interativo'}
       srcDoc={srcDoc}
       sandbox="allow-scripts"
@@ -360,6 +376,10 @@ export default function InteractiveStudio({
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [developerMode, setDeveloperMode] = useState(false);
+  const [runtimeError, setRuntimeError] = useState('');
+  const [previewCode, setPreviewCode] = useState(document.code);
+  const chatRef = useRef<HTMLDivElement>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [assetUrl, setAssetUrl] = useState(document.asset?.url || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -384,6 +404,7 @@ export default function InteractiveStudio({
       title: current.title || blankInteractiveDocument(engine).title,
       code: '',
     }));
+    setPreviewCode(''); setRuntimeError('');
     setPreviewKey((value) => value + 1);
   };
 
@@ -392,9 +413,28 @@ export default function InteractiveStudio({
   };
 
   const setAsset = (asset?: InteractiveAsset) => {
-    setDraft((current) => ({ ...current, asset }));
+    setDraft((current) => ({ ...current, asset, characterReference: undefined }));
     setAssetUrl(asset?.url || '');
     setPreviewKey((value) => value + 1);
+  };
+
+  const chooseCharacter = (node: ThoughtNode) => {
+    if (!node.sprite) return;
+    const sprite = node.sprite;
+    const views = ['front', 'three-quarter', 'side', 'back'] as const;
+    const images = sprite.generatedSvg ? [{ view: 'front' as const, url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(sprite.generatedSvg) }] : views.map(view => ({ view, url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(buildCharacterSvg(sprite, view, 'neutral', 'neutral')) }));
+    setDraft(current => ({ ...current, characterReference: { nodeId: node.id, name: sprite.characterName, appearance: sprite.appearance, views: images }, asset: { url: images[0].url, name: sprite.characterName, kind: 'image', contentType: 'image/svg+xml' }, preserveBrand: false, prompt: current.prompt || 'Crie uma versão 3D deste personagem a partir das quatro vistas. Preserve rosto, proporções, cabelo e roupa; use luz suave e permita girar a câmera por toque.' }));
+  };
+
+  const imageForAI = async (url: string) => {
+    const image = new Image(); image.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => { const timer = window.setTimeout(() => reject(new Error('A referência demorou demais para carregar. Tente novamente.')), 12000); image.onload = () => { window.clearTimeout(timer); resolve(); }; image.onerror = () => { window.clearTimeout(timer); reject(new Error('Não foi possível ler a referência visual. Envie a imagem novamente.')); }; image.src = url; });
+    const canvas = window.document.createElement('canvas');
+    const scale = Math.min(1, 640 / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext('2d'); if (!context) throw new Error('A referência visual não pôde ser preparada.');
+    context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    try { return { mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', .82).split(',')[1] }; } catch { throw new Error('Essa URL não permite ler a imagem. Use o upload para enviá-la como referência à IA.'); }
   };
 
   const uploadAsset = async (file: File) => {
@@ -493,11 +533,14 @@ export default function InteractiveStudio({
     setPreviewKey((value) => value + 1);
   };
 
-  const generateFromPrompt = async () => {
-    if (!draft.prompt.trim() || !canEdit) return;
+  const generateFromPrompt = async (repair = false) => {
+    const requestPrompt = repair ? `Corrija este erro do sketch e devolva o código completo: ${runtimeError}` : draft.prompt.trim();
+    if (!requestPrompt || !canEdit || isGenerating) return;
     setIsGenerating(true);
     setError('');
     try {
+      const images = draft.characterReference?.views?.length ? draft.characterReference.views.slice(0,4) : draft.asset ? [{url:draft.asset.url}] : [];
+      const visualReferences = await Promise.all(images.map(image => imageForAI(image.url)));
       const session = await ensureTursoSession().catch(() => null);
       const response = await fetch('/api/mediators/think', {
         method: 'POST',
@@ -508,7 +551,11 @@ export default function InteractiveStudio({
         body: JSON.stringify({
           mode: 'interactive-code',
           engine: draft.engine,
-          prompt: draft.prompt,
+          prompt: requestPrompt,
+          visualReferences,
+          characterReference: draft.characterReference ? { ...draft.characterReference, views: draft.characterReference.views.map(view => ({ view: view.view })) } : null,
+          conversation: (draft.messages || []).slice(-8),
+          runtimeError,
           currentTitle: draft.title,
           currentCode: draft.code || '',
           asset: draft.asset || null,
@@ -546,13 +593,20 @@ export default function InteractiveStudio({
       try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`Resposta inválida da IA (HTTP ${response.status}).`); }
       if (!response.ok) throw new Error(data.error || `Não foi possível gerar a interação (HTTP ${response.status}).`);
       if (!data.interactive?.code) throw new Error('A IA não devolveu código executável.');
+      if (data.interactive.engine && data.interactive.engine !== draft.engine) throw new Error('A IA respondeu com outro motor. Tente gerar novamente com o motor escolhido.');
+      const nextCode = normalizeSketchCode(data.interactive.code);
       setDraft((current) => ({
         ...current,
+        revisions: [...(current.revisions || []), { code: current.code, title: current.title, engine: current.engine }].slice(-10),
+        messages: [...(current.messages || []), { role: 'user' as const, content: requestPrompt }, { role: 'assistant' as const, content: `Sketch atualizado: ${data.interactive.title || current.title}. Você pode testar e pedir novos ajustes.` }].slice(-40),
+        prompt: '',
         title: data.interactive.title || current.title,
         engine: data.interactive.engine || current.engine,
-        code: data.interactive.code,
+        code: nextCode,
       }));
+      setPreviewCode(nextCode); setRuntimeError('');
       setPreviewKey((value) => value + 1);
+      requestAnimationFrame(() => chatRef.current?.scrollIntoView({ block: 'nearest' }));
     } catch (err: any) {
       setError(err?.message || 'Não foi possível gerar a interação.');
     } finally {
@@ -704,6 +758,9 @@ export default function InteractiveStudio({
             </div>
           </div>
 
+          {nodes.some(node=>node.sprite) && <div className="rounded-xl border p-3"><b>Personagens do projeto</b><p className="text-sm text-neutral-500 mt-1">Selecione um personagem para enviar suas referências à IA.</p><div className="mt-2 grid grid-cols-2 gap-2">{nodes.filter(node=>node.sprite).map(node=><button key={node.id} type="button" aria-pressed={draft.characterReference?.nodeId === node.id} onClick={()=>chooseCharacter(node)} className="rounded-xl border p-2 text-left"><img className="h-24 w-full object-contain" alt="" src={'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(buildCharacterSvg(node.sprite!))}/><span>{node.sprite!.characterName || node.title}</span></button>)}</div></div>}
+          {draft.characterReference && <div className="rounded-xl border bg-teal-50 p-3 text-sm"><b>{draft.characterReference.name} · {draft.characterReference.views.length} {draft.characterReference.views.length === 1 ? 'referência' : 'vistas'}</b><div className="flex mt-2">{draft.characterReference.views.map(view=><img key={view.view} alt={view.view} src={view.url} className="w-1/4 h-20 object-contain"/>)}</div><p className="mt-2">A IA interpreta as referências para construir uma cena volumétrica em Three.js. As vistas 2D orientam a forma; não são uma malha 3D pronta.</p>{draft.engine === 'three' && (!draft.characterReference.appearance?.bodyPlan || draft.characterReference.appearance.bodyPlan === 'biped') && <button type="button" onClick={() => { setDraft(current=>({...current,code:characterSceneCode})); setPreviewCode(characterSceneCode); setRuntimeError(''); setPreviewKey(value=>value+1); }} className="mt-2 border rounded-lg p-2 bg-white">Testar base 3D articulada</button>}</div>}
+
           <label className="block">
             <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">nome da camada</span>
             <input
@@ -797,6 +854,8 @@ export default function InteractiveStudio({
             </div>
           ) : null}
 
+          {(draft.messages || []).length > 0 && <div aria-label="Conversa com a IA" className="interactive-chat-history">{draft.messages!.map((message,index)=><div key={index} className={`interactive-chat-message ${message.role}`}><b>{message.role === 'user' ? 'Você' : 'Forja'}</b><p>{message.content}</p></div>)}<div ref={chatRef}/></div>}
+          {(draft.revisions || []).length > 0 && <button type="button" onClick={() => { const revision = draft.revisions![draft.revisions!.length-1]; setDraft(current=>({...current,...revision,revisions:current.revisions!.slice(0,-1)})); setPreviewCode(revision.code); setRuntimeError(''); }} className="w-full border rounded-xl p-2 text-sm">Restaurar versão anterior</button>}
           <label className="block">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[9px] font-mono font-bold uppercase tracking-[0.18em] text-neutral-500">{draft.asset?.kind === 'svg' ? '3. refinar o efeito com a Forja (opcional)' : 'descreva a interação / converse com a Forja'}</span>
@@ -818,7 +877,7 @@ export default function InteractiveStudio({
 
           <button
             type="button"
-            onClick={generateFromPrompt}
+            onClick={() => void generateFromPrompt()}
             disabled={!canEdit || isGenerating || !draft.prompt.trim()}
             className="w-full min-h-12 rounded-xl bg-black text-white disabled:bg-neutral-300 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer"
           >
@@ -826,7 +885,7 @@ export default function InteractiveStudio({
             {isGenerating ? 'REFINANDO INTERAÇÃO…' : draft.asset?.kind === 'svg' ? 'REFINAR EFEITO COM IA' : 'GERAR / RECRIAR POR PROMPT'}
           </button>
 
-          {draft.asset && (
+          {draft.asset?.kind === 'svg' && draft.engine !== 'three' && (
             <div className="rounded-xl bg-[#F3F2EE] px-3 py-2.5 text-[10px] leading-relaxed text-neutral-600 flex gap-2">
               <ImagePlus size={14} className="shrink-0 mt-0.5" />
               Para SVG, o efeito controlado monta o arquivo original e anima seus próprios elementos. A IA entra apenas como refinamento do comportamento; com Marca protegida ligada, não deve trocar cores nem redesenhar a composição.
@@ -835,7 +894,7 @@ export default function InteractiveStudio({
 
           {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
-          <div className="border border-[#D8D7D2] rounded-xl overflow-hidden">
+          {developerMode && <div className="border border-[#D8D7D2] rounded-xl overflow-hidden">
             <div className="h-10 px-3 bg-[#F7F7F4] border-b border-[#D8D7D2] flex items-center justify-between">
               <span className="text-[10px] font-mono font-bold uppercase flex items-center gap-1.5"><Code2 size={13} /> código · {ENGINE_LABELS[draft.engine]}</span>
               <button type="button" onClick={copyCode} className="h-8 px-2 rounded-lg hover:bg-black/5 flex items-center gap-1 text-[10px] font-mono cursor-pointer">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'COPIADO' : 'COPIAR'}</button>
@@ -848,17 +907,19 @@ export default function InteractiveStudio({
               className="w-full min-h-[300px] p-3 font-mono text-[11px] leading-relaxed outline-none resize-y bg-[#101010] text-[#F5F5F5] disabled:opacity-70 select-text"
               style={{ touchAction: 'manipulation' }}
             />
-          </div>
+          </div>}
         </section>}>
 
-        <section className="min-h-[48vh] xl:min-h-0 flex flex-col bg-[#ECEBE7]">
-          <div className="h-11 px-4 border-b border-[#D8D7D2] bg-white/90 flex items-center justify-between shrink-0">
+        <section className="interactive-workbench min-h-0 flex flex-col bg-[#ECEBE7]">
+          <div className="interactive-sketch-toolbar px-3 py-2 gap-2 flex-wrap border-b border-[#D8D7D2] bg-white/90 flex items-center justify-between shrink-0">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-2"><Play size={13} /> prévia em tempo real · {ENGINE_LABELS[draft.engine]}</span>
-            <button type="button" onClick={() => setPreviewKey((value) => value + 1)} className="h-8 px-3 rounded-lg border border-[#D8D7D2] bg-white hover:border-black text-[10px] font-mono font-bold cursor-pointer">REINICIAR</button>
+            <button type="button" aria-pressed={developerMode} aria-label="Modo desenvolvedor" onClick={() => setDeveloperMode(value => !value)} className="h-9 px-3 rounded-lg border flex items-center gap-2"><Code2 size={16}/><span>Dev</span></button>
+            <button type="button" onClick={() => { setPreviewCode(draft.code); setRuntimeError(''); setPreviewKey((value) => value + 1); }} className="h-8 px-3 rounded-lg border border-[#D8D7D2] bg-white hover:border-black text-[10px] font-mono font-bold cursor-pointer">EXECUTAR</button>
           </div>
-          <div className="flex-1 min-h-0 p-3 sm:p-5">
-            <div className="h-full min-h-[360px] rounded-2xl overflow-hidden border border-[#D0CFCB] bg-white shadow-sm">
-              <InteractivePreview key={previewKey} document={draft} className="w-full h-full" interactive />
+          {runtimeError && <div role="alert" className="m-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm"><b>O sketch encontrou um erro</b><p className="break-words mt-1">{runtimeError}</p><button type="button" disabled={isGenerating || !canEdit} onClick={() => void generateFromPrompt(true)} className="mt-2 border rounded-lg px-3 py-2 disabled:opacity-50">{isGenerating ? 'Corrigindo…' : 'Corrigir com IA'}</button></div>}
+          <div className="interactive-sketch-container flex-1 min-h-0 p-3 sm:p-5">
+            <div className="interactive-sketch-surface h-full rounded-2xl overflow-hidden border border-[#D0CFCB] bg-white shadow-sm">
+              <InteractivePreview key={previewKey} document={{ ...draft, code: previewCode }} className="w-full h-full" interactive onRuntimeError={setRuntimeError} />
             </div>
           </div>
         </section>
