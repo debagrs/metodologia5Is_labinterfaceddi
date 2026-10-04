@@ -55,3 +55,4 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   }
   return { defs: `<defs>${defs}</defs>`, markup };
 }
+
