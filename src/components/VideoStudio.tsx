@@ -1,53 +1,2134 @@
-import { StudioWorkspace } from './StudioWorkspace';
-// @ts-nocheck
-import React, { useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Download, ExternalLink, ImagePlus, Layers3, Loader2, Plus, Play, Save, Sparkles, Trash2, Upload, WandSparkles, X } from 'lucide-react';
-import { DesignSystemDocument, VideoDocument, VideoFormatPreset, VideoMediaItem, VideoOverlay, VideoTimelineItem, VideoTransition } from '../types';
-import VoiceDictationButton from './VoiceDictationButton';
-import { ensureTursoSession } from '../lib/turso';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Film,
+  ImagePlus,
+  Layers3,
+  Loader2,
+  Music2,
+  Pause,
+  Play,
+  Plus,
+  Redo2,
+  Save,
+  Scissors,
+  Settings2,
+  Sparkles,
+  Trash2,
+  Type,
+  Undo2,
+  Upload,
+  WandSparkles,
+  X,
+} from "lucide-react";
+import type {
+  DesignSystemDocument,
+  VideoDocument,
+  VideoFormatPreset,
+  VideoMediaItem,
+  VideoTextLayer,
+  VideoTimelineItem,
+  VideoTransition,
+} from "../types";
+import {
+  applyVideoComposition,
+  bounded,
+  migrateVideo,
+  sceneAt,
+  textLayer,
+  videoDuration,
+} from "../lib/videoComposition";
+import {
+  exportVideo,
+  loadVideoAssets,
+  releaseVideoAssets,
+  renderVideoFrame,
+  syncVideoAssets,
+  type VideoAssets,
+} from "../lib/videoRenderer";
+import { ensureTursoSession } from "../lib/turso";
+import VoiceDictationButton from "./VoiceDictationButton";
+interface Props {
+  document: VideoDocument;
+  designSystem?: DesignSystemDocument;
+  title?: string;
+  canEdit?: boolean;
+  availableMedia?: VideoMediaItem[];
+  onSave: (document: VideoDocument) => void;
+  onClose: () => void;
+}
+const uid = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const FORMATS = [
+  { id: "reel", label: "Vertical 9:16", width: 1080, height: 1920 },
+  { id: "feed", label: "Feed 4:5", width: 1080, height: 1350 },
+  { id: "square", label: "Quadrado", width: 1080, height: 1080 },
+  { id: "youtube", label: "Horizontal 16:9", width: 1920, height: 1080 },
+];
+const TOOLS = [
+  { id: "media", label: "Mídia", icon: ImagePlus },
+  { id: "edit", label: "Editar", icon: Scissors },
+  { id: "text", label: "Texto", icon: Type },
+  { id: "transitions", label: "Transições", icon: Film },
+  { id: "effects", label: "Efeitos", icon: Sparkles },
+  { id: "layers", label: "Camadas", icon: Layers3 },
+  { id: "audio", label: "Áudio", icon: Music2 },
+  { id: "ai", label: "Montar com IA", icon: WandSparkles },
+  { id: "format", label: "Formato", icon: Settings2 },
+] as const;
+type Tool = (typeof TOOLS)[number]["id"];
+export const blankVideo = (ds?: DesignSystemDocument): VideoDocument => ({
+  title: "Vídeo do projeto",
+  subtitle: "",
+  format: "reel",
+  width: 1080,
+  height: 1920,
+  duration: 6,
+  background:
+    ds?.colors.find((color) => color.role === "brand")?.value || "#102328",
+  accent:
+    ds?.colors.find((color) => color.role === "accent")?.value || "#37D4C6",
+  textColor: "#FFFFFF",
+  media: [],
+  timeline: [],
+  overlays: [],
+  texts: [],
+  audioTracks: [],
+  aiPlan: [],
+});
+const clock = (time: number) =>
+  `${Math.floor(time / 60)
+    .toString()
+    .padStart(2, "0")}:${Math.floor(time % 60)
+    .toString()
+    .padStart(2, "0")}.${Math.floor((time % 1) * 10)}`;
+const color = (value: string | undefined) =>
+  /^#[0-9a-f]{6}$/i.test(value || "") ? value! : "#111111";
 
-interface Props { document:VideoDocument; designSystem?:DesignSystemDocument; title?:string; canEdit?:boolean; availableMedia?:VideoMediaItem[]; onSave:(document:VideoDocument)=>void; onClose:()=>void; }
-const FORMATS:Array<{id:VideoFormatPreset;label:string;hint:string;width:number;height:number}>=[
-{id:'reel',label:'Reels / Shorts',hint:'Instagram · YouTube',width:1080,height:1920},{id:'tiktok',label:'TikTok',hint:'vertical 9:16',width:1080,height:1920},{id:'story',label:'Stories',hint:'Instagram · Facebook · Snapchat',width:1080,height:1920},{id:'feed',label:'Feed 4:5',hint:'Instagram · LinkedIn',width:1080,height:1350},{id:'square',label:'Quadrado',hint:'cards sociais',width:1080,height:1080},{id:'youtube',label:'YouTube',hint:'horizontal 16:9',width:1920,height:1080},{id:'facebook',label:'Facebook',hint:'landscape',width:1200,height:630},{id:'linkedin',label:'LinkedIn',hint:'post visual',width:1200,height:1200}];
-const uid=(p:string)=>`${p}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-export const blankVideo=(ds?:DesignSystemDocument):VideoDocument=>({title:'Vídeo do projeto',subtitle:'Uma ideia pode ganhar tempo, movimento e circulação.',format:'reel',width:1080,height:1920,duration:6,background:ds?.colors.find(x=>x.role==='brand')?.value||'#111111',accent:ds?.colors.find(x=>x.role==='accent')?.value||'#FF13F0',textColor:ds?.colors.find(x=>x.role==='text')?.value==='#111111'?'#FFFFFF':ds?.colors.find(x=>x.role==='text')?.value||'#FFFFFF',prompt:'',media:[],timeline:[],overlays:[],aiPlan:[]});
-const normalizeHex=(v:string,f='#000000')=>{const c=String(v||'').trim().replace(/^#/,'').toUpperCase();if(/^[0-9A-F]{3}$/.test(c))return `#${c.split('').map(x=>x+x).join('')}`;if(/^[0-9A-F]{6}$/.test(c))return `#${c}`;return f;};
-function HexField({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){const safe=normalizeHex(value);return <label className="text-[9px] font-mono text-neutral-500">{label}<div className="mt-1 flex gap-2"><input type="color" value={safe} onChange={e=>onChange(e.target.value.toUpperCase())} className="h-11 w-12 rounded-lg border p-1 bg-white"/><input value={value} onChange={e=>onChange(e.target.value)} onBlur={e=>onChange(normalizeHex(e.target.value,safe))} className="h-11 min-w-0 flex-1 rounded-xl border border-black/10 px-3 font-mono text-xs uppercase" placeholder="#FF13F0"/></div></label>}
-const safeScale=(w:number,h:number)=>Math.min(520/w,620/h,1);
-
-function MediaVisual({item,className=''}:{item:{kind:'image'|'video';url:string};className?:string}){return item.kind==='image'?<img src={item.url} className={`object-cover ${className}`} alt=""/>:<video src={item.url} muted playsInline className={`object-cover ${className}`}/>}
-export function VideoPreview({document,className=''}:{document:VideoDocument;className?:string}){
- const first=document.timeline?.[0];const overlays=document.overlays||[];const url=first?.url||document.generatedUrl||document.sourceUrl;
- return <div className={`relative overflow-hidden flex items-center justify-center ${className}`} style={{background:normalizeHex(document.background,'#111111'),color:normalizeHex(document.textColor||'#FFFFFF','#FFFFFF')}}>{url?(first?.kind==='image'?<img src={url} className="absolute inset-0 w-full h-full object-cover"/>:<video src={url} muted playsInline autoPlay loop className="absolute inset-0 w-full h-full object-cover"/>):null}{overlays.slice(0,8).map(o=><img key={o.id} src={o.url} className={`absolute object-contain ${o.animation==='spin'?'animate-spin':String(o.animation)==='pulse'||o.animation==='pop'?'animate-pulse':''}`} style={{left:`${o.x}%`,top:`${o.y}%`,width:`${o.width}%`,opacity:o.opacity,transform:'translate(-50%,-50%)'}}/>)}<div className="relative z-10 text-center max-w-[85%] drop-shadow-[0_2px_8px_rgba(0,0,0,.65)]"><div className="text-xl font-bold">{document.title}</div><div className="mt-2 text-xs opacity-90">{document.subtitle}</div><div className="mt-4 h-1 w-16 mx-auto rounded-full" style={{background:document.accent}}/></div></div>
+function CompositionCanvas({
+  document,
+  time = 0,
+  playing = false,
+  onError,
+}: {
+  document: VideoDocument;
+  time?: number;
+  playing?: boolean;
+  onError?: (message: string) => void;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null),
+    assets = useRef<VideoAssets>({ visuals: new Map(), audio: new Map() }),
+    latest = useRef({ document, time, playing });
+  latest.current = { document, time, playing };
+  const sourceKey = JSON.stringify([
+    document.timeline?.map((clip) => [clip.id, clip.url, clip.kind]),
+    document.overlays?.map((layer) => [layer.id, layer.url]),
+    document.audioTracks?.map((track) => [track.id, track.url]),
+  ]);
+  const draw = () => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const current = latest.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    syncVideoAssets(
+      current.document,
+      assets.current,
+      current.time,
+      current.playing,
+    );
+    renderVideoFrame(
+      ctx,
+      current.document,
+      assets.current,
+      current.time,
+      canvas.width,
+      canvas.height,
+    );
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    let disposed = false;
+    void loadVideoAssets(latest.current.document, controller.signal)
+      .then((result) => {
+        if (disposed) {
+          releaseVideoAssets(result);
+          return;
+        }
+        releaseVideoAssets(assets.current);
+        assets.current = result;
+        for (const el of result.visuals.values())
+          if (el instanceof HTMLVideoElement) el.onseeked = draw;
+        draw();
+      })
+      .catch((error) => {
+        if (!disposed && error.name !== "AbortError") onError?.(error.message);
+      });
+    return () => {
+      disposed = true;
+      controller.abort();
+      releaseVideoAssets(assets.current);
+    };
+  }, [sourceKey]);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    canvas.width = Math.min(960, document.width);
+    canvas.height = Math.round(
+      (canvas.width * document.height) / document.width,
+    );
+    draw();
+  }, [document, time, playing]);
+  return (
+    <canvas
+      ref={ref}
+      aria-label={`Prévia do vídeo em ${clock(time)}`}
+      className="video-composition-canvas"
+    />
+  );
+}
+export function VideoPreview({
+  document,
+  className = "",
+}: {
+  document: VideoDocument;
+  className?: string;
+}) {
+  const video = useMemo(() => migrateVideo(document), [document]);
+  return (
+    <div className={`video-card-preview ${className}`}>
+      <CompositionCanvas document={video} />
+    </div>
+  );
+}
+function FrameThumbnail({
+  clip,
+  index = 0,
+}: {
+  clip: VideoTimelineItem;
+  index?: number;
+}) {
+  const [url, setUrl] = useState(clip.kind === "image" ? clip.url : "");
+  useEffect(() => {
+    if (clip.kind !== "video") return;
+    let disposed = false;
+    const video = window.document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "auto";
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(
+        (clip.trimStart || 0) + (clip.duration * index) / 3,
+        Math.max(0, video.duration - 0.05),
+      );
+    };
+    video.onseeked = () => {
+      if (disposed) return;
+      try {
+        const canvas = window.document.createElement("canvas");
+        canvas.width = 160;
+        canvas.height = 90;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(video, 0, 0, 160, 90);
+        setUrl(canvas.toDataURL("image/jpeg", 0.65));
+      } catch {}
+    };
+    video.src = clip.url;
+    return () => {
+      disposed = true;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [clip.url, clip.trimStart, clip.duration, index]);
+  return url ? (
+    <img src={url} alt="" />
+  ) : (
+    <div
+      className="video-frame-placeholder"
+      style={{ background: clip.background || "#173B40" }}
+    >
+      {clip.kind === "color" ? <Type size={18} /> : <Film size={18} />}
+    </div>
+  );
+}
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="video-field">
+      <span>{label}</span>
+      {React.Children.map(children, (child) =>
+        React.isValidElement(child) &&
+        ["input", "select", "textarea"].includes(String(child.type))
+          ? React.cloneElement(child as React.ReactElement<any>, {
+              "aria-label": label,
+            })
+          : child,
+      )}
+    </label>
+  );
 }
 
-export default function VideoStudio({document,designSystem,title='Vídeo',canEdit=true,availableMedia=[],onSave,onClose}:Props){
- const initial=JSON.parse(JSON.stringify(document)) as VideoDocument;initial.media||=[];initial.timeline||=[];initial.overlays||=[];initial.aiPlan||=[];
- const [draft,setDraft]=useState(initial);const [library,setLibrary]=useState<VideoMediaItem[]>(()=>{const map=new Map<string,VideoMediaItem>();[...availableMedia,...(initial.media||[])].forEach(m=>m?.url&&map.set(m.url,m));if(initial.sourceUrl&&!map.has(initial.sourceUrl))map.set(initial.sourceUrl,{id:uid('media'),kind:'video',url:initial.sourceUrl,name:initial.sourceName||'Vídeo existente',source:'project',duration:4});return [...map.values()]});
- const [selectedClipId,setSelectedClipId]=useState(initial.timeline?.[0]?.id||'');const [isUploading,setIsUploading]=useState(false);const [isGenerating,setIsGenerating]=useState(false);const [isPlanning,setIsPlanning]=useState(false);const [error,setError]=useState('');const fileRef=useRef<HTMLInputElement>(null);const canvasRef=useRef<HTMLCanvasElement>(null);const scale=useMemo(()=>safeScale(draft.width,draft.height),[draft.width,draft.height]);const totalDuration=Math.max(1,(draft.timeline||[]).reduce((s,x)=>s+(Number(x.duration)||0),0)||draft.duration);const selectedClip=draft.timeline?.find(c=>c.id===selectedClipId)||draft.timeline?.[0];
- const uploadBlob=async(blob:Blob,name:string)=>{const fd=new FormData();fd.append('file',new File([blob],name,{type:blob.type||'application/octet-stream'}));const session=await ensureTursoSession().catch(()=>null);const r=await fetch('/api/upload',{method:'POST',headers:{...(session?.token?{Authorization:`Bearer ${session.token}`}:{})},body:fd});const d=await r.json().catch(()=>({}));if(!r.ok||!d.url)throw new Error(d.error||'Falha no upload.');return d.url as string};
- const uploadMedia=async(files:FileList)=>{setIsUploading(true);setError('');try{for(const file of Array.from(files)){if(!file.type.startsWith('video/')&&!file.type.startsWith('image/'))continue;const url=await uploadBlob(file,file.name);const m:VideoMediaItem={id:uid('media'),kind:file.type.startsWith('video/')?'video':'image',url,name:file.name,source:'upload',duration:file.type.startsWith('image/')?2.5:4};setLibrary(x=>[m,...x.filter(v=>v.url!==m.url)]);setDraft(d=>({...d,media:[m,...(d.media||[]).filter(v=>v.url!==m.url)]}))}}catch(e:any){setError(e.message||'Falha no upload')}finally{setIsUploading(false);if(fileRef.current)fileRef.current.value=''}};
- const chooseFormat=(id:VideoFormatPreset)=>{const f=FORMATS.find(x=>x.id===id);if(f)setDraft(d=>({...d,format:id,width:f.width,height:f.height}))};
- const addToTimeline=(m:VideoMediaItem)=>{const clip:VideoTimelineItem={id:uid('clip'),mediaId:m.id,kind:m.kind,url:m.url,name:m.name,duration:m.duration|| (m.kind==='image'?2.5:4),transition:'fade',fit:'cover',caption:''};setDraft(d=>({...d,timeline:[...(d.timeline||[]),clip]}));setSelectedClipId(clip.id)};
- const addOverlay=(m:VideoMediaItem)=>{if(m.kind!=='image')return setError('Para sobreposição, use imagem, desenho, SVG, ícone, wireframe ou personagem. Vídeos entram como cenas.');const overlay:VideoOverlay={id:uid('overlay'),mediaId:m.id,kind:'image',url:m.url,name:m.name,x:50,y:50,width:28,opacity:1,start:0,end:Math.max(1,totalDuration),animation:'pop'};setDraft(d=>({...d,overlays:[...(d.overlays||[]),overlay]}))};
- const patchClip=(id:string,patch:Partial<VideoTimelineItem>)=>setDraft(d=>({...d,timeline:(d.timeline||[]).map(c=>c.id===id?{...c,...patch}:c)}));
- const patchOverlay=(id:string,patch:Partial<VideoOverlay>)=>setDraft(d=>({...d,overlays:(d.overlays||[]).map(o=>o.id===id?{...o,...patch}:o)}));
- const moveClip=(id:string,dir:number)=>setDraft(d=>{const arr=[...(d.timeline||[])],i=arr.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=arr.length)return d;[arr[i],arr[j]]=[arr[j],arr[i]];return {...d,timeline:arr}});
- const askAI=async()=>{if(!draft.prompt?.trim())return setError('Escreva o que deseja montar no vídeo.');if(!library.length)return setError('Adicione ou selecione mídia do projeto antes de pedir a montagem.');setIsPlanning(true);setError('');try{const s=await ensureTursoSession().catch(()=>null);const r=await fetch('/api/mediators/think',{method:'POST',headers:{'Content-Type':'application/json',...(s?.token?{Authorization:`Bearer ${s.token}`}:{})},body:JSON.stringify({mode:'video-compose',prompt:draft.prompt,video:{title:draft.title,subtitle:draft.subtitle,format:draft.format,width:draft.width,height:draft.height,media:library.map(m=>({id:m.id,name:m.name,kind:m.kind,url:m.url}))},project:{name:title}})});const text=await r.text();let d:any={};try{d=text?JSON.parse(text):{}}catch{throw new Error(`A IA devolveu resposta inválida (HTTP ${r.status}).`)}if(!r.ok||!d.videoPlan)throw new Error(d.error||'A IA não conseguiu montar o plano.');const plan=d.videoPlan;const timeline:VideoTimelineItem[]=(plan.timeline||[]).map((p:any)=>{const m=library.find(x=>x.id===p.mediaId)||library.find(x=>x.name===p.name);return m?{id:uid('clip'),mediaId:m.id,kind:m.kind,url:m.url,name:m.name,duration:Math.max(.5,Math.min(12,Number(p.duration)||2.5)),transition:['cut','fade','slide','zoom'].includes(p.transition)?p.transition:'fade',fit:p.fit==='contain'?'contain':'cover',caption:String(p.caption||'')}:null}).filter(Boolean);setDraft(cur=>{const fmt=FORMATS.find(f=>f.id===(plan.format||cur.format));return {...cur,title:plan.title||cur.title,subtitle:plan.subtitle||cur.subtitle,format:plan.format||cur.format,width:fmt?.width||cur.width,height:fmt?.height||cur.height,timeline:timeline.length?timeline:cur.timeline,aiPlan:Array.isArray(plan.notes)?plan.notes:[],duration:timeline.length?Math.ceil(timeline.reduce((sum,x)=>sum+x.duration,0)):cur.duration}});if(timeline[0])setSelectedClipId(timeline[0].id)}catch(e:any){setError(e.message||'Falha na IA de vídeo')}finally{setIsPlanning(false)}};
- const generate=async()=>{const canvas=canvasRef.current;if(!canvas||typeof MediaRecorder==='undefined'||!(canvas as any).captureStream)return setError('Este navegador não oferece geração local WebM.');if(!(draft.timeline||[]).length)return setError('Adicione ao menos uma cena à timeline.');setIsGenerating(true);setError('');try{const outW=draft.width>=draft.height?960:540,outH=Math.round(outW*draft.height/draft.width);canvas.width=outW;canvas.height=outH;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas indisponível');const timeline=(draft.timeline||[]);const overlays=draft.overlays||[];const assets=new Map<string,HTMLImageElement|HTMLVideoElement>();const all=[...timeline.map(x=>({key:x.id,kind:x.kind,url:x.url})),...overlays.map(x=>({key:x.id,kind:'image' as const,url:x.url}))];for(const item of all){try{if(item.kind==='image'){const img=new Image();img.crossOrigin='anonymous';img.src=item.url;await new Promise((res,rej)=>{img.onload=res;img.onerror=rej});assets.set(item.key,img)}else{const v=window.document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.playsInline=true;v.src=item.url;await new Promise((res,rej)=>{v.onloadeddata=res;v.onerror=rej});assets.set(item.key,v)}}catch{}}
- const stream=(canvas as any).captureStream(30);const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:2_500_000});const chunks:BlobPart[]=[];recorder.ondataavailable=e=>e.data.size&&chunks.push(e.data);const stopped=new Promise<void>((res,rej)=>{recorder.onstop=()=>res();recorder.onerror=()=>rej(new Error('Falha ao gravar'))});recorder.start(250);const duration=Math.max(2,Math.min(45,totalDuration));const start=performance.now();let activeVideo:HTMLVideoElement|null=null;
- const drawFit=(el:any,fit:'cover'|'contain',x=0,y=0,w=outW,h=outH)=>{const sw=el.videoWidth||el.naturalWidth||w,sh=el.videoHeight||el.naturalHeight||h;const ratio=fit==='contain'?Math.min(w/sw,h/sh):Math.max(w/sw,h/sh);const dw=sw*ratio,dh=sh*ratio;ctx.drawImage(el,x+(w-dw)/2,y+(h-dh)/2,dw,dh)};
- const draw=(now:number)=>{const sec=(now-start)/1000,t=Math.min(1,sec/duration);ctx.fillStyle=normalizeHex(draft.background,'#111111');ctx.fillRect(0,0,outW,outH);let cursor=0,clip=timeline[0],local=sec;for(const c of timeline){if(sec<cursor+c.duration){clip=c;local=sec-cursor;break}cursor+=c.duration}if(clip){const el=assets.get(clip.id);if(el){try{if(el instanceof HTMLVideoElement){if(activeVideo!==el){activeVideo?.pause();activeVideo=el;el.currentTime=Math.min(local,Math.max(0,(el.duration||local)-.05));void el.play().catch(()=>{})}}drawFit(el,clip.fit||'cover')}catch{}}}
- for(const o of overlays){if(sec<o.start||sec>o.end)continue;const el=assets.get(o.id) as HTMLImageElement|undefined;if(!el)continue;ctx.save();let alpha=o.opacity;const localO=sec-o.start;if(o.animation==='fade')alpha*=Math.min(1,localO/.35,(o.end-sec)/.35);ctx.globalAlpha=Math.max(0,Math.min(1,alpha));const maxW=outW*(o.width/100),ratio=Math.min(maxW/(el.naturalWidth||maxW),(outH*.8)/(el.naturalHeight||outH));let ow=(el.naturalWidth||maxW)*ratio,oh=(el.naturalHeight||maxW)*ratio;let ox=outW*(o.x/100),oy=outH*(o.y/100);if(o.animation==='float')oy+=Math.sin(sec*3)*10;if(o.animation==='pop'){const k=Math.min(1,localO/.25);ow*=k;oh*=k}ctx.translate(ox,oy);if(o.animation==='spin')ctx.rotate(sec*1.6);ctx.drawImage(el,-ow/2,-oh/2,ow,oh);ctx.restore()}
- ctx.globalAlpha=1;ctx.fillStyle=normalizeHex(draft.textColor||'#FFFFFF','#FFFFFF');ctx.textAlign='center';ctx.font=`700 ${Math.round(outW*.065)}px ${designSystem?.fontFamilies?.display||designSystem?.primaryFont||'Arial'}`;wrapText(ctx,draft.title,outW/2,outH*.13,outW*.82,outW*.075);if(clip?.caption){ctx.font=`500 ${Math.round(outW*.032)}px ${designSystem?.fontFamilies?.text||'Arial'}`;wrapText(ctx,clip.caption,outW/2,outH*.88,outW*.82,outW*.04)}if(t<1)requestAnimationFrame(draw);else{activeVideo?.pause();recorder.stop()}};requestAnimationFrame(draw);await stopped;const blob=new Blob(chunks,{type:'video/webm'});const url=await uploadBlob(blob,`video-atelie-${Date.now()}.webm`);setDraft(d=>({...d,generatedUrl:url,sourceName:'composição gerada no Ateliê'}))}catch(e:any){setError(e.message||'Não foi possível gerar a composição')}finally{setIsGenerating(false)}};
- const mediaGroups=useMemo(()=>{const groups:{label:string;items:VideoMediaItem[]}[]=[];const projectItems=library.filter(m=>m.source==='project'),uploads=library.filter(m=>m.source!=='project');if(projectItems.length)groups.push({label:'DO PROJETO',items:projectItems});if(uploads.length)groups.push({label:'UPLOADS',items:uploads});return groups},[library]);
- return <div className="studio-editor fixed inset-0 z-[125] bg-[#EEEDE9] flex flex-col canvas-control atelier-studio" onPointerDown={e=>e.stopPropagation()}><header className="shrink-0 min-h-16 bg-white border-b px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}><button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={19}/></button><div className="min-w-0 flex-1"><b className="block truncate">{title}</b><div className="text-[10px] font-mono text-neutral-500 uppercase">mídia do projeto · cenas · camadas · IA · motion · publicação</div></div><button disabled={!canEdit} onClick={()=>onSave({...draft,media:library})} className="h-11 px-4 rounded-xl bg-black text-white text-xs font-bold flex gap-2 items-center"><Save size={15}/> SALVAR</button></header>
- <StudioWorkspace tools={<section className="bg-white border-r p-4 space-y-5 xl:overflow-y-auto"><div><div className="text-[9px] font-mono font-bold text-neutral-500">FORMATO</div><div className="mt-2 flex gap-2 overflow-x-auto">{FORMATS.map(f=><button key={f.id} onClick={()=>chooseFormat(f.id)} className={`shrink-0 w-32 rounded-xl border p-2 text-left ${draft.format===f.id?'bg-black text-white':'border-black/10'}`}><b className="text-[10px]">{f.label}</b><div className="text-[8px] opacity-60">{f.width}×{f.height}</div></button>)}</div></div>
- <div className="rounded-2xl border p-4"><div className="flex items-start justify-between gap-2"><div><div className="font-bold text-sm">Biblioteca do projeto</div><div className="text-[10px] text-neutral-500 mt-1">Desenhos, wireframes, personagens, assets de interação, imagens e vídeos já criados aparecem aqui. Também aceite SVG/ícone por upload.</div></div><button onClick={()=>fileRef.current?.click()} className="h-9 px-3 rounded-xl bg-black text-white text-[9px] font-bold flex items-center gap-1"><Upload size={13}/> UPLOAD</button></div><input ref={fileRef} type="file" accept="image/*,video/*,.svg" multiple className="hidden" onChange={e=>e.target.files&&void uploadMedia(e.target.files)}/>{isUploading&&<div className="mt-2 text-[9px]">Enviando...</div>}{mediaGroups.map(group=><div key={group.label} className="mt-3"><div className="text-[8px] font-mono text-neutral-400">{group.label}</div><div className="mt-1 grid grid-cols-2 gap-2 max-h-72 overflow-y-auto">{group.items.map(m=><div key={m.id} className="rounded-xl border overflow-hidden"><div className="aspect-video bg-neutral-100 overflow-hidden"><MediaVisual item={m} className="w-full h-full"/></div><div className="p-2"><div className="text-[9px] font-bold truncate">{m.name}</div><div className="mt-1 grid grid-cols-2 gap-1"><button onClick={()=>addToTimeline(m)} className="h-8 rounded-lg bg-black text-white text-[7px] font-bold"><Plus size={10} className="inline"/> CENA</button><button disabled={m.kind!=='image'} onClick={()=>addOverlay(m)} className="h-8 rounded-lg border text-[7px] font-bold disabled:opacity-30"><Layers3 size={10} className="inline"/> CAMADA</button></div></div></div>)}</div></div>)}{!library.length&&<div className="mt-3 rounded-xl border border-dashed p-6 text-center text-xs text-neutral-400">Nenhuma mídia ainda. Crie imagens/desenhos/wireframes no canvas ou faça upload.</div>}</div>
- <div className="rounded-2xl border p-4"><div className="font-bold text-sm">Timeline / cenas</div><div className="text-[10px] text-neutral-500">Cada cena pode ser imagem ou vídeo real. Toque para selecionar e editar.</div><div className="mt-3 space-y-2">{(draft.timeline||[]).map((c,i)=><div key={c.id} onClick={()=>setSelectedClipId(c.id)} className={`rounded-xl border p-2 ${selectedClipId===c.id?'ring-2 ring-black':''}`}><div className="flex gap-2 items-center"><span className="text-[9px] font-mono w-5">{i+1}</span><div className="h-12 w-16 rounded-lg overflow-hidden bg-neutral-100"><MediaVisual item={c} className="w-full h-full"/></div><div className="min-w-0 flex-1"><b className="text-[9px] truncate block">{c.name}</b><div className="mt-1 flex gap-1"><input type="number" min="0.5" step="0.5" value={c.duration} onChange={e=>patchClip(c.id,{duration:+e.target.value})} className="h-8 w-16 border rounded px-1 text-[9px]"/><select value={c.transition||'fade'} onChange={e=>patchClip(c.id,{transition:e.target.value as VideoTransition})} className="h-8 min-w-0 flex-1 border rounded text-[8px]"><option value="cut">Corte</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="zoom">Zoom</option></select></div></div><div className="flex flex-col gap-1"><button onClick={e=>{e.stopPropagation();moveClip(c.id,-1)}}><ArrowUp size={13}/></button><button onClick={e=>{e.stopPropagation();moveClip(c.id,1)}}><ArrowDown size={13}/></button><button onClick={e=>{e.stopPropagation();setDraft(d=>({...d,timeline:(d.timeline||[]).filter(x=>x.id!==c.id)}))}} className="text-red-600"><Trash2 size={13}/></button></div></div><input value={c.caption||''} onChange={e=>patchClip(c.id,{caption:e.target.value})} placeholder="Legenda / texto desta cena" className="mt-2 h-8 w-full rounded-lg border px-2 text-[9px]"/></div>)}{!(draft.timeline||[]).length&&<div className="rounded-xl border border-dashed p-4 text-center text-[10px] text-neutral-400">Adicione mídia como CENA.</div>}</div></div>
- <div className="rounded-2xl border p-4"><div className="font-bold text-sm">Camadas sobre o vídeo</div><div className="text-[10px] text-neutral-500">Ícones, SVGs, personagens, desenhos e wireframes podem ficar sobre as cenas com posição, escala e animação simples.</div><div className="mt-3 space-y-2">{(draft.overlays||[]).map(o=><div key={o.id} className="rounded-xl border p-2"><div className="flex gap-2 items-center"><img src={o.url} className="h-10 w-10 rounded bg-neutral-100 object-contain"/><b className="min-w-0 flex-1 truncate text-[9px]">{o.name}</b><button onClick={()=>setDraft(d=>({...d,overlays:(d.overlays||[]).filter(x=>x.id!==o.id)}))} className="text-red-600"><Trash2 size={13}/></button></div><div className="mt-2 grid grid-cols-3 gap-1"><label className="text-[7px] font-mono">X %<input type="number" min="0" max="100" value={o.x} onChange={e=>patchOverlay(o.id,{x:+e.target.value})} className="h-8 w-full border rounded px-1"/></label><label className="text-[7px] font-mono">Y %<input type="number" min="0" max="100" value={o.y} onChange={e=>patchOverlay(o.id,{y:+e.target.value})} className="h-8 w-full border rounded px-1"/></label><label className="text-[7px] font-mono">LARGURA %<input type="number" min="5" max="100" value={o.width} onChange={e=>patchOverlay(o.id,{width:+e.target.value})} className="h-8 w-full border rounded px-1"/></label><label className="text-[7px] font-mono">INÍCIO<input type="number" min="0" step=".1" value={o.start} onChange={e=>patchOverlay(o.id,{start:+e.target.value})} className="h-8 w-full border rounded px-1"/></label><label className="text-[7px] font-mono">FIM<input type="number" min=".1" step=".1" value={o.end} onChange={e=>patchOverlay(o.id,{end:+e.target.value})} className="h-8 w-full border rounded px-1"/></label><label className="text-[7px] font-mono">ANIMAÇÃO<select value={o.animation||'none'} onChange={e=>patchOverlay(o.id,{animation:e.target.value as any})} className="h-8 w-full border rounded"><option value="none">Nenhuma</option><option value="fade">Fade</option><option value="pop">Pop</option><option value="float">Flutuar</option><option value="spin">Girar</option></select></label></div></div>)}{!(draft.overlays||[]).length&&<div className="rounded-xl border border-dashed p-3 text-center text-[9px] text-neutral-400">Use CAMADA em uma imagem/SVG da biblioteca.</div>}</div></div>
- <div className="rounded-2xl border-2 border-black p-4"><div className="font-bold flex items-center gap-2"><Sparkles size={15}/> Montar com IA</div><div className="mt-1 text-[10px] text-neutral-500">A IA só usa os arquivos que estão na biblioteca. Ela monta roteiro e timeline com IDs reais — sem inventar mídia inexistente.</div><div className="mt-2 flex gap-2 items-start"><textarea value={draft.prompt||''} onChange={e=>setDraft({...draft,prompt:e.target.value})} placeholder="Ex.: vídeo vertical de 15 s. Comece pelo wireframe, sobreponha o personagem, depois mostre o vídeo real do teste. Ritmo progressivo, texto curto..." className="min-h-24 min-w-0 flex-1 rounded-xl border p-3 text-sm"/><VoiceDictationButton onText={t=>setDraft(d=>({...d,prompt:`${d.prompt||''}${d.prompt&&!d.prompt.endsWith(' ')?' ':''}${t}`}))}/></div><button onClick={()=>void askAI()} disabled={isPlanning} className="mt-2 h-11 w-full rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-2">{isPlanning?<Loader2 size={14} className="animate-spin"/>:<WandSparkles size={14}/>} GERAR ROTEIRO + TIMELINE</button>{draft.aiPlan?.map((n,i)=><div key={i} className="mt-1 text-[9px] text-neutral-600">• {n}</div>)}</div>
- <div className="rounded-2xl border p-4 space-y-3"><b className="text-sm">Visual do vídeo</b><label className="block text-[9px] font-mono">TÍTULO<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})} className="mt-1 h-10 w-full border rounded-lg px-2"/></label><label className="block text-[9px] font-mono">SUBTÍTULO<textarea value={draft.subtitle||''} onChange={e=>setDraft({...draft,subtitle:e.target.value})} className="mt-1 min-h-16 w-full border rounded-lg p-2"/></label><div className="grid sm:grid-cols-2 gap-2"><HexField label="FUNDO · HEX" value={draft.background} onChange={v=>setDraft({...draft,background:v})}/><HexField label="DESTAQUE · HEX" value={draft.accent} onChange={v=>setDraft({...draft,accent:v})}/><HexField label="TEXTO · HEX" value={draft.textColor||'#FFFFFF'} onChange={v=>setDraft({...draft,textColor:v})}/></div><button onClick={()=>void generate()} disabled={isGenerating} className="h-12 w-full rounded-xl bg-black text-white flex items-center justify-center gap-2 text-[10px] font-bold">{isGenerating?<Loader2 size={15} className="animate-spin"/>:<Play size={15}/>} GERAR COMPOSIÇÃO WEBM</button>{draft.generatedUrl&&<a href={draft.generatedUrl} target="_blank" rel="noreferrer" className="h-10 w-full rounded-xl border flex items-center justify-center gap-2 text-[9px] font-mono"><Download size={13}/> ABRIR / BAIXAR</a>}</div>{error&&<div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">{error}</div>}</section>}>
- <section className="min-h-[55vh] xl:min-h-0 overflow-auto p-4 sm:p-7 flex flex-col items-center justify-start gap-4"><div className="text-[9px] font-mono text-neutral-500">PRÉVIA · {draft.width}×{draft.height} · {totalDuration.toFixed(1)}s</div><div className="overflow-hidden rounded-2xl border shadow-2xl bg-black" style={{width:draft.width*scale,height:draft.height*scale,maxWidth:'92vw'}}><VideoPreview document={draft} className="w-full h-full"/></div>{selectedClip&&<div className="text-[10px] text-neutral-500">Cena selecionada: <b>{selectedClip.name}</b></div>}{draft.generatedUrl&&<a href={draft.generatedUrl} target="_blank" rel="noreferrer" className="h-10 px-3 rounded-xl bg-white border flex items-center gap-2 text-[10px] font-mono"><ExternalLink size={14}/> ABRIR VÍDEO GERADO</a>}<canvas ref={canvasRef} className="hidden"/></section></StudioWorkspace></div>
+export default function VideoStudio({
+  document,
+  designSystem,
+  title = "Editor de vídeo",
+  canEdit = true,
+  availableMedia = [],
+  onSave,
+  onClose,
+}: Props) {
+  const [draft, setDraft] = useState<VideoDocument>(() =>
+    migrateVideo(JSON.parse(JSON.stringify(document))),
+  );
+  const [library, setLibrary] = useState<VideoMediaItem[]>(() => [
+    ...new Map(
+      [
+        ...availableMedia,
+        ...(document.media || []),
+        ...(document.sourceUrl
+          ? [
+              {
+                id: uid("media"),
+                url: document.sourceUrl,
+                name: document.sourceName || "Vídeo",
+                kind: "video" as const,
+                source: "project" as const,
+              },
+            ]
+          : []),
+      ].map((item) => [item.url, item]),
+    ).values(),
+  ]);
+  const [tool, setTool] = useState<Tool>("media"),
+    [panelOpen, setPanelOpen] = useState(false),
+    [playhead, setPlayhead] = useState(0),
+    [playing, setPlaying] = useState(false),
+    [selectedClipId, setSelectedClipId] = useState(
+      document.timeline?.[0]?.id || "",
+    ),
+    [selectedTextId, setSelectedTextId] = useState(""),
+    [selectedLayerId, setSelectedLayerId] = useState("");
+  const [error, setError] = useState(""),
+    [status, setStatus] = useState(""),
+    [busy, setBusy] = useState(false),
+    [uploading, setUploading] = useState(false),
+    [progress, setProgress] = useState(0),
+    [downloadUrl, setDownloadUrl] = useState(""),
+    [downloadMime, setDownloadMime] = useState("video/webm"),
+    [history, setHistory] = useState<VideoDocument[]>([]),
+    [future, setFuture] = useState<VideoDocument[]>([]),
+    [timelineZoom, setTimelineZoom] = useState(72);
+  const [stageSize, setStageSize] = useState({ width: 200, height: 300 });
+  const previewZoneRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null),
+    abortRef = useRef<AbortController | null>(null),
+    stageRef = useRef<HTMLDivElement>(null),
+    timelineRef = useRef<HTMLDivElement>(null),
+    dragRef = useRef<{ kind: "text" | "layer"; id: string } | null>(null),
+    mounted = useRef(true);
+  const duration = videoDuration(draft),
+    selectedClip =
+      draft.timeline?.find((clip) => clip.id === selectedClipId) ||
+      sceneAt(draft, playhead)?.clip,
+    selectedText = draft.texts?.find((text) => text.id === selectedTextId),
+    selectedLayer = draft.overlays?.find(
+      (layer) => layer.id === selectedLayerId,
+    );
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+  useEffect(
+    () => () => {
+      if (downloadUrl.startsWith("blob:")) URL.revokeObjectURL(downloadUrl);
+    },
+    [downloadUrl],
+  );
+  useEffect(() => {
+    if (!playing) return;
+    const initial = playhead,
+      start = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const next = initial + (now - start) / 1000;
+      if (next >= duration) {
+        setPlayhead(duration);
+        setPlaying(false);
+        return;
+      }
+      setPlayhead(next);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, duration]);
+  useEffect(() => {
+    setPlayhead((value) => Math.min(value, duration));
+  }, [duration]);
+  useEffect(() => {
+    const zone = previewZoneRef.current;
+    if (!zone) return;
+    const measure = () => {
+      const style = getComputedStyle(zone),
+        width = Math.max(
+          1,
+          zone.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight),
+        ),
+        height = Math.max(
+          1,
+          zone.clientHeight -
+            parseFloat(style.paddingTop) -
+            parseFloat(style.paddingBottom),
+        ),
+        scale = Math.min(width / draft.width, height / draft.height);
+      setStageSize({
+        width: draft.width * scale,
+        height: draft.height * scale,
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(zone);
+    measure();
+    return () => observer.disconnect();
+  }, [draft.width, draft.height]);
+  const change = (
+    update: (video: VideoDocument) => VideoDocument,
+    record = true,
+  ) => {
+    if (!canEdit || busy) return;
+    setDraft((current) => {
+      if (record) {
+        setHistory((previous) => [...previous, current].slice(-40));
+        setFuture([]);
+      }
+      return { ...update(current), generatedUrl: undefined };
+    });
+    setDownloadUrl("");
+  };
+  const patchClip = (patch: Partial<VideoTimelineItem>) => {
+    if (selectedClip)
+      change((video) => ({
+        ...video,
+        timeline: video.timeline!.map((clip) =>
+          clip.id === selectedClip.id ? { ...clip, ...patch } : clip,
+        ),
+      }));
+  };
+  const patchText = (patch: Partial<VideoTextLayer>, record = true) => {
+    if (selectedTextId)
+      change(
+        (video) => ({
+          ...video,
+          texts: video.texts!.map((text) =>
+            text.id === selectedTextId ? { ...text, ...patch } : text,
+          ),
+        }),
+        record,
+      );
+  };
+  const selectTool = (next: Tool) => {
+    setTool(next);
+    setPanelOpen(true);
+    setPlaying(false);
+  };
+  const selectClip = (clip: VideoTimelineItem, index: number) => {
+    setSelectedClipId(clip.id);
+    setPlayhead(
+      draft
+        .timeline!.slice(0, index)
+        .reduce((sum, item) => sum + item.duration, 0),
+    );
+    setPlaying(false);
+  };
+  const addScene = (media?: VideoMediaItem) => {
+    const clip: VideoTimelineItem = {
+      id: uid("clip"),
+      mediaId: media?.id || "",
+      kind: media?.kind || "color",
+      url: media?.url || "",
+      name: media?.name || "Cena gráfica",
+      duration: media?.duration || 3,
+      transition: "fade",
+      transitionDuration: 0.5,
+      fit: "cover",
+      background: draft.background,
+      backgroundStyle: "gradient",
+      motion: media?.kind === "image" ? "zoom-in" : "none",
+      muted: true,
+    };
+    const index = draft.timeline?.length || 0;
+    change((video) => ({
+      ...video,
+      timeline: [...(video.timeline || []), clip],
+    }));
+    setSelectedClipId(clip.id);
+    setPlayhead(duration);
+    setPlaying(false);
+    return { clip, index };
+  };
+  const addText = () => {
+    let video = draft;
+    if (!duration) {
+      const clip: VideoTimelineItem = {
+        id: uid("clip"),
+        mediaId: "",
+        kind: "color",
+        url: "",
+        name: "Cena gráfica",
+        duration: 3,
+        background: draft.background,
+        backgroundStyle: "gradient",
+        transition: "cut",
+      };
+      video = { ...video, timeline: [clip] };
+      setSelectedClipId(clip.id);
+    }
+    const at = sceneAt(video, playhead);
+    const text = textLayer(
+      "Seu texto aqui",
+      at?.start || 0,
+      (at?.start || 0) + (at?.clip.duration || 3),
+      video,
+      {
+        fontFamily:
+          designSystem?.fontFamilies?.display ||
+          designSystem?.primaryFont ||
+          "Arial",
+      },
+    );
+    change(() => ({ ...video, texts: [...(video.texts || []), text] }));
+    setSelectedTextId(text.id);
+    setPlayhead(text.start + 0.3);
+    selectTool("text");
+  };
+  const moveScene = (direction: number) => {
+    if (!selectedClip) return;
+    change((video) => {
+      const clips = [...video.timeline!],
+        index = clips.findIndex((clip) => clip.id === selectedClip.id),
+        target = index + direction;
+      if (target < 0 || target >= clips.length) return video;
+      [clips[index], clips[target]] = [clips[target], clips[index]];
+      return { ...video, timeline: clips };
+    });
+  };
+  const split = () => {
+    const at = sceneAt(draft, playhead);
+    if (!at || at.local < 0.25 || at.clip.duration - at.local < 0.25)
+      return setError(
+        "Posicione o cursor dentro da cena, afastado das bordas, para dividi-la.",
+      );
+    change((video) => {
+      const clips = [...video.timeline!];
+      clips.splice(
+        at.index,
+        1,
+        { ...at.clip, duration: at.local },
+        {
+          ...at.clip,
+          id: uid("clip"),
+          trimStart: (at.clip.trimStart || 0) + at.local,
+          duration: at.clip.duration - at.local,
+          transition: "cut",
+        },
+      );
+      return { ...video, timeline: clips };
+    });
+  };
+  const uploadBlob = async (blob: Blob, name: string) => {
+    const data = new FormData();
+    data.append("file", new File([blob], name, { type: blob.type }));
+    const session = await ensureTursoSession().catch(() => null);
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      headers: session?.token
+        ? { Authorization: `Bearer ${session.token}` }
+        : {},
+      body: data,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.url)
+      throw new Error(
+        result.error || "Não foi possível salvar o arquivo na nuvem.",
+      );
+    return String(result.url);
+  };
+  const uploadFiles = async (files: FileList) => {
+    setUploading(true);
+    setError("");
+    try {
+      for (const file of Array.from(files)) {
+        if (!/^(image|video|audio)\//.test(file.type))
+          throw new Error("Envie imagens, vídeos ou arquivos de áudio.");
+        const url = await uploadBlob(file, file.name);
+        if (file.type.startsWith("audio/")) {
+          change((video) => ({
+            ...video,
+            audioTracks: [
+              ...(video.audioTracks || []),
+              {
+                id: uid("audio"),
+                url,
+                name: file.name,
+                start: 0,
+                end: duration || 6,
+                offset: 0,
+                volume: 0.7,
+              },
+            ],
+          }));
+          selectTool("audio");
+        } else {
+          const item: VideoMediaItem = {
+            id: uid("media"),
+            kind: file.type.startsWith("video/") ? "video" : "image",
+            url,
+            name: file.name,
+            source: "upload",
+          };
+          setLibrary((items) => [item, ...items]);
+          change((video) => ({
+            ...video,
+            media: [...(video.media || []), item],
+          }));
+        }
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  const renderAndSave = async (
+    video: VideoDocument,
+    controller: AbortController,
+  ) => {
+    setStatus("Renderizando a montagem…");
+    setProgress(0);
+    const blob = await exportVideo(video, {
+      signal: controller.signal,
+      onProgress: (value) => {
+        if (mounted.current) setProgress(value);
+      },
+    });
+    if (!mounted.current || controller.signal.aborted) return;
+    setDownloadMime(blob.type);
+    setDownloadUrl(URL.createObjectURL(blob));
+    setStatus("Vídeo pronto para baixar.");
+    try {
+      const url = await uploadBlob(
+        blob,
+        `video-5is-${Date.now()}.${blob.type.includes("mp4") ? "mp4" : "webm"}`,
+      );
+      if (mounted.current)
+        setDraft((current) => ({ ...current, generatedUrl: url }));
+    } catch (err: any) {
+      if (mounted.current)
+        setStatus(`Vídeo pronto para baixar. ${err.message}`);
+    }
+  };
+  const runExport = async () => {
+    if (busy) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setPlaying(false);
+    setError("");
+    try {
+      await renderAndSave(draft, controller);
+    } catch (err: any) {
+      setError(
+        err.name === "AbortError"
+          ? "Exportação cancelada. Sua edição foi preservada."
+          : err.message,
+      );
+    } finally {
+      if (mounted.current) {
+        setBusy(false);
+        abortRef.current = null;
+      }
+    }
+  };
+  const executeAI = async () => {
+    if (!draft.prompt?.trim())
+      return setError("Descreva o vídeo ou cole o roteiro.");
+    if (busy) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setPlaying(false);
+    setError("");
+    setStatus("A IA está montando as cenas…");
+    try {
+      const session = await ensureTursoSession().catch(() => null);
+      const response = await fetch("/api/mediators/think", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.token
+            ? { Authorization: `Bearer ${session.token}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          mode: "video-compose",
+          prompt: draft.prompt,
+          video: {
+            title: draft.title,
+            format: draft.format,
+            width: draft.width,
+            height: draft.height,
+            currentTimeline: draft.timeline,
+            media: library.map((item) => ({
+              id: item.id,
+              name: item.name,
+              kind: item.kind,
+            })),
+          },
+          project: { name: title },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.videoPlan)
+        throw new Error(result.error || "A IA não devolveu cenas executáveis.");
+      let next = applyVideoComposition(draft, result.videoPlan, library);
+      const format = FORMATS.find(
+        (item) => item.id === result.videoPlan.format,
+      );
+      if (format)
+        next = {
+          ...next,
+          format: format.id as VideoFormatPreset,
+          width: format.width,
+          height: format.height,
+          exportWidth: format.width > format.height ? 1280 : 720,
+        };
+      setHistory((previous) => [...previous, draft].slice(-40));
+      setFuture([]);
+      setDraft(next);
+      setSelectedClipId(next.timeline![0].id);
+      setPlayhead(0.3);
+      await renderAndSave(next, controller);
+    } catch (err: any) {
+      setError(
+        err.name === "AbortError"
+          ? "Execução cancelada. As cenas já montadas continuam editáveis."
+          : err.message,
+      );
+    } finally {
+      if (mounted.current) {
+        setBusy(false);
+        abortRef.current = null;
+      }
+    }
+  };
+  const dragPosition = (event: React.PointerEvent) => {
+    const drag = dragRef.current,
+      rect = stageRef.current?.getBoundingClientRect();
+    if (!drag || !rect) return;
+    const x = bounded(
+        ((event.clientX - rect.left) / rect.width) * 100,
+        2,
+        98,
+        50,
+      ),
+      y = bounded(((event.clientY - rect.top) / rect.height) * 100, 2, 98, 50);
+    change(
+      (video) =>
+        drag.kind === "text"
+          ? {
+              ...video,
+              texts: video.texts!.map((layer) =>
+                layer.id === drag.id ? { ...layer, x, y } : layer,
+              ),
+            }
+          : {
+              ...video,
+              overlays: video.overlays!.map((layer) =>
+                layer.id === drag.id ? { ...layer, x, y } : layer,
+              ),
+            },
+      false,
+    );
+  };
+  const undo = () => {
+    if (!history.length || busy) return;
+    const previous = history[history.length - 1];
+    setFuture((items) => [draft, ...items]);
+    setHistory((items) => items.slice(0, -1));
+    setDraft(previous);
+    setDownloadUrl("");
+  };
+  const redo = () => {
+    if (!future.length || busy) return;
+    setHistory((items) => [...items, draft]);
+    setDraft(future[0]);
+    setFuture((items) => items.slice(1));
+    setDownloadUrl("");
+  };
+  const trackWidth = Math.max(420, duration * timelineZoom),
+    currentTool = TOOLS.find((item) => item.id === tool)!;
+  const timelineSeek = (event: React.PointerEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPlayhead(
+      bounded((event.clientX - rect.left) / timelineZoom, 0, duration, 0),
+    );
+    setPlaying(false);
+  };
+  return (
+    <div
+      className="studio-editor video-editor fixed inset-0 z-[125]"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <header className="video-editor-header">
+        <button
+          type="button"
+          aria-label="Fechar editor de vídeo"
+          onClick={onClose}
+        >
+          <X />
+        </button>
+        <div className="video-editor-title">
+          <b>{title}</b>
+          <span>
+            {draft.width} × {draft.height} · {clock(duration)}
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={!canEdit || busy}
+          onClick={() => onSave({ ...draft, media: library, duration })}
+          aria-label="Salvar edição"
+        >
+          <Save />
+          <span>Salvar</span>
+        </button>
+        <button
+          type="button"
+          className="video-primary-action"
+          disabled={!canEdit || busy || !duration}
+          onClick={() => void runExport()}
+        >
+          <Download />
+          <span>Exportar</span>
+        </button>
+      </header>
+      <div className={`video-workspace ${panelOpen ? "has-panel" : ""}`}>
+        <main className="video-main">
+          <div className="video-preview-zone" ref={previewZoneRef}>
+            <div
+              className="video-stage"
+              ref={stageRef}
+              style={{ width: stageSize.width, height: stageSize.height }}
+            >
+              <CompositionCanvas
+                document={draft}
+                time={playhead}
+                playing={playing}
+                onError={setError}
+              />
+              {selectedText &&
+                playhead >= selectedText.start &&
+                playhead < selectedText.end && (
+                  <button
+                    type="button"
+                    className="video-position-handle"
+                    aria-label={`Mover texto: ${selectedText.text}`}
+                    style={{
+                      left: `${selectedText.x}%`,
+                      top: `${selectedText.y}%`,
+                      width: `${selectedText.width}%`,
+                    }}
+                    onPointerDown={(event) => {
+                      if (!canEdit || busy) return;
+                      setHistory((items) => [...items, draft].slice(-40));
+                      setFuture([]);
+                      dragRef.current = { id: selectedText.id, kind: "text" };
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={dragPosition}
+                    onPointerUp={() => (dragRef.current = null)}
+                    onPointerCancel={() => (dragRef.current = null)}
+                    onKeyDown={(event) => {
+                      const offset = event.shiftKey ? 5 : 1;
+                      if (
+                        [
+                          "ArrowLeft",
+                          "ArrowRight",
+                          "ArrowUp",
+                          "ArrowDown",
+                        ].includes(event.key)
+                      ) {
+                        event.preventDefault();
+                        patchText({
+                          x: bounded(
+                            selectedText.x +
+                              (event.key === "ArrowRight"
+                                ? offset
+                                : event.key === "ArrowLeft"
+                                  ? -offset
+                                  : 0),
+                            2,
+                            98,
+                            50,
+                          ),
+                          y: bounded(
+                            selectedText.y +
+                              (event.key === "ArrowDown"
+                                ? offset
+                                : event.key === "ArrowUp"
+                                  ? -offset
+                                  : 0),
+                            2,
+                            98,
+                            50,
+                          ),
+                        });
+                      }
+                    }}
+                  >
+                    <span>Mover texto</span>
+                  </button>
+                )}
+              {selectedLayer &&
+                playhead >= selectedLayer.start &&
+                playhead < selectedLayer.end && (
+                  <button
+                    type="button"
+                    className="video-position-handle"
+                    aria-label={`Mover camada: ${selectedLayer.name}`}
+                    style={{
+                      left: `${selectedLayer.x}%`,
+                      top: `${selectedLayer.y}%`,
+                      width: `${selectedLayer.width}%`,
+                    }}
+                    onPointerDown={(event) => {
+                      if (!canEdit || busy) return;
+                      setHistory((items) => [...items, draft].slice(-40));
+                      dragRef.current = { id: selectedLayer.id, kind: "layer" };
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    }}
+                    onPointerMove={dragPosition}
+                    onPointerUp={() => (dragRef.current = null)}
+                    onPointerCancel={() => (dragRef.current = null)}
+                  >
+                    <span>Mover camada</span>
+                  </button>
+                )}
+            </div>
+          </div>
+          <div className="video-playback-bar">
+            <span>
+              {clock(playhead)} / {clock(duration)}
+            </span>
+            <button
+              type="button"
+              aria-label={playing ? "Pausar vídeo" : "Reproduzir vídeo"}
+              disabled={!duration || busy}
+              onClick={() => {
+                if (playhead >= duration) setPlayhead(0);
+                setPlaying((value) => !value);
+              }}
+            >
+              {playing ? <Pause /> : <Play />}
+            </button>
+            <button
+              type="button"
+              aria-label="Desfazer edição"
+              disabled={!history.length || busy || !canEdit}
+              onClick={undo}
+            >
+              <Undo2 />
+            </button>
+            <button
+              type="button"
+              aria-label="Refazer edição"
+              disabled={!future.length || busy || !canEdit}
+              onClick={redo}
+            >
+              <Redo2 />
+            </button>
+            <button
+              type="button"
+              aria-label="Dividir cena no cursor"
+              disabled={!duration || busy || !canEdit}
+              onClick={split}
+            >
+              <Scissors />
+            </button>
+          </div>
+          <div className="video-timeline-header">
+            <b>Sequência de cenas</b>
+            <label>
+              Zoom
+              <input
+                aria-label="Zoom da timeline"
+                type="range"
+                min={20}
+                max={90}
+                value={timelineZoom}
+                onChange={(event) => setTimelineZoom(+event.target.value)}
+              />
+            </label>
+          </div>
+          <div
+            ref={timelineRef}
+            className="video-timeline-scroll"
+            aria-label="Timeline do vídeo"
+          >
+            <div className="video-tracks" style={{ width: trackWidth }}>
+              <div className="video-time-ruler" onPointerDown={timelineSeek}>
+                {Array.from({ length: Math.ceil(duration) + 1 }, (_, index) => (
+                  <span key={index} style={{ left: index * timelineZoom }}>
+                    {clock(index)}
+                  </span>
+                ))}
+              </div>
+              <div className="video-scene-track">
+                {draft.timeline!.map((clip, index) => (
+                  <React.Fragment key={clip.id}>
+                    <button
+                      type="button"
+                      className={`video-clip ${selectedClip?.id === clip.id ? "is-selected" : ""}`}
+                      aria-label={`Selecionar cena ${index + 1}: ${clip.name}`}
+                      aria-pressed={selectedClip?.id === clip.id}
+                      style={{ width: clip.duration * timelineZoom }}
+                      onClick={() => selectClip(clip, index)}
+                      draggable={canEdit && !busy}
+                      onDragStart={(event) =>
+                        event.dataTransfer.setData("text/plain", clip.id)
+                      }
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const id = event.dataTransfer.getData("text/plain");
+                        change((video) => {
+                          const clips = [...video.timeline!],
+                            from = clips.findIndex((item) => item.id === id);
+                          if (from < 0) return video;
+                          const [moving] = clips.splice(from, 1);
+                          clips.splice(index, 0, moving);
+                          return { ...video, timeline: clips };
+                        });
+                      }}
+                    >
+                      <div className="video-filmstrip">
+                        {[0, 1, 2].map((sample) => (
+                          <FrameThumbnail
+                            key={sample}
+                            clip={clip}
+                            index={sample}
+                          />
+                        ))}
+                      </div>
+                      <span>
+                        {index + 1} · {clip.name}
+                      </span>
+                      <small>{clip.duration.toFixed(1)}s</small>
+                    </button>
+                    {index < draft.timeline!.length - 1 && (
+                      <button
+                        type="button"
+                        className="video-transition-marker"
+                        style={{
+                          left:
+                            draft
+                              .timeline!.slice(0, index + 1)
+                              .reduce((sum, item) => sum + item.duration, 0) *
+                              timelineZoom -
+                            22,
+                        }}
+                        aria-label={`Editar transição entre cenas ${index + 1} e ${index + 2}`}
+                        onClick={() => {
+                          setSelectedClipId(draft.timeline![index + 1].id);
+                          setPlayhead(
+                            draft
+                              .timeline!.slice(0, index + 1)
+                              .reduce((sum, item) => sum + item.duration, 0) +
+                              0.2,
+                          );
+                          selectTool("transitions");
+                        }}
+                      >
+                        <Film size={12} />
+                      </button>
+                    )}
+                  </React.Fragment>
+                ))}
+                <button
+                  type="button"
+                  className="video-add-scene"
+                  onClick={() => selectTool("media")}
+                  aria-label="Adicionar cena"
+                >
+                  <Plus />
+                </button>
+              </div>
+              <div className="video-layer-track">
+                {draft.texts!.map((layer) => (
+                  <button
+                    key={layer.id}
+                    type="button"
+                    style={{
+                      left: layer.start * timelineZoom,
+                      width: Math.max(
+                        32,
+                        (layer.end - layer.start) * timelineZoom,
+                      ),
+                    }}
+                    onClick={() => {
+                      setSelectedTextId(layer.id);
+                      setSelectedLayerId("");
+                      setPlayhead(layer.start + 0.3);
+                      selectTool("text");
+                    }}
+                    aria-label={`Editar texto: ${layer.text}`}
+                  >
+                    <Type size={12} />
+                    {layer.text}
+                  </button>
+                ))}
+              </div>
+              <div className="video-audio-track">
+                {draft.audioTracks!.map((track) => (
+                  <button
+                    key={track.id}
+                    type="button"
+                    style={{
+                      left: track.start * timelineZoom,
+                      width: Math.max(
+                        32,
+                        (track.end - track.start) * timelineZoom,
+                      ),
+                    }}
+                    onClick={() => selectTool("audio")}
+                  >
+                    <Music2 size={12} />
+                    {track.name}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="video-playhead"
+                style={{ left: playhead * timelineZoom }}
+              />
+            </div>
+          </div>
+        </main>
+        {panelOpen && (
+          <aside
+            className="video-tool-panel"
+            aria-label={`Ferramentas de ${currentTool.label}`}
+          >
+            <div className="video-panel-heading">
+              <b>
+                <currentTool.icon size={18} />
+                {currentTool.label}
+              </b>
+              <button
+                type="button"
+                aria-label="Recolher ferramentas"
+                onClick={() => setPanelOpen(false)}
+              >
+                <ChevronDown />
+              </button>
+            </div>
+            <div className="video-panel-content">
+              <fieldset disabled={!canEdit || busy}>
+                {tool === "media" && (
+                  <>
+                    <button
+                      type="button"
+                      className="video-action"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      <Upload />
+                      {uploading ? "Enviando…" : "Adicionar mídia"}
+                    </button>
+                    <button
+                      type="button"
+                      className="video-action"
+                      onClick={() => addScene()}
+                    >
+                      <Plus />
+                      Cena gráfica sem mídia
+                    </button>
+                    <div className="video-media-grid">
+                      {library.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-label={`Adicionar cena: ${item.name}`}
+                          onClick={() => addScene(item)}
+                        >
+                          {item.kind === "image" ? (
+                            <img src={item.url} alt="" />
+                          ) : (
+                            <video src={item.url} muted playsInline />
+                          )}
+                          <span>{item.name}</span>
+                          <Plus size={16} />
+                        </button>
+                      ))}
+                    </div>
+                    {!library.length && (
+                      <p>
+                        Envie imagens ou vídeos, ou monte cenas gráficas com
+                        textos e movimento.
+                      </p>
+                    )}
+                  </>
+                )}
+                {tool === "edit" &&
+                  (selectedClip ? (
+                    <>
+                      <h3>{selectedClip.name}</h3>
+                      <div className="video-field-grid">
+                        <Field label="Duração (s)">
+                          <input
+                            type="number"
+                            min={0.25}
+                            max={600}
+                            step={0.25}
+                            value={selectedClip.duration}
+                            onChange={(event) =>
+                              patchClip({
+                                duration: bounded(
+                                  event.target.value,
+                                  0.25,
+                                  600,
+                                  3,
+                                ),
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Início no arquivo (s)">
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={selectedClip.trimStart || 0}
+                            onChange={(event) =>
+                              patchClip({
+                                trimStart: bounded(
+                                  event.target.value,
+                                  0,
+                                  600,
+                                  0,
+                                ),
+                              })
+                            }
+                          />
+                        </Field>
+                      </div>
+                      <Field label="Enquadramento">
+                        <select
+                          value={selectedClip.fit || "cover"}
+                          onChange={(event) =>
+                            patchClip({
+                              fit: event.target.value as "cover" | "contain",
+                            })
+                          }
+                        >
+                          <option value="cover">Preencher quadro</option>
+                          <option value="contain">Mostrar mídia inteira</option>
+                        </select>
+                      </Field>
+                      <div className="video-button-row">
+                        <button type="button" onClick={() => moveScene(-1)}>
+                          <ArrowLeft />
+                          Antes
+                        </button>
+                        <button type="button" onClick={() => moveScene(1)}>
+                          Depois
+                          <ArrowRight />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        className="video-action"
+                        onClick={split}
+                      >
+                        <Scissors />
+                        Dividir no cursor
+                      </button>
+                      <button
+                        type="button"
+                        className="video-action video-danger"
+                        onClick={() =>
+                          change((video) => ({
+                            ...video,
+                            timeline: video.timeline!.filter(
+                              (clip) => clip.id !== selectedClip.id,
+                            ),
+                          }))
+                        }
+                      >
+                        <Trash2 />
+                        Remover cena
+                      </button>
+                    </>
+                  ) : (
+                    <p>Selecione uma cena na timeline.</p>
+                  ))}
+                {tool === "text" && (
+                  <>
+                    <button
+                      type="button"
+                      className="video-action"
+                      onClick={addText}
+                    >
+                      <Plus />
+                      Adicionar texto
+                    </button>
+                    <div className="video-text-list">
+                      {draft.texts!.map((layer) => (
+                        <button
+                          type="button"
+                          key={layer.id}
+                          aria-pressed={selectedTextId === layer.id}
+                          onClick={() => {
+                            setSelectedTextId(layer.id);
+                            setSelectedLayerId("");
+                            setPlayhead(layer.start + 0.3);
+                          }}
+                        >
+                          {layer.text}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedText && (
+                      <>
+                        <Field label="Texto">
+                          <textarea
+                            value={selectedText.text}
+                            onChange={(event) =>
+                              patchText({ text: event.target.value })
+                            }
+                          />
+                        </Field>
+                        <p>
+                          Arraste a caixa na prévia. Com o teclado, use as
+                          setas; Shift move em passos maiores.
+                        </p>
+                        <div className="video-position-grid">
+                          {[15, 50, 85].flatMap((y) =>
+                            [15, 50, 85].map((x) => (
+                              <button
+                                key={`${x}-${y}`}
+                                type="button"
+                                aria-label={`Posição do texto ${x}% horizontal, ${y}% vertical`}
+                                aria-pressed={
+                                  selectedText.x === x && selectedText.y === y
+                                }
+                                onClick={() =>
+                                  patchText({
+                                    x,
+                                    y,
+                                    width:
+                                      x === 50
+                                        ? selectedText.width
+                                        : Math.min(selectedText.width, 28),
+                                  })
+                                }
+                              >
+                                <span />
+                              </button>
+                            )),
+                          )}
+                        </div>
+                        <div className="video-field-grid">
+                          <Field label="X (%)">
+                            <input
+                              type="number"
+                              min={2}
+                              max={98}
+                              value={selectedText.x}
+                              onChange={(event) =>
+                                patchText({
+                                  x: bounded(event.target.value, 2, 98, 50),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Y (%)">
+                            <input
+                              type="number"
+                              min={2}
+                              max={98}
+                              value={selectedText.y}
+                              onChange={(event) =>
+                                patchText({
+                                  y: bounded(event.target.value, 2, 98, 50),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Tamanho (% da largura)">
+                            <input
+                              type="number"
+                              min={2}
+                              max={16}
+                              step={0.25}
+                              value={selectedText.fontSize}
+                              onChange={(event) =>
+                                patchText({
+                                  fontSize: bounded(
+                                    event.target.value,
+                                    2,
+                                    16,
+                                    6,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Largura (%)">
+                            <input
+                              type="number"
+                              min={10}
+                              max={95}
+                              value={selectedText.width}
+                              onChange={(event) =>
+                                patchText({
+                                  width: bounded(
+                                    event.target.value,
+                                    10,
+                                    95,
+                                    84,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Início (s)">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.1}
+                              value={selectedText.start}
+                              onChange={(event) =>
+                                patchText({
+                                  start: bounded(
+                                    event.target.value,
+                                    0,
+                                    selectedText.end - 0.1,
+                                    0,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                          <Field label="Fim (s)">
+                            <input
+                              type="number"
+                              min={selectedText.start + 0.1}
+                              step={0.1}
+                              value={selectedText.end}
+                              onChange={(event) =>
+                                patchText({
+                                  end: bounded(
+                                    event.target.value,
+                                    selectedText.start + 0.1,
+                                    Math.max(
+                                      duration,
+                                      selectedText.start + 0.1,
+                                    ),
+                                    duration,
+                                  ),
+                                })
+                              }
+                            />
+                          </Field>
+                        </div>
+                        <Field label="Fonte">
+                          <select
+                            value={selectedText.fontFamily}
+                            onChange={(event) =>
+                              patchText({ fontFamily: event.target.value })
+                            }
+                          >
+                            {[
+                              ...new Set(
+                                [
+                                  "Arial",
+                                  "Georgia",
+                                  "Verdana",
+                                  designSystem?.primaryFont,
+                                  designSystem?.fontFamilies?.display,
+                                ].filter(Boolean),
+                              ),
+                            ].map((font) => (
+                              <option key={font} value={font}>
+                                {font}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <div className="video-field-grid">
+                          <Field label="Cor do texto">
+                            <input
+                              type="color"
+                              value={color(selectedText.color)}
+                              onChange={(event) =>
+                                patchText({ color: event.target.value })
+                              }
+                            />
+                          </Field>
+                          <Field label="Alinhamento">
+                            <select
+                              value={selectedText.align}
+                              onChange={(event) =>
+                                patchText({
+                                  align: event.target
+                                    .value as VideoTextLayer["align"],
+                                })
+                              }
+                            >
+                              <option value="left">Esquerda</option>
+                              <option value="center">Centro</option>
+                              <option value="right">Direita</option>
+                            </select>
+                          </Field>
+                        </div>
+                        <button
+                          type="button"
+                          className="video-action"
+                          aria-pressed={selectedText.bold}
+                          onClick={() =>
+                            patchText({ bold: !selectedText.bold })
+                          }
+                        >
+                          Negrito
+                        </button>
+                        <Field label="Animação do texto">
+                          <select
+                            value={selectedText.animation || "none"}
+                            onChange={(event) =>
+                              patchText({
+                                animation: event.target
+                                  .value as VideoTextLayer["animation"],
+                              })
+                            }
+                          >
+                            <option value="none">Sem animação</option>
+                            <option value="fade">Aparecer suavemente</option>
+                            <option value="pop">Aproximar</option>
+                            <option value="float">Flutuar</option>
+                          </select>
+                        </Field>
+                        <button
+                          type="button"
+                          className="video-action video-danger"
+                          onClick={() => {
+                            change((video) => ({
+                              ...video,
+                              texts: video.texts!.filter(
+                                (layer) => layer.id !== selectedTextId,
+                              ),
+                            }));
+                            setSelectedTextId("");
+                          }}
+                        >
+                          <Trash2 />
+                          Remover texto
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+                {tool === "transitions" &&
+                  (selectedClip ? (
+                    <>
+                      <p>
+                        A transição acontece na entrada da cena selecionada.
+                        Toque no ícone entre duas cenas para editar.
+                      </p>
+                      <div className="video-transition-grid">
+                        {[
+                          { id: "cut", label: "Corte" },
+                          { id: "fade", label: "Dissolver" },
+                          { id: "slide", label: "Deslizar" },
+                          { id: "zoom", label: "Aproximar" },
+                        ].map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={selectedClip.transition === item.id}
+                            onClick={() =>
+                              patchClip({
+                                transition: item.id as VideoTransition,
+                              })
+                            }
+                          >
+                            <span
+                              className={`video-transition-sample ${item.id}`}
+                            >
+                              <i />
+                              <i />
+                            </span>
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                      <Field label="Tempo da transição (s)">
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.min(2, selectedClip.duration / 2)}
+                          step={0.1}
+                          value={selectedClip.transitionDuration ?? 0.5}
+                          onChange={(event) =>
+                            patchClip({
+                              transitionDuration: +event.target.value,
+                            })
+                          }
+                        />
+                        <output>
+                          {selectedClip.transitionDuration ?? 0.5}s
+                        </output>
+                      </Field>
+                    </>
+                  ) : (
+                    <p>Adicione cenas para escolher uma transição.</p>
+                  ))}
+                {tool === "effects" &&
+                  (selectedClip ? (
+                    <>
+                      <Field label="Movimento da cena">
+                        <select
+                          value={selectedClip.motion || "none"}
+                          onChange={(event) =>
+                            patchClip({
+                              motion: event.target
+                                .value as VideoTimelineItem["motion"],
+                            })
+                          }
+                        >
+                          <option value="none">Sem movimento</option>
+                          <option value="zoom-in">Aproximar lentamente</option>
+                          <option value="zoom-out">Afastar lentamente</option>
+                          <option value="pan-left">Mover à esquerda</option>
+                          <option value="pan-right">Mover à direita</option>
+                          <option value="float">Flutuar</option>
+                          <option value="pulse">Pulsar</option>
+                          <option value="rotate">Oscilar rotação</option>
+                        </select>
+                      </Field>
+                      <Field label="Tratamento da imagem">
+                        <select
+                          value={selectedClip.effect || "none"}
+                          onChange={(event) =>
+                            patchClip({
+                              effect: event.target
+                                .value as VideoTimelineItem["effect"],
+                            })
+                          }
+                        >
+                          <option value="none">Original</option>
+                          <option value="grayscale">Preto e branco</option>
+                          <option value="warm">Quente</option>
+                          <option value="cool">Frio</option>
+                          <option value="contrast">Contraste</option>
+                          <option value="blur">Desfocar</option>
+                        </select>
+                      </Field>
+                      {selectedClip.kind === "color" && (
+                        <>
+                          <Field label="Fundo da cena">
+                            <select
+                              value={selectedClip.backgroundStyle || "plain"}
+                              onChange={(event) =>
+                                patchClip({
+                                  backgroundStyle: event.target
+                                    .value as VideoTimelineItem["backgroundStyle"],
+                                })
+                              }
+                            >
+                              <option value="plain">Cor sólida</option>
+                              <option value="gradient">Gradiente</option>
+                              <option value="particles">
+                                Partículas em movimento
+                              </option>
+                            </select>
+                          </Field>
+                          <Field label="Cor da cena">
+                            <input
+                              type="color"
+                              value={color(
+                                selectedClip.background || draft.background,
+                              )}
+                              onChange={(event) =>
+                                patchClip({ background: event.target.value })
+                              }
+                            />
+                          </Field>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <p>Selecione uma cena.</p>
+                  ))}
+                {tool === "layers" && (
+                  <>
+                    <p>Escolha uma imagem para colocar sobre as cenas.</p>
+                    <div className="video-media-grid">
+                      {library
+                        .filter((item) => item.kind === "image")
+                        .map((item) => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() => {
+                              const layer = {
+                                id: uid("layer"),
+                                mediaId: item.id,
+                                url: item.url,
+                                name: item.name,
+                                kind: "image" as const,
+                                x: 50,
+                                y: 50,
+                                width: 35,
+                                opacity: 1,
+                                start: 0,
+                                end: duration || 3,
+                                animation: "fade" as const,
+                              };
+                              change((video) => ({
+                                ...video,
+                                overlays: [...video.overlays!, layer],
+                              }));
+                              setSelectedLayerId(layer.id);
+                              setSelectedTextId("");
+                            }}
+                          >
+                            <img alt="" src={item.url} />
+                            <span>{item.name}</span>
+                          </button>
+                        ))}
+                    </div>
+                    {draft.overlays!.map((layer) => (
+                      <button
+                        type="button"
+                        className="video-action"
+                        key={layer.id}
+                        onClick={() => {
+                          setSelectedLayerId(layer.id);
+                          setSelectedTextId("");
+                          setPlayhead(layer.start + 0.3);
+                        }}
+                      >
+                        {layer.name}
+                      </button>
+                    ))}
+                    {selectedLayer && (
+                      <>
+                        <Field label="Largura da camada (%)">
+                          <input
+                            type="range"
+                            min={5}
+                            max={100}
+                            value={selectedLayer.width}
+                            onChange={(event) =>
+                              change((video) => ({
+                                ...video,
+                                overlays: video.overlays!.map((layer) =>
+                                  layer.id === selectedLayer.id
+                                    ? { ...layer, width: +event.target.value }
+                                    : layer,
+                                ),
+                              }))
+                            }
+                          />
+                        </Field>
+                        <Field label="Animação da camada">
+                          <select
+                            value={selectedLayer.animation}
+                            onChange={(event) =>
+                              change((video) => ({
+                                ...video,
+                                overlays: video.overlays!.map((layer) =>
+                                  layer.id === selectedLayer.id
+                                    ? {
+                                        ...layer,
+                                        animation: event.target.value as any,
+                                      }
+                                    : layer,
+                                ),
+                              }))
+                            }
+                          >
+                            <option value="none">Sem animação</option>
+                            <option value="fade">Aparecer</option>
+                            <option value="pop">Aproximar</option>
+                            <option value="float">Flutuar</option>
+                            <option value="spin">Girar</option>
+                          </select>
+                        </Field>
+                        <button
+                          type="button"
+                          className="video-action video-danger"
+                          onClick={() =>
+                            change((video) => ({
+                              ...video,
+                              overlays: video.overlays!.filter(
+                                (layer) => layer.id !== selectedLayer.id,
+                              ),
+                            }))
+                          }
+                        >
+                          <Trash2 />
+                          Remover camada
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+                {tool === "audio" && (
+                  <>
+                    <button
+                      type="button"
+                      className="video-action"
+                      onClick={() => fileRef.current?.click()}
+                    >
+                      <Upload />
+                      Adicionar áudio
+                    </button>
+                    {selectedClip?.kind === "video" && (
+                      <button
+                        type="button"
+                        className="video-action"
+                        aria-pressed={selectedClip.muted !== false}
+                        onClick={() =>
+                          patchClip({ muted: selectedClip.muted === false })
+                        }
+                      >
+                        <Music2 />
+                        {selectedClip.muted === false
+                          ? "Silenciar cena"
+                          : "Ativar áudio da cena"}
+                      </button>
+                    )}
+                    {draft.audioTracks!.map((track) => (
+                      <div key={track.id} className="video-audio-settings">
+                        <b>{track.name}</b>
+                        <Field label="Volume">
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={track.volume}
+                            onChange={(event) =>
+                              change((video) => ({
+                                ...video,
+                                audioTracks: video.audioTracks!.map((item) =>
+                                  item.id === track.id
+                                    ? { ...item, volume: +event.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                          />
+                        </Field>
+                        <div className="video-field-grid">
+                          <Field label="Início (s)">
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.1}
+                              value={track.start}
+                              onChange={(event) =>
+                                change((video) => ({
+                                  ...video,
+                                  audioTracks: video.audioTracks!.map((item) =>
+                                    item.id === track.id
+                                      ? {
+                                          ...item,
+                                          start: bounded(
+                                            event.target.value,
+                                            0,
+                                            track.end - 0.1,
+                                            0,
+                                          ),
+                                        }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                          </Field>
+                          <Field label="Fim (s)">
+                            <input
+                              type="number"
+                              min={track.start + 0.1}
+                              step={0.1}
+                              value={track.end}
+                              onChange={(event) =>
+                                change((video) => ({
+                                  ...video,
+                                  audioTracks: video.audioTracks!.map((item) =>
+                                    item.id === track.id
+                                      ? {
+                                          ...item,
+                                          end: bounded(
+                                            event.target.value,
+                                            track.start + 0.1,
+                                            Math.max(
+                                              duration,
+                                              track.start + 0.1,
+                                            ),
+                                            duration,
+                                          ),
+                                        }
+                                      : item,
+                                  ),
+                                }))
+                              }
+                            />
+                          </Field>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Remover áudio: ${track.name}`}
+                          onClick={() =>
+                            change((video) => ({
+                              ...video,
+                              audioTracks: video.audioTracks!.filter(
+                                (item) => item.id !== track.id,
+                              ),
+                            }))
+                          }
+                        >
+                          <Trash2 />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {tool === "ai" && (
+                  <>
+                    <p>
+                      Cole seu roteiro ou descreva o resultado. A IA monta
+                      cenas, textos, posições, movimentos e transições; em
+                      seguida o editor renderiza o vídeo automaticamente.
+                    </p>
+                    <Field label="Roteiro / instrução para a IA">
+                      <textarea
+                        value={draft.prompt || ""}
+                        placeholder="Ex.: vídeo vertical de 12 segundos sobre meu projeto. Abertura com uma pergunta no centro, depois apresente a solução; feche com uma chamada. Fundo com partículas, textos curtos e transições suaves."
+                        onChange={(event) =>
+                          change((video) => ({
+                            ...video,
+                            prompt: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <VoiceDictationButton
+                      onText={(text) =>
+                        change((video) => ({
+                          ...video,
+                          prompt: `${video.prompt || ""} ${text}`,
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="video-action video-primary-action"
+                      onClick={() => void executeAI()}
+                    >
+                      <WandSparkles />
+                      Executar roteiro e gerar vídeo
+                    </button>
+                    <p>
+                      Com mídia do projeto, a IA faz a montagem. Sem mídia, cria
+                      cenas gráficas com texto e movimento.
+                    </p>
+                    {draft.aiPlan!.map((note, index) => (
+                      <p key={index}>{note}</p>
+                    ))}
+                  </>
+                )}
+                {tool === "format" && (
+                  <>
+                    <Field label="Nome do vídeo">
+                      <input
+                        value={draft.title}
+                        onChange={(event) =>
+                          change((video) => ({
+                            ...video,
+                            title: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <div className="video-transition-grid">
+                      {FORMATS.map((format) => (
+                        <button
+                          type="button"
+                          key={format.id}
+                          aria-pressed={draft.format === format.id}
+                          onClick={() =>
+                            change((video) => ({
+                              ...video,
+                              format: format.id as VideoFormatPreset,
+                              width: format.width,
+                              height: format.height,
+                              exportWidth:
+                                format.width > format.height ? 1280 : 720,
+                            }))
+                          }
+                        >
+                          {format.label}
+                        </button>
+                      ))}
+                    </div>
+                    <Field label="Fundo geral">
+                      <input
+                        type="color"
+                        value={color(draft.background)}
+                        onChange={(event) =>
+                          change((video) => ({
+                            ...video,
+                            background: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Cor de destaque">
+                      <input
+                        type="color"
+                        value={color(draft.accent)}
+                        onChange={(event) =>
+                          change((video) => ({
+                            ...video,
+                            accent: event.target.value,
+                          }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Resolução de exportação">
+                      <select
+                        value={
+                          draft.exportWidth ||
+                          (draft.width > draft.height ? 1280 : 720)
+                        }
+                        onChange={(event) =>
+                          change((video) => ({
+                            ...video,
+                            exportWidth: +event.target.value,
+                          }))
+                        }
+                      >
+                        {(draft.width > draft.height
+                          ? [960, 1280, 1920]
+                          : [540, 720, 1080]
+                        ).map((width) => (
+                          <option key={width} value={width}>
+                            {width} ×{" "}
+                            {Math.round((width * draft.height) / draft.width)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                )}
+              </fieldset>
+            </div>
+          </aside>
+        )}
+      </div>
+      {(busy || error || status || downloadUrl || draft.generatedUrl) && (
+        <div className="video-status" aria-live="polite">
+          {busy ? (
+            <>
+              <Loader2 className="animate-spin" />
+              <span>
+                {status} {Math.round(progress * 100)}%
+              </span>
+              <button type="button" onClick={() => abortRef.current?.abort()}>
+                Cancelar
+              </button>
+            </>
+          ) : (
+            <>
+              <span className={error ? "video-error" : ""}>
+                {error || status}
+              </span>
+              {(downloadUrl || draft.generatedUrl) && (
+                <a
+                  href={downloadUrl || draft.generatedUrl}
+                  download={`video-5is.${downloadMime.includes("mp4") ? "mp4" : "webm"}`}
+                >
+                  <Download size={16} />
+                  Baixar vídeo
+                </a>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      <nav
+        className="video-tool-dock"
+        aria-label="Ferramentas de edição de vídeo"
+      >
+        <button
+          type="button"
+          className="video-dock-expand"
+          aria-label={
+            panelOpen
+              ? "Recolher menu de ferramentas"
+              : "Expandir menu de ferramentas"
+          }
+          aria-expanded={panelOpen}
+          onClick={() => setPanelOpen((value) => !value)}
+        >
+          {panelOpen ? <ChevronDown /> : <ChevronUp />}
+          <span>{panelOpen ? "Recolher" : "Expandir"}</span>
+        </button>
+        <div className="video-dock-scroll">
+          {TOOLS.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              aria-pressed={tool === item.id && panelOpen}
+              onClick={() => selectTool(item.id)}
+            >
+              <item.icon />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+      <input
+        type="file"
+        ref={fileRef}
+        className="hidden"
+        accept={tool === "audio" ? "audio/*" : "image/*,video/*,audio/*,.svg"}
+        multiple
+        onChange={(event) =>
+          event.target.files && void uploadFiles(event.target.files)
+        }
+      />
+    </div>
+  );
 }
-function wrapText(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,maxWidth:number,lineHeight:number){const words=String(text||'').split(/\s+/),lines:string[]=[];let line='';for(const word of words){const t=line?`${line} ${word}`:word;if(ctx.measureText(t).width>maxWidth&&line){lines.push(line);line=word}else line=t}if(line)lines.push(line);const start=y-((lines.length-1)*lineHeight)/2;lines.slice(0,4).forEach((v,i)=>ctx.fillText(v,x,start+i*lineHeight))}
