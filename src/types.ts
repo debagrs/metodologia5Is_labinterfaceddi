@@ -116,6 +116,9 @@ export interface InteractiveDocument {
   effectPreset?: InteractiveEffect;
   intensity?: InteractiveIntensity;
   preserveBrand?: boolean;
+  characterReference?: { nodeId: string; name: string; appearance?: CharacterAppearance; views: Array<{view: CharacterView; url: string}> };
+  messages?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  revisions?: Array<{ code: string; title: string; engine: InteractiveEngine }>;
 }
 
 export interface DrawingPoint {
@@ -396,7 +399,7 @@ export interface HardwareDocument {
 export type SpriteAnimationKind = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'custom';
 export type SpriteMotionPreset = 'none' | 'bob' | 'bounce' | 'shake' | 'pulse' | 'squash';
 export type CharacterView = 'front' | 'three-quarter' | 'side' | 'back';
-export type CharacterExpression = 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'determined';
+export type CharacterExpression = 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'determined' | 'winking' | 'laughing' | 'worried' | 'calm';
 export type CharacterPoseKind = 'neutral' | 'wave' | 'walk' | 'run' | 'jump' | 'sit' | 'action';
 
 export interface SpriteFrame {
@@ -415,6 +418,7 @@ export interface SpriteAnimation {
   loop: boolean;
   motion: SpriteMotionPreset;
   frames: SpriteFrame[];
+  generatedFromCharacter?: boolean;
 }
 
 export type CharacterSpecies = 'human' | 'anthropomorphic' | 'quadruped' | 'bird' | 'reptile' | 'amphibian' | 'fish' | 'arthropod' | 'fantasy' | 'hybrid';
@@ -435,7 +439,7 @@ export interface CharacterAppearance {
   hybridBlend?: number;
   headShape: 'round' | 'oval' | 'square' | 'heart' | 'triangle' | 'wide';
   faceShape: 'soft' | 'angular' | 'long' | 'wide';
-  eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large';
+  eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large' | 'hooded' | 'monolid' | 'upturned' | 'downturned';
   browStyle: 'none' | 'soft' | 'straight' | 'arched' | 'bold';
   noseStyle: 'none' | 'small' | 'straight' | 'wide';
   mouthStyle: 'line' | 'smile' | 'full' | 'small';
