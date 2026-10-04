@@ -1,3 +1,4 @@
+import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
@@ -693,7 +694,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const activeShape = SHAPE_TOOLS.find((item) => item.tool === tool);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#ECECEA] flex flex-col canvas-control" onPointerDown={(event) => event.stopPropagation()}>
+    <div className="studio-editor fixed inset-0 z-[100] bg-[#ECECEA] flex flex-col canvas-control" onPointerDown={(event) => event.stopPropagation()}>
       <header className="shrink-0 bg-white border-b border-black/10 px-2 sm:px-4 py-2 flex items-center gap-2 justify-between" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <div className="min-w-0 flex items-center gap-2">
           <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar folha"><X size={18} /></button>
@@ -705,15 +706,15 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
         <div className="flex items-center gap-1.5 shrink-0">
           <button type="button" disabled={!canEdit || historyIndex <= 0} onClick={() => historyIndex > 0 && setHistoryIndex(historyIndex - 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Desfazer"><Undo2 size={16} /></button>
           <button type="button" disabled={!canEdit || historyIndex >= history.length - 1} onClick={() => historyIndex < history.length - 1 && setHistoryIndex(historyIndex + 1)} className="h-10 w-10 rounded-xl border border-black/10 bg-white disabled:opacity-30 flex items-center justify-center cursor-pointer" title="Refazer"><Redo2 size={16} /></button>
-          <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="md:hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
+          <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
           {onWireframe && <button type="button" disabled={!canEdit} onClick={() => onWireframe(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Transformar este desenho em wireframe editável"><PanelsTopLeft size={15}/><span className="hidden sm:inline">WIREFRAME</span></button>}
           {onAnimate && <button type="button" disabled={!canEdit} onClick={() => onAnimate(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Animar este desenho na Camada Interativa"><WandSparkles size={15}/><span className="hidden sm:inline">ANIMAR</span></button>}
           <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
         </div>
       </header>
 
-      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
-      <div className="hidden md:flex shrink-0 bg-white border-b border-black/10 flex-col">
+<StudioWorkspace tools={<div>      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
+      <div className="flex shrink-0 bg-white border-b border-black/10 flex-col">
         <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-2 border-b border-black/5">
           <div className="flex flex-wrap items-center gap-1.5">
             <ToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setDesktopShapesOpen(false); }} label="Selecionar"><ArrowLeftRight size={15} /></ToolButton>
@@ -757,7 +758,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
               <span className="text-[9px] font-mono uppercase tracking-wider text-neutral-500">Formas 2D e 3D</span>
               <span className="text-[9px] text-neutral-400">Escolha uma forma e desenhe diretamente na folha.</span>
             </div>
-            <div className="grid grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 2xl:grid-cols-13 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {SHAPE_TOOLS.filter((item) => item.tool !== 'line' && item.tool !== 'arrow').map((item) => (
                 <button
                   key={item.tool}
@@ -840,7 +841,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
         </div>
       </div>
 
-      <main className="flex-1 min-h-0 p-2 md:p-5 pb-24 md:pb-5 overflow-auto flex items-start justify-center bg-[#ECECEA]">
+</div>}>      <main className="flex-1 min-h-0 p-2 md:p-5 pb-5 overflow-auto flex items-start justify-center bg-[#ECECEA]">
         <div ref={paperRef} className="relative w-full max-w-[1400px] min-w-[280px] flex justify-center">
           <svg
             ref={svgRef}
@@ -896,189 +897,14 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
             />
           )}
         </div>
-      </main>
+      </main></StudioWorkspace>
 
       <footer className="hidden md:flex shrink-0 bg-white border-t border-black/10 px-3 py-1.5 text-[10px] font-mono text-neutral-500 items-center justify-between gap-3">
         <span className="truncate">Caneta/touch: desenhe diretamente. Formas: toque e arraste ou apenas toque para inserir. Texto: escolha T e toque na folha.</span>
         <span className="shrink-0">SVG vetorial · PNG/JPG raster</span>
       </footer>
 
-      {/* Painéis mobile */}
-      {mobilePanel === 'shapes' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[48dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div>
-              <div className="text-xs font-semibold">Formas</div>
-              <div className="text-[10px] font-mono text-neutral-500">Toque para escolher; depois arraste ou toque na folha.</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {SHAPE_TOOLS.map((item) => (
-              <button
-                key={item.tool}
-                type="button"
-                onClick={() => chooseTool(item.tool)}
-                className={`min-h-16 rounded-xl border px-2 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-mono ${tool === item.tool ? 'bg-black text-white border-black' : 'bg-white border-black/10'}`}
-              >
-                {shapeIcon(item.tool)}
-                <span className="text-center leading-tight">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {mobilePanel === 'style' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] max-h-[54dvh] overflow-y-auto rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="text-xs font-semibold">Cor e tamanho</div>
-              <div className="text-[10px] font-mono text-neutral-500">{tool === 'text' ? 'Cor e tamanho do texto' : tool === 'brush' ? 'Cor e espessura do pincel' : 'Traço e preenchimento da forma'}</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-
-          <div className="mb-4">
-            <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do traço</div>
-            <div className="grid grid-cols-6 gap-2">
-              {PALETTE.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setStrokeColor(color)}
-                  className={`h-11 rounded-xl border ${strokeColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`}
-                  style={{ backgroundColor: color }}
-                  aria-label={`Usar cor ${color}`}
-                />
-              ))}
-              <label className="h-11 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden">
-                + COR
-                <input type="color" value={strokeColor} onChange={(event) => setStrokeColor(event.target.value)} className="absolute opacity-0 pointer-events-none" />
-              </label>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono uppercase text-neutral-500">Espessura</span>
-              <span className="text-xs font-mono font-bold">{strokeWidth}px</span>
-            </div>
-            <input type="range" min="1" max="40" value={strokeWidth} onChange={(event) => setStrokeWidth(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
-            <div className="grid grid-cols-5 gap-2 mt-1">
-              {[2, 4, 8, 16, 32].map((size) => (
-                <button key={size} type="button" onClick={() => setStrokeWidth(size)} className={`h-10 rounded-xl border text-[10px] font-mono ${strokeWidth === size ? 'bg-black text-white border-black' : 'border-black/10'}`}>{size}px</button>
-              ))}
-            </div>
-          </div>
-
-          {tool === 'brush' && (
-            <div className="mb-4 pt-3 border-t border-black/10">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-mono uppercase text-neutral-500">Precisão / estabilização</span><strong className="text-xs font-mono">{stabilization}%</strong></div>
-              <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-full h-8" style={{touchAction:'manipulation'}}/>
-              <label className="mt-1 min-h-11 flex items-center justify-between text-xs font-mono"><span>Usar pressão da caneta quando disponível</span><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)} className="h-5 w-5"/></label>
-              <div className="text-[9px] leading-relaxed text-neutral-500">Captura eventos coalescidos do stylus/touch e suaviza o traço sem rasterizar o desenho.</div>
-            </div>
-          )}
-
-          {tool === 'text' && (
-            <div className="mb-3 pt-3 border-t border-black/10">
-              <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Tipografia · Google Fonts</div>
-              <input
-                value={fontSearch}
-                onChange={(event) => setFontSearch(event.target.value)}
-                placeholder="Buscar tipografia…"
-                className="w-full h-11 rounded-xl border border-black/15 px-3 text-sm outline-none mb-2"
-              />
-              <select
-                value={fontFamily}
-                onChange={(event) => setFontFamily(event.target.value)}
-                className="w-full h-12 rounded-xl border border-black/15 bg-white px-3 text-sm mb-3"
-                style={{ fontFamily }}
-              >
-                {fontFamilies.filter((family) => family.toLowerCase().includes(fontSearch.toLowerCase())).map((family) => (
-                  <option key={family} value={family}>{family}</option>
-                ))}
-              </select>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono uppercase text-neutral-500">Tamanho do texto</span>
-                <span className="text-xs font-mono font-bold">{fontSize}px</span>
-              </div>
-              <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-full h-8" style={{ touchAction: 'manipulation' }} />
-              <button type="button" onClick={() => setMobilePanel(null)} className="mt-2 w-full h-11 rounded-xl bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider">Escrever na folha</button>
-            </div>
-          )}
-
-          {isShapeTool(tool) && (
-            <div className="pt-3 border-t border-black/10">
-              <label className="flex items-center justify-between gap-3 min-h-11 text-xs font-mono">
-                <span>Preencher forma</span>
-                <input type="checkbox" checked={useFill} onChange={(event) => setUseFill(event.target.checked)} className="h-5 w-5" />
-              </label>
-              {useFill && (
-                <div className="mt-2">
-                  <div className="text-[10px] font-mono uppercase text-neutral-500 mb-2">Cor do preenchimento</div>
-                  <div className="grid grid-cols-6 gap-2">
-                    {PALETTE.map((color) => (
-                      <button key={`fill-${color}`} type="button" onClick={() => setFillColor(color)} className={`h-10 rounded-xl border ${fillColor === color ? 'ring-2 ring-black ring-offset-2' : 'border-black/15'}`} style={{ backgroundColor: color }} aria-label={`Preenchimento ${color}`} />
-                    ))}
-                    <label className="h-10 rounded-xl border border-black/15 bg-white flex items-center justify-center text-[9px] font-mono cursor-pointer overflow-hidden relative">
-                      + COR
-                      <input type="color" value={fillColor} onChange={(event) => setFillColor(event.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {mobilePanel === 'export' && (
-        <div className="md:hidden absolute left-2 right-2 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-[130] rounded-2xl border border-black/15 bg-white p-3 shadow-2xl" onPointerDown={(event) => event.stopPropagation()}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div>
-              <div className="text-xs font-semibold">Exportar desenho</div>
-              <div className="text-[10px] font-mono text-neutral-500">SVG mantém vetores; PNG/JPG geram imagem.</div>
-            </div>
-            <button type="button" className="h-9 w-9 rounded-xl border border-black/10 flex items-center justify-center" onClick={() => setMobilePanel(null)}><X size={16} /></button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-              <button key={format} type="button" disabled={exporting} onClick={() => void handleExport(format)} className="h-12 rounded-xl bg-black text-white text-xs font-mono uppercase flex items-center justify-center gap-1.5 disabled:opacity-50"><Download size={14} /> {format}</button>
-            ))}
-          </div>
-          {allDrawings.length > 1 && (
-            <div className="mt-3 pt-3 border-t border-black/10">
-              <div className="text-[10px] font-mono text-neutral-500 mb-2">EXPORTAR TODAS AS FOLHAS</div>
-              <div className="grid grid-cols-3 gap-2">
-                {(['svg', 'png', 'jpg'] as ExportFormat[]).map((format) => (
-                  <button key={`all-${format}`} type="button" disabled={exporting} onClick={() => void handleExport(format, 'all')} className="h-11 rounded-xl border border-black text-[10px] font-mono uppercase disabled:opacity-50">TODAS {format}</button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedElementId && tool === 'select' && !mobilePanel && (
-        <div className="md:hidden absolute right-2 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] z-[125] flex items-center gap-2 rounded-2xl border border-black/15 bg-white p-2 shadow-xl">
-          <button type="button" onClick={deleteSelected} className="h-11 px-3 rounded-xl bg-red-50 text-red-700 text-[10px] font-mono font-bold uppercase flex items-center gap-2"><Trash2 size={15} /> Excluir elemento</button>
-        </div>
-      )}
-
-      {/* Barra de ferramentas mobile: sempre visível e com áreas de toque grandes. */}
-      <div className="md:hidden absolute left-0 right-0 bottom-0 z-[120] border-t border-black/10 bg-white/95 backdrop-blur-xl px-2 pt-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }} onPointerDown={(event) => event.stopPropagation()}>
-        <div className="grid grid-cols-5 gap-1 max-w-[560px] mx-auto">
-          <MobileToolButton active={tool === 'select'} onClick={() => { chooseTool('select'); setMobilePanel(null); }} label="Selecionar"><ArrowLeftRight size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'brush'} onClick={() => chooseTool('brush')} label="Pincel"><Pencil size={18} /></MobileToolButton>
-          <MobileToolButton active={tool === 'text'} onClick={() => chooseTool('text')} label="Texto"><Type size={18} /></MobileToolButton>
-          <MobileToolButton active={isShapeTool(tool)} onClick={() => setMobilePanel(mobilePanel === 'shapes' ? null : 'shapes')} label={activeShape ? activeShape.label.split(' ')[0] : 'Formas'}>{activeShape ? shapeIcon(activeShape.tool) : <Square size={18} />}</MobileToolButton>
-          <MobileToolButton active={mobilePanel === 'style'} onClick={() => setMobilePanel(mobilePanel === 'style' ? null : 'style')} label="Estilo">
-            <span className="h-5 w-5 rounded-full border border-black/20" style={{ backgroundColor: strokeColor }} />
-          </MobileToolButton>
-        </div>
-      </div>
     </div>
   );
 }
