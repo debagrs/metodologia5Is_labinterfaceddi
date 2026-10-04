@@ -1,3 +1,9 @@
+import { upload as uploadToBlob } from "@vercel/blob/client";
+import {
+  FontPicker,
+  useGraphicFonts,
+  ensureGraphicFonts,
+} from "../lib/graphicFonts";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -83,6 +89,7 @@ const TOOLS = [
 type Tool = (typeof TOOLS)[number]["id"];
 export const blankVideo = (ds?: DesignSystemDocument): VideoDocument => ({
   title: "Vídeo do projeto",
+  defaultFontFamily: ds?.fontFamilies?.display || ds?.primaryFont || "Inter",
   subtitle: "",
   format: "reel",
   width: 1080,
@@ -198,6 +205,7 @@ export function VideoPreview({
   document: VideoDocument;
   className?: string;
 }) {
+  useGraphicFonts((document.texts || []).map((t) => t.fontFamily));
   const video = useMemo(() => migrateVideo(document), [document]);
   return (
     <div className={`video-card-preview ${className}`}>
@@ -465,7 +473,12 @@ export default function VideoStudio({
       duration: media?.duration || 3,
       transition: "fade",
       transitionDuration: 0.5,
-      fit: "cover",
+      fit:
+        media?.url.startsWith("data:image/svg") ||
+        /\.svg(?:[?#]|$)/i.test(media?.url || "") ||
+        /\.svg$/i.test(media?.name || "")
+          ? "contain"
+          : "cover",
       background: draft.background,
       backgroundStyle: "gradient",
       motion: media?.kind === "image" ? "zoom-in" : "none",
@@ -550,16 +563,40 @@ export default function VideoStudio({
       return { ...video, timeline: clips };
     });
   };
+  useGraphicFonts([
+    designSystem?.primaryFont,
+    ...Object.values(designSystem?.fontFamilies || {}),
+    ...(draft.texts || []).map((t) => t.fontFamily),
+  ]);
   const uploadBlob = async (blob: Blob, name: string) => {
-    const data = new FormData();
-    data.append("file", new File([blob], name, { type: blob.type }));
     const session = await ensureTursoSession().catch(() => null);
+    if (blob.size > 100 * 1024 * 1024)
+      throw new Error("Envie arquivos de até 100 MB.");
+    if (blob.size > 3 * 1024 * 1024) {
+      if (!session?.token)
+        throw new Error("Entre novamente para enviar arquivos maiores.");
+      const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const result = await uploadToBlob(
+        `5is/${session.ownerId}/${Date.now()}-${safeName}`,
+        blob,
+        {
+          access: "public",
+          handleUploadUrl: "/api/upload-client",
+          contentType: blob.type,
+          headers: { Authorization: `Bearer ${session.token}` },
+          multipart: true,
+        },
+      );
+      return result.url;
+    }
     const response = await fetch("/api/upload", {
       method: "POST",
-      headers: session?.token
-        ? { Authorization: `Bearer ${session.token}` }
-        : {},
-      body: data,
+      headers: {
+        "Content-Type": blob.type || "application/octet-stream",
+        "X-File-Name": encodeURIComponent(name),
+        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+      },
+      body: blob,
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result.url)
@@ -621,6 +658,7 @@ export default function VideoStudio({
   ) => {
     setStatus("Renderizando a montagem…");
     setProgress(0);
+    await ensureGraphicFonts((video.texts || []).map((t) => t.fontFamily));
     const blob = await exportVideo(video, {
       signal: controller.signal,
       onProgress: (value) => {
@@ -694,11 +732,17 @@ export default function VideoStudio({
             format: draft.format,
             width: draft.width,
             height: draft.height,
-            currentTimeline: draft.timeline,
+            currentTimeline: draft.timeline?.map(({ url, ...scene }) => scene),
             media: library.map((item) => ({
               id: item.id,
               name: item.name,
               kind: item.kind,
+              fitHint:
+                item.url.startsWith("data:image/svg") ||
+                /\.svg(?:[?#]|$)/i.test(item.url) ||
+                /\.svg$/i.test(item.name)
+                  ? "contain"
+                  : undefined,
             })),
           },
           project: { name: title },
@@ -707,7 +751,18 @@ export default function VideoStudio({
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.videoPlan)
         throw new Error(result.error || "A IA não devolveu cenas executáveis.");
-      let next = applyVideoComposition(draft, result.videoPlan, library);
+      let next = applyVideoComposition(
+        {
+          ...draft,
+          defaultFontFamily:
+            designSystem?.fontFamilies?.display ||
+            designSystem?.primaryFont ||
+            draft.defaultFontFamily ||
+            "Inter",
+        },
+        result.videoPlan,
+        library,
+      );
       const format = FORMATS.find(
         (item) => item.id === result.videoPlan.format,
       );
@@ -1252,6 +1307,45 @@ export default function VideoStudio({
                           <option value="contain">Mostrar mídia inteira</option>
                         </select>
                       </Field>
+                      <Field label="Escala proporcional">
+                        <input
+                          aria-label="Escala da mídia"
+                          type="range"
+                          min="0.25"
+                          max="3"
+                          step="0.01"
+                          value={selectedClip.scale || 1}
+                          onChange={(e) =>
+                            patchClip({ scale: +e.target.value })
+                          }
+                        />
+                        <span>
+                          {Math.round((selectedClip.scale || 1) * 100)}%
+                        </span>
+                      </Field>
+                      <div className="video-field-grid">
+                        {(["x", "y"] as const).map((axis) => (
+                          <Field
+                            key={axis}
+                            label={
+                              axis === "x"
+                                ? "Posição horizontal"
+                                : "Posição vertical"
+                            }
+                          >
+                            <input
+                              aria-label={`Posição ${axis} da mídia`}
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={selectedClip[axis] ?? 50}
+                              onChange={(e) =>
+                                patchClip({ [axis]: +e.target.value })
+                              }
+                            />
+                          </Field>
+                        ))}
+                      </div>
                       <div className="video-button-row">
                         <button type="button" onClick={() => moveScene(-1)}>
                           <ArrowLeft />
@@ -1460,28 +1554,13 @@ export default function VideoStudio({
                           </Field>
                         </div>
                         <Field label="Fonte">
-                          <select
+                          <FontPicker
                             value={selectedText.fontFamily}
-                            onChange={(event) =>
-                              patchText({ fontFamily: event.target.value })
-                            }
-                          >
-                            {[
-                              ...new Set(
-                                [
-                                  "Arial",
-                                  "Georgia",
-                                  "Verdana",
-                                  designSystem?.primaryFont,
-                                  designSystem?.fontFamilies?.display,
-                                ].filter(Boolean),
-                              ),
-                            ].map((font) => (
-                              <option key={font} value={font}>
-                                {font}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(fontFamily) => patchText({ fontFamily })}
+                            preferred={Object.values(
+                              designSystem?.fontFamilies || {},
+                            )}
+                          />
                         </Field>
                         <div className="video-field-grid">
                           <Field label="Cor do texto">
