@@ -81,7 +81,8 @@ export type DrawingElementType =
   | 'cylinder'
   | 'cone'
   | 'pyramid'
-  | 'text';
+  | 'text'
+  | 'image';
 
 
 export type InteractiveEngine = 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg';
@@ -104,6 +105,7 @@ export interface InteractiveAsset {
   contentType: string;
   kind: 'image' | 'svg';
   profile?: InteractiveAssetProfile;
+  credit?: {title:string; author:string; license:string; licenseUrl:string; sourceUrl:string; provider:string};
 }
 
 export interface InteractiveDocument {
@@ -114,6 +116,7 @@ export interface InteractiveDocument {
   asset?: InteractiveAsset;
   interactionMode?: InteractiveMode;
   effectPreset?: InteractiveEffect;
+  libraryEffect?:string;
   intensity?: InteractiveIntensity;
   preserveBrand?: boolean;
   characterReference?: { nodeId: string; name: string; appearance?: CharacterAppearance; views: Array<{view: CharacterView; url: string}> };
@@ -131,6 +134,8 @@ export interface DrawingPoint {
 }
 
 export interface DrawingElement {
+  imageUrl?:string; imageName?:string; hidden?:boolean;
+  imageCredit?: {title:string; author:string; license:string; licenseUrl:string; sourceUrl:string; provider:string};
   id: string;
   type: DrawingElementType;
   stroke: string;
@@ -161,6 +166,7 @@ export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
 export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'nav-item' | 'list-item' | 'icon' | 'avatar' | 'checkbox' | 'toggle' | 'divider' | 'section' | 'spacer';
 
 export interface WireframeBlock {
+  fontFamily?: string; fontSize?: number; fontWeight?: number;
   id: string;
   type: WireframeBlockType;
   label: string;
@@ -278,6 +284,7 @@ export interface VideoTimelineItem {
   duration: number;
   transition?: VideoTransition;
   fit?: 'cover' | 'contain';
+  scale?: number; x?: number; y?: number;
   caption?: string;
   transitionDuration?: number;
   trimStart?: number;
@@ -316,6 +323,7 @@ export interface VideoOverlay {
 }
 
 export interface VideoDocument {
+  defaultFontFamily?: string;
   title: string;
   subtitle?: string;
   format: VideoFormatPreset;
@@ -452,7 +460,19 @@ export type CharacterHornStyle = 'none' | 'short' | 'long' | 'antlers' | 'antenn
 export type CharacterSurfaceStyle = 'skin' | 'fur-short' | 'fur-long' | 'feathers' | 'scales' | 'shell' | 'chitin';
 export type CharacterFootStyle = 'feet' | 'paws' | 'hooves' | 'claws' | 'talons' | 'fins';
 
+export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'hat' | 'cap' | 'beanie' | 'scarf' | 'backpack' | 'headphones' | 'earrings' | 'necklace' | 'bow' | 'crown' | 'bracelet' | 'belt';
+export interface CharacterAccessory { id:string; kind:CharacterAccessoryKind; color:string; scale:number; x:number; y:number; }
+export interface CharacterPoseAdjustment { al?:number; ar?:number; el?:number; er?:number; ll?:number; lr?:number; kl?:number; kr?:number; lean?:number; headTilt?:number; }
 export interface CharacterAppearance {
+  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi';
+  accessories?: CharacterAccessory[];
+  headWidth?:number; headHeight?:number; eyeSize?:number; eyeSpacing?:number; eyeHeight?:number; irisScale?:number;
+  browSize?:number; browHeight?:number; noseSize?:number; noseHeight?:number; mouthSize?:number; mouthHeight?:number;
+  earSize?:number; earAngle?:number; hairVolume?:number; muzzleSize?:number; muzzleHeight?:number;
+  armLength?:number; armWidth?:number; legLength?:number; legWidth?:number; handSize?:number; footSize?:number; waistWidth?:number;
+  tailSize?:number; wingSize?:number; hornSize?:number; whiskerLength?:number; strokeWidth?:number;
+  noseColor?:string; mouthColor?:string; earColor?:string; wingColor?:string; tailColor?:string; hornColor?:string;
+
   species?: CharacterSpecies;
   bodyPlan?: CharacterBodyPlan;
   speciesPreset?: string;
@@ -517,6 +537,8 @@ export interface CharacterPoseReference {
 }
 
 export interface CharacterSpriteDocument {
+  aiReferences?: Array<{ id: string; name: string; url: string }>;
+  aiSourceMode?: 'refine' | 'reference' | 'new';
   title: string;
   characterName: string;
   description?: string;
@@ -537,6 +559,8 @@ export interface CharacterSpriteDocument {
   activeView?: CharacterView;
   activeExpression?: CharacterExpression;
   activePose?: CharacterPoseKind;
+  posePhase?:number;
+  poseAdjustments?: Partial<Record<CharacterPoseKind, CharacterPoseAdjustment>>;
   updatedAt?: string;
 }
 
@@ -666,6 +690,7 @@ export interface ThoughtNode {
   imageUrl?: string;
   imageName?: string;
   imageContentType?: string;
+  imageCredit?: {title:string; author:string; license:string; licenseUrl:string; sourceUrl:string; provider:string};
   aspectRatio?: number;
   drawing?: DrawingDocument;
   drawingName?: string;
