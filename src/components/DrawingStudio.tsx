@@ -1,3 +1,8 @@
+import {useGraphicFonts} from '../lib/graphicFonts';
+import ImageLibrary from './ImageLibrary';
+import PhotopeaEditor from './PhotopeaEditor';
+import {imageCredit,type OpenImage} from '../lib/openImages';
+import {ImagePlus,Layers,Eye,EyeOff,ArrowUp,ArrowDown} from 'lucide-react';
 import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -32,6 +37,7 @@ export interface DrawingExportItem {
 }
 
 interface DrawingStudioProps {
+  defaultFontFamily?: string;
   drawing: DrawingDocument;
   title?: string;
   canEdit?: boolean;
@@ -156,6 +162,7 @@ const arrowHead = (x1: number, y1: number, x2: number, y2: number, size: number)
 };
 
 const renderDrawingElement = (element: DrawingElement, selected = false) => {
+  if(element.hidden)return null;
   const stroke = element.stroke || '#111111';
   const fill = element.fill || 'none';
   const strokeWidth = element.strokeWidth || 2;
@@ -169,6 +176,7 @@ const renderDrawingElement = (element: DrawingElement, selected = false) => {
   const common = { stroke, strokeWidth, opacity, fill, vectorEffect: 'non-scaling-stroke' as const, style: selectionStyle };
 
   switch (element.type) {
+    case 'image':return <image href={element.imageUrl} x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} opacity={opacity} preserveAspectRatio="xMidYMid meet" style={selectionStyle}/>;
     case 'brush': {
       const points = element.points || [];
       const hasPressure = points.some((point) => typeof point.pressure === 'number');
@@ -297,6 +305,7 @@ const escapeXml = (value: string) => value
   .replace(/'/g, '&apos;');
 
 const elementToSvgString = (element: DrawingElement) => {
+  if(element.hidden)return '';
   const stroke = element.stroke || '#111111';
   const fill = element.fill || 'none';
   const strokeWidth = element.strokeWidth || 2;
@@ -309,6 +318,7 @@ const elementToSvgString = (element: DrawingElement) => {
   const attrs = `stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" fill="${escapeXml(fill)}" opacity="${opacity}" vector-effect="non-scaling-stroke"`;
 
   switch (element.type) {
+    case 'image':return `<image href="${escapeXml(element.imageUrl || '')}" x="${bounds.minX}" y="${bounds.minY}" width="${bounds.width}" height="${bounds.height}" opacity="${opacity}" preserveAspectRatio="xMidYMid meet"/>`;
     case 'brush': { const pts = element.points || []; const pressured = pts.some((point) => typeof point.pressure === 'number'); if (pressured && pts.length > 1) return `<g opacity="${opacity}">${pts.slice(1).map((point,index)=>{ const prev=pts[index]; const pressure=Math.max(.08,Math.min(1,((prev.pressure??.55)+(point.pressure??.55))/2)); const width=strokeWidth*(.45+pressure); return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" stroke="${escapeXml(stroke)}" stroke-width="${width}" stroke-linecap="round"/>`; }).join('')}</g>`; return `<path d="${pointsToPath(pts)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`; }
     case 'line': return `<line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" ${attrs} fill="none" stroke-linecap="round"/>`;
     case 'arrow': return `<g opacity="${opacity}"><line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polyline points="${arrowHead(x, y, x2, y2, Math.max(12, strokeWidth * 4))}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
@@ -352,6 +362,17 @@ export const drawingToSvgString = (drawing: DrawingDocument) => {
   const body = drawing.elements.map(elementToSvgString).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${drawing.width}" height="${drawing.height}" viewBox="0 0 ${drawing.width} ${drawing.height}"><rect width="100%" height="100%" fill="${escapeXml(drawing.background || '#FFFFFF')}"/>${body}</svg>`;
 };
+
+const trimmedDrawings = new WeakMap<DrawingDocument,string>();
+// Video uses the artwork's bounds, without changing the saved drawing sheet.
+export function drawingToVideoSvg(drawing:DrawingDocument){
+ if(trimmedDrawings.has(drawing))return trimmedDrawings.get(drawing)!;
+ if(typeof document==='undefined')return drawingToSvgString(drawing);
+ const visible=drawing.elements.filter(e=>!e.hidden);if(!visible.length)return drawingToSvgString(drawing);
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('width',String(drawing.width));svg.setAttribute('height',String(drawing.height));svg.style.cssText='position:fixed;left:-100000px;top:0;visibility:hidden;pointer-events:none';
+ const group=document.createElementNS('http://www.w3.org/2000/svg','g');group.innerHTML=visible.map(elementToSvgString).join('');svg.appendChild(group);document.body.appendChild(svg);
+ try{const b=group.getBBox();if(!b.width||!b.height)return drawingToSvgString(drawing);const pad=Math.max(8,...visible.map(e=>(e.strokeWidth||1)*2));const x=b.x-pad,y=b.y-pad,w=b.width+2*pad,h=b.height+2*pad;const result=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}" preserveAspectRatio="xMidYMid meet">${group.innerHTML}</svg>`;trimmedDrawings.set(drawing,result);return result;}finally{svg.remove()}
+}
 
 const sanitizeName = (name: string) => name.trim().replace(/[^a-zA-Z0-9À-ÿ_-]+/g, '-').replace(/^-+|-+$/g, '') || 'desenho';
 
@@ -424,7 +445,7 @@ type TextEditorState = {
   value: string;
 };
 
-export default function DrawingStudio({ drawing, title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onAnimate, onWireframe, onClose }: DrawingStudioProps) {
+export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', title = 'Folha de desenho', canEdit = true, allDrawings = [], onSave, onAnimate, onWireframe, onClose }: DrawingStudioProps) {
   const initial = useMemo(() => cloneDrawing(drawing), [drawing]);
   const [history, setHistory] = useState<DrawingDocument[]>([initial]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -434,7 +455,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const [useFill, setUseFill] = useState(false);
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [fontSize, setFontSize] = useState(44);
-  const [fontFamily, setFontFamily] = useState('Inter');
+  const [fontFamily, setFontFamily] = useState(defaultFontFamily);
   const [stabilization, setStabilization] = useState(36);
   const [pressureEnabled, setPressureEnabled] = useState(true);
   const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONTS);
@@ -448,35 +469,12 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
   const svgRef = useRef<SVGSVGElement>(null);
   const paperRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  const [imageLibraryOpen,setImageLibraryOpen]=useState(false),[photopeaOpen,setPhotopeaOpen]=useState(false),[imageError,setImageError]=useState('');
+  const imageInput=useRef<HTMLInputElement>(null);
   const current = history[historyIndex];
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch('https://fonts.google.com/metadata/fonts')
-      .then((response) => response.text())
-      .then((raw) => {
-        const cleaned = raw.replace(/^\)\]\}'\s*/, '');
-        const payload = JSON.parse(cleaned);
-        const families = (payload.familyMetadataList || [])
-          .map((item: any) => String(item.family || '').trim())
-          .filter(Boolean)
-          .sort((a: string, b: string) => a.localeCompare(b));
-        if (!cancelled && families.length) setFontFamilies(families);
-      })
-      .catch(() => { /* fallback list remains available */ });
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!fontFamily) return;
-    const id = `google-font-${fontFamily.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
-    if (document.getElementById(id)) return;
-    const link = document.createElement('link');
-    link.id = id;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily).replace(/%20/g, '+')}:wght@300;400;500;600;700&display=swap`;
-    document.head.appendChild(link);
-  }, [fontFamily]);
+  useEffect(()=>{let alive=true;fetch('/api/google-fonts').then(r=>r.json()).then(d=>{if(alive && Array.isArray(d.items))setFontFamilies(d.items.map((i:any)=>i.family))}).catch(()=>{});return()=>{alive=false}},[]);
+  useGraphicFonts([fontFamily,...current.elements.map(e=>e.fontFamily)]);
 
   useEffect(() => {
     if (textEditor) {
@@ -491,6 +489,17 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
     setHistoryIndex(nextHistory.length - 1);
   };
 
+  const addImageFile=async(file:File,credit?:DrawingElement['imageCredit'],replaceId?:string)=>{
+    if(!canEdit)return;if(file.size>4*1024*1024)throw new Error('Use uma imagem de até 4 MB.');
+    const url=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(new Error('Não foi possível ler a imagem.'));reader.readAsDataURL(file);});
+    const image=new Image();await new Promise<void>((resolve,reject)=>{image.onload=()=>resolve();image.onerror=()=>reject(new Error('A imagem não pôde ser aberta.'));image.src=url;});
+    const scale=Math.min(current.width*.8/image.naturalWidth,current.height*.8/image.naturalHeight,1),w=image.naturalWidth*scale,h=image.naturalHeight*scale;
+    const existing=replaceId?current.elements.find(item=>item.id===replaceId):undefined;
+    const element:DrawingElement=existing?{...existing,imageUrl:url,imageName:file.name}:{id:`image-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,type:'image',stroke:'none',strokeWidth:0,imageUrl:url,imageName:file.name,x:(current.width-w)/2,y:(current.height-h)/2,x2:(current.width+w)/2,y2:(current.height+h)/2,opacity:1,imageCredit:credit};
+    commit({...current,elements:existing?current.elements.map(item=>item.id===existing.id?element:item):[...current.elements,element]});setSelectedElementId(element.id);chooseTool('select');
+  };
+  const addLibraryImage=async(item:OpenImage)=>{const response=await fetch(item.url);if(!response.ok)throw new Error('A fonte não permitiu baixar a imagem. Escolha outra imagem ou envie o arquivo.');const blob=await response.blob();await addImageFile(new File([blob],item.title,{type:blob.type}),imageCredit(item));setImageLibraryOpen(false);};
+  const moveLayer=(elementId:string,offset:number)=>{const elements=[...current.elements],from=elements.findIndex(item=>item.id===elementId),to=from+offset;if(to<0 || to>=elements.length)return;[elements[from],elements[to]]=[elements[to],elements[from]];commit({...current,elements});};
   const getSvgPointFromClient = (clientX: number, clientY: number, pressure = .55, t = performance.now()): DrawingPoint => {
     const svg = svgRef.current;
     if (!svg) return { x: 0, y: 0, pressure, t };
@@ -695,6 +704,8 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
 
   return (
     <div className="studio-editor fixed inset-0 z-[100] bg-[#ECECEA] flex flex-col canvas-control" onPointerDown={(event) => event.stopPropagation()}>
+      {imageLibraryOpen && <ImageLibrary onChoose={addLibraryImage} onClose={()=>setImageLibraryOpen(false)}/>}
+      {photopeaOpen && <PhotopeaEditor url={current.elements.find(item=>item.id===selectedElementId && item.type==='image')?.imageUrl || 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(drawingToSvgString(current))} name={title} onSave={file=>addImageFile(file,undefined,current.elements.find(item=>item.id===selectedElementId && item.type==='image')?.id)} onClose={()=>setPhotopeaOpen(false)}/>}
       <header className="shrink-0 bg-white border-b border-black/10 px-2 sm:px-4 py-2 flex items-center gap-2 justify-between" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))' }}>
         <div className="min-w-0 flex items-center gap-2">
           <button type="button" onClick={onClose} className="h-10 w-10 rounded-xl hover:bg-black/5 flex items-center justify-center cursor-pointer" aria-label="Fechar folha"><X size={18} /></button>
@@ -713,7 +724,7 @@ export default function DrawingStudio({ drawing, title = 'Folha de desenho', can
         </div>
       </header>
 
-<StudioWorkspace tools={<div>      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
+<StudioWorkspace tools={<div><div className="image-integration-actions"><input type="file" accept="image/*" ref={imageInput} hidden onChange={async event=>{const file=event.target.files?.[0];if(file)try{await addImageFile(file);setImageError('');}catch(error:any){setImageError(error.message);}event.target.value='';}}/><button type="button" disabled={!canEdit} onClick={()=>imageInput.current?.click()}><ImagePlus size={16}/>Adicionar imagem como camada</button><button type="button" disabled={!canEdit} onClick={()=>setImageLibraryOpen(true)}><ImagePlus size={16}/>Pesquisar imagens livres</button><button type="button" disabled={!canEdit} onClick={()=>setPhotopeaOpen(true)}><Layers size={16}/>Editar no Photopea</button><p>Selecione uma imagem para editá-la. Sem seleção, a folha retorna como uma nova camada de imagem.</p>{imageError && <p role="alert">{imageError}</p>}</div><details className="drawing-layer-list" open><summary>Camadas · {current.elements.length}</summary>{[...current.elements].reverse().map((element,index)=><div key={element.id}><button type="button" aria-label={`Selecionar camada ${index+1}`} aria-pressed={element.id===selectedElementId} onClick={()=>{setSelectedElementId(element.id);chooseTool('select');}}>{element.imageName || element.text || element.type}</button><button type="button" disabled={!canEdit} aria-label={`Visibilidade da camada ${index+1}`} aria-pressed={!element.hidden} onClick={()=>commit({...current,elements:current.elements.map(item=>item.id===element.id?{...item,hidden:!item.hidden}:item)})}>{element.hidden?<EyeOff size={16}/>:<Eye size={16}/>}</button><button type="button" disabled={!canEdit} aria-label={`Subir camada ${index+1}`} onClick={()=>moveLayer(element.id,1)}><ArrowUp size={16}/></button><button type="button" disabled={!canEdit} aria-label={`Descer camada ${index+1}`} onClick={()=>moveLayer(element.id,-1)}><ArrowDown size={16}/></button>{element.imageCredit && <a href={element.imageCredit.sourceUrl} target="_blank" rel="noreferrer" title={`${element.imageCredit.author} · ${element.imageCredit.license}`}>Créditos</a>}</div>)}</details>      {/* Painel desktop estruturado: sem rolagem horizontal e com propriedades contextuais. */}
       <div className="flex shrink-0 bg-white border-b border-black/10 flex-col">
         <div className="px-3 lg:px-4 py-2 flex flex-wrap items-center gap-2 border-b border-black/5">
           <div className="flex flex-wrap items-center gap-1.5">
