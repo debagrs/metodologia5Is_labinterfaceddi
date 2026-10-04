@@ -372,8 +372,8 @@ function HexField({ label, value, onChange }: { label: string; value: string; on
 
 function animationMotionProps(motionPreset: SpriteMotionPreset, playing: boolean) {
   if (!playing || motionPreset === 'none') return { animate: { x: 0, y: 0, scaleX: 1, scaleY: 1, scale: 1 }, transition: { duration: .2 } };
-  if (motionPreset === 'bob') return { animate: { y: [0, -9, 0] }, transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } };
-  if (motionPreset === 'bounce') return { animate: { y: [0, -18, 0] }, transition: { duration: .75, repeat: Infinity, ease: 'easeInOut' } };
+  if (motionPreset === 'bob') return { animate: { y: [0, -9, 0] }, transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' as const } };
+  if (motionPreset === 'bounce') return { animate: { y: [0, -18, 0] }, transition: { duration: .75, repeat: Infinity, ease: 'easeInOut' as const } };
   if (motionPreset === 'shake') return { animate: { x: [0, -5, 5, -3, 3, 0] }, transition: { duration: .36, repeat: Infinity } };
   if (motionPreset === 'pulse') return { animate: { scale: [1, 1.04, 1] }, transition: { duration: .9, repeat: Infinity } };
   return { animate: { scaleX: [1, 1.07, 1], scaleY: [1, .93, 1] }, transition: { duration: .72, repeat: Infinity } };
