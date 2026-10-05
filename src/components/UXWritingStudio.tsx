@@ -1,3 +1,4 @@
+import StudioAreaGuide from './StudioAreaGuide';
 import React, { useMemo, useState } from 'react';
 import { Accessibility, Copy, Languages, Plus, Save, Sparkles, Trash2, X, Hand, Download, Check } from 'lucide-react';
 import { Project, UXWritingDocument, UXWritingEntry, UXWritingTone, WireframeDocument } from '../types';
@@ -121,6 +122,7 @@ export default function UXWritingStudio({ document, project, title = 'UX Writing
       <button type="button" onClick={onClose} className="h-11 w-11 rounded-xl hover:bg-black/5 flex items-center justify-center" aria-label="Fechar UX Writing"><X size={19}/></button>
       <div className="min-w-0 flex-1"><div className="font-bold truncate">{title}</div><div className="text-[10px] font-mono text-neutral-500 uppercase">microcopy · linguagem simples · idiomas · apoio para Libras</div></div>
       <button type="button" onClick={exportJson} className="hidden sm:flex h-11 px-3 rounded-xl border border-black/10 items-center gap-2 text-[10px] font-mono"><Download size={14}/> JSON</button>
+      <StudioAreaGuide area="ux-writing" />
       <button type="button" disabled={!canEdit} onClick={()=>onSave({...draft,updatedAt:new Date().toISOString()})} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15}/> SALVAR</button>
     </header>
     <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_360px]">
