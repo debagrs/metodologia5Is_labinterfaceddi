@@ -4,6 +4,7 @@ import PhotopeaEditor from './PhotopeaEditor';
 import {imageCredit,type OpenImage} from '../lib/openImages';
 import {ImagePlus,Layers,Eye,EyeOff,ArrowUp,ArrowDown} from 'lucide-react';
 import { StudioWorkspace } from './StudioWorkspace';
+import StudioAreaGuide from './StudioAreaGuide';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
@@ -720,6 +721,7 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
           <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
           {onWireframe && <button type="button" disabled={!canEdit} onClick={() => onWireframe(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Transformar este desenho em wireframe editável"><PanelsTopLeft size={15}/><span className="hidden sm:inline">WIREFRAME</span></button>}
           {onAnimate && <button type="button" disabled={!canEdit} onClick={() => onAnimate(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Animar este desenho na Camada Interativa"><WandSparkles size={15}/><span className="hidden sm:inline">ANIMAR</span></button>}
+          <StudioAreaGuide area="drawing" />
           <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
         </div>
       </header>
