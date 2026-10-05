@@ -117,27 +117,29 @@ const AGE_LABELS: Record<NonNullable<CharacterAppearance['ageGroup']>, string> =
 };
 const AGE_PATCHES: Record<NonNullable<CharacterAppearance['ageGroup']>, Partial<CharacterAppearance>> = {
   baby: {
-    headToBodyRatio: 2.8, limbLength: .56, shoulderWidth: .7, bodyWidth: .88, waistWidth: 1.0,
-    legStyle: 'short', armStyle: 'thin', headShape: 'round', faceShape: 'soft', eyeSize: 1.24,
-    eyeSpacing: 1.06, noseStyle: 'small', mouthStyle: 'small', stature: 'very-short', handSize: .72, footSize: .76,
+    headToBodyRatio: 2.25, limbLength: .44, shoulderWidth: .62, bodyWidth: .84, waistWidth: 1.08,
+    legStyle: 'short', armStyle: 'thin', headShape: 'round', faceShape: 'soft', eyeSize: 1.34,
+    eyeSpacing: 1.09, noseStyle: 'small', mouthStyle: 'small', stature: 'very-short', handSize: .66, footSize: .68,
+    headWidth: 1.08, headHeight: 1.1,
   },
   child: {
-    headToBodyRatio: 3.65, limbLength: .74, shoulderWidth: .8, bodyWidth: .92, waistWidth: .96,
-    legStyle: 'short', armStyle: 'regular', headShape: 'round', faceShape: 'soft', eyeSize: 1.14,
-    eyeSpacing: 1.04, noseStyle: 'small', stature: 'short', handSize: .82, footSize: .84,
+    headToBodyRatio: 3.15, limbLength: .66, shoulderWidth: .76, bodyWidth: .9, waistWidth: .98,
+    legStyle: 'short', armStyle: 'regular', headShape: 'round', faceShape: 'soft', eyeSize: 1.2,
+    eyeSpacing: 1.05, noseStyle: 'small', mouthStyle: 'small', stature: 'short', handSize: .78, footSize: .82,
+    headWidth: 1.03, headHeight: 1.03,
   },
   teen: {
-    headToBodyRatio: 4.85, limbLength: 1.0, shoulderWidth: .92, bodyWidth: .94, waistWidth: .92,
-    legStyle: 'long', armStyle: 'regular', headShape: 'oval', eyeSize: 1.04, stature: 'average', handSize: .94, footSize: .96,
+    headToBodyRatio: 4.65, limbLength: .98, shoulderWidth: .9, bodyWidth: .94, waistWidth: .9,
+    legStyle: 'long', armStyle: 'regular', headShape: 'oval', eyeSize: 1.04, stature: 'average', handSize: .93, footSize: .95,
   },
   adult: {
     headToBodyRatio: 5.7, limbLength: 1.03, shoulderWidth: 1, bodyWidth: 1, waistWidth: 1,
     legStyle: 'regular', armStyle: 'regular', eyeSize: 1, stature: 'average', handSize: 1, footSize: 1,
   },
   'older-adult': {
-    headToBodyRatio: 5.25, limbLength: .93, shoulderWidth: .94, bodyWidth: 1.02, waistWidth: 1.02,
-    legStyle: 'regular', armStyle: 'regular', headShape: 'oval', faceShape: 'soft', eyeSize: .96,
-    stature: 'short', handSize: .96, footSize: .96,
+    headToBodyRatio: 5.0, limbLength: .88, shoulderWidth: .92, bodyWidth: 1.0, waistWidth: 1.03,
+    legStyle: 'regular', armStyle: 'regular', headShape: 'oval', faceShape: 'soft', eyeSize: .94,
+    stature: 'short', handSize: .94, footSize: .94, torsoShape: 'round', headHeight: .98,
   },
 };
 
