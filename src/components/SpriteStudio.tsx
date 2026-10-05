@@ -86,6 +86,34 @@ const BODY_PLANS: Option<CharacterBodyPlan>[] = [
   { id: 'custom', label: 'Personalizado' },
 ];
 
+const IDENTITY_REPRESENTATIONS: Option<NonNullable<CharacterAppearance['identityRepresentation']>>[] = [
+  { id: 'man', label: 'Homem' },
+  { id: 'woman', label: 'Mulher' },
+  { id: 'lgbtqia', label: 'Diversidade LGBTQIA+' },
+  { id: 'open', label: 'Livre / não definir' },
+];
+const IDENTITY_LABELS: Record<NonNullable<CharacterAppearance['identityRepresentation']>, string> = {
+  man: 'Homem', woman: 'Mulher', lgbtqia: 'Diversidade LGBTQIA+', open: 'Livre',
+};
+
+const AGE_GROUPS: Option<NonNullable<CharacterAppearance['ageGroup']>>[] = [
+  { id: 'baby', label: 'Bebê' },
+  { id: 'child', label: 'Criança' },
+  { id: 'teen', label: 'Adolescente' },
+  { id: 'adult', label: 'Adulto' },
+  { id: 'older-adult', label: 'Pessoa idosa' },
+];
+const AGE_LABELS: Record<NonNullable<CharacterAppearance['ageGroup']>, string> = {
+  baby: 'Bebê', child: 'Criança', teen: 'Adolescente', adult: 'Adulto', 'older-adult': 'Pessoa idosa',
+};
+const AGE_PATCHES: Record<NonNullable<CharacterAppearance['ageGroup']>, Partial<CharacterAppearance>> = {
+  baby: { headToBodyRatio: 3.0, limbLength: .68, shoulderWidth: .78, bodyWidth: .92, legStyle: 'short', armStyle: 'thin', headShape: 'round', faceShape: 'soft', eyeSize: 1.13 },
+  child: { headToBodyRatio: 4.1, limbLength: .82, shoulderWidth: .84, bodyWidth: .94, legStyle: 'short', armStyle: 'regular', headShape: 'round', faceShape: 'soft', eyeSize: 1.08 },
+  teen: { headToBodyRatio: 5.1, limbLength: .96, shoulderWidth: .94, bodyWidth: .98, legStyle: 'regular', armStyle: 'regular', eyeSize: 1.03 },
+  adult: { headToBodyRatio: 5.7, limbLength: 1.03, shoulderWidth: 1, bodyWidth: 1, legStyle: 'regular', armStyle: 'regular', eyeSize: 1 },
+  'older-adult': { headToBodyRatio: 5.6, limbLength: .98, shoulderWidth: .98, bodyWidth: 1.02, legStyle: 'regular', armStyle: 'regular', eyeSize: .98 },
+};
+
 const FEATURE_PROFILES: Option<NonNullable<CharacterAppearance['featureProfile']>>[] = [
   { id: 'neutral', label: 'Neutro / livre' },
   { id: 'afrodiasporic', label: 'Afrodiaspórico' },
@@ -260,6 +288,8 @@ const DEFAULT_APPEARANCE: CharacterAppearance = {
   accessories: [],
   stature: 'average',
   representationProfile: 'none',
+  identityRepresentation: 'open',
+  ageGroup: 'adult',
   mobilityAid: 'none',
   wheelchairStyle: 'active',
   wheelchairColor: '#4C5968',
@@ -689,10 +719,12 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
       currentVariantId,
     );
     const isHuman = preset.id === 'human';
+    const agePatch = AGE_PATCHES[appearance.ageGroup || 'adult'] || {};
 
     patchAppearance({
       ...styledBase,
       ...preset.patch,
+      ...agePatch,
       artStyle: appearance.artStyle || styledBase.artStyle,
       styleVariant: currentVariantId,
       speciesPreset: preset.id,
@@ -705,6 +737,8 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
       outfitStyle: isHuman ? styledBase.outfitStyle : 'none',
       wingStyle: preset.patch.wingStyle || 'none',
       hornStyle: preset.patch.hornStyle || 'none',
+      identityRepresentation: appearance.identityRepresentation || 'open',
+      ageGroup: appearance.ageGroup || 'adult',
     });
   };
 
@@ -756,6 +790,12 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
       giant: { stature, limbLength: 1.34, headToBodyRatio: 6.8, legStyle: 'long', bodyWidth: Math.max(appearance.bodyWidth || 1, 1.04) },
     };
     patchAppearance(presets[stature]);
+  };
+
+  const applyAgeGroup = (ageGroup: NonNullable<CharacterAppearance['ageGroup']>) => {
+    const patch = AGE_PATCHES[ageGroup] || AGE_PATCHES.adult;
+    patchAppearance({ ...patch, ageGroup });
+    patchProfile({ ageBand: AGE_LABELS[ageGroup] });
   };
 
   const applyRepresentationProfile = (profile: NonNullable<CharacterAppearance['representationProfile']>) => {
@@ -959,8 +999,13 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
 
 {refinementSliders('details')}</>}{builderSection === 'style' && <>
           <div className="rounded-2xl border-2 border-black p-4">
-            <div className="flex items-start justify-between gap-3"><div><div className="text-[9px] font-mono uppercase tracking-wider text-teal-700">PASSO 1 · escolha primeiro a linguagem gráfica</div><b className="text-xl">Estilo comanda o personagem</b><p className="text-sm text-neutral-600 mt-1">A família visual define traço, proporção, olhos, acabamento e recomendações de figurino. Depois você afina cada parte sem perder o estilo.</p></div><InfoTip>O estilo é um preset inicial, não uma trava. Ao escolher um subestilo, o sistema aplica características mínimas coerentes e mantém todos os controles disponíveis.</InfoTip></div>
-            <div className="grid grid-cols-3 gap-3 mt-4">{CHARACTER_STYLE_FAMILIES.map(style => { const variant=defaultStyleVariant(style.id); const selected=(appearance.artStyle || 'illustrated')===style.id; const previewAppearance=applyStyleVariant(appearance,variant.id); return <button type="button" key={style.id} aria-pressed={selected} onClick={() => applyGraphicStyle(variant.id)} className={`min-w-0 rounded-2xl border-2 p-2 text-left ${selected ? 'border-teal-700 bg-teal-50' : 'border-neutral-200 bg-white'}`}><img alt="" loading="lazy" src={candidateThumbnail(draft, previewAppearance, true)} className="w-full aspect-square object-contain rounded-xl bg-[#f7f5f1]"/><b className="block text-sm mt-2">{style.label}</b><span className="block text-[10px] text-neutral-600 mt-1 leading-snug">{style.description}</span><span className="block text-[9px] font-mono text-neutral-400 mt-2 uppercase">{style.market}</span></button>; })}</div>
+            <div className="flex items-start justify-between gap-3"><div><div className="text-[9px] font-mono uppercase tracking-wider text-teal-700">PASSO 1 · quem é a personagem?</div><b className="text-xl">Representação e fase da vida</b><p className="text-sm text-neutral-600 mt-1">Defina identidade/representação e faixa etária sem transformar nenhuma delas em estereótipo visual. Corpo, roupa, cabelo, cor e expressão continuam livres.</p></div><InfoTip>“Diversidade LGBTQIA+” registra uma intenção ampla de representação. Não é um tipo de corpo, aparência ou figurino. A faixa etária altera proporções-base para facilitar o desenho, mas tudo pode ser refinado depois.</InfoTip></div>
+            {['human','anthropomorphic','hybrid','fantasy'].includes(appearance.species || 'human') ? <><div className="mt-4"><div className="text-[9px] font-mono uppercase text-neutral-500 mb-2">Identidade / representação</div><div className="grid grid-cols-2 xl:grid-cols-4 gap-2">{IDENTITY_REPRESENTATIONS.map(item=><button key={item.id} type="button" aria-pressed={(appearance.identityRepresentation || 'open')===item.id} onClick={()=>patchAppearance({identityRepresentation:item.id})} className={`min-h-12 rounded-xl border px-2 py-2 text-[10px] font-bold leading-tight ${(appearance.identityRepresentation || 'open')===item.id?'border-teal-700 bg-teal-50 text-teal-900 ring-1 ring-teal-700':'bg-white hover:border-black'}`}>{item.label}</button>)}</div></div><div className="mt-4"><div className="text-[9px] font-mono uppercase text-neutral-500 mb-2">Faixa etária</div><div className="grid grid-cols-3 gap-2">{AGE_GROUPS.map(item=>{const selected=(appearance.ageGroup || 'adult')===item.id; const previewAppearance={...appearance,...AGE_PATCHES[item.id],ageGroup:item.id}; return <button key={item.id} type="button" aria-pressed={selected} onClick={()=>applyAgeGroup(item.id)} className={`rounded-xl border-2 p-1.5 text-left ${selected?'border-teal-700 bg-teal-50 ring-1 ring-teal-700':'border-neutral-200 bg-white hover:border-black'}`}><img alt={`${item.label}`} loading="lazy" src={candidateThumbnail(draft, previewAppearance, true)} className="w-full aspect-[4/3] object-contain rounded-lg bg-[#f7f5f1]"/><b className="block text-[10px] leading-tight mt-1.5">{item.label}</b></button>})}</div></div></> : <div className="mt-4"><div className="text-[9px] font-mono uppercase text-neutral-500 mb-2">Faixa etária</div><div className="grid grid-cols-3 gap-2">{AGE_GROUPS.map(item=><button key={item.id} type="button" onClick={()=>applyAgeGroup(item.id)} className={`min-h-11 rounded-xl border px-2 py-2 text-[10px] font-bold ${(appearance.ageGroup || 'adult')===item.id?'border-teal-700 bg-teal-50 ring-1 ring-teal-700':'bg-white'}`}>{item.label}</button>)}</div></div>}
+          </div>
+          <div className="rounded-2xl border-2 border-black p-4">
+            <div className="flex items-start justify-between gap-3"><div><div className="text-[9px] font-mono uppercase tracking-wider text-teal-700">PASSO 2 · escolha a linguagem gráfica</div><b className="text-xl">Estilo comanda o personagem</b><p className="text-sm text-neutral-600 mt-1">A família visual define traço, proporção, olhos, acabamento e recomendações de figurino. Depois você afina cada parte sem perder o estilo.</p></div><InfoTip>O estilo é um preset inicial, não uma trava. Ao escolher um subestilo, o sistema aplica características mínimas coerentes e mantém todos os controles disponíveis.</InfoTip></div>
+            <div className="grid grid-cols-3 gap-2 mt-4">{CHARACTER_STYLE_FAMILIES.map(style => { const variant=defaultStyleVariant(style.id); const selected=(appearance.artStyle || 'illustrated')===style.id; const previewAppearance=applyStyleVariant(appearance,variant.id); return <button type="button" key={style.id} aria-pressed={selected} onClick={() => applyGraphicStyle(variant.id)} className={`min-w-0 rounded-xl border-2 p-1.5 text-left transition ${selected ? 'border-teal-700 bg-teal-50 ring-1 ring-teal-700' : 'border-neutral-200 bg-white hover:border-black'}`}><img alt={`${style.label} aplicado ao personagem`} loading="lazy" src={candidateThumbnail(draft, previewAppearance, true)} className="w-full aspect-[4/3] object-contain rounded-lg bg-[#f7f5f1]"/><b className="block text-[11px] leading-tight mt-1.5">{style.label}</b></button>; })}</div>
+            {(() => { const family=CHARACTER_STYLE_FAMILIES.find(item=>item.id===(appearance.artStyle || 'illustrated')); return family ? <div className="mt-3 rounded-xl bg-neutral-50 p-3"><div className="text-[9px] font-mono uppercase text-teal-700">Estilo selecionado</div><b className="text-sm">{family.label}</b><p className="mt-1 text-[11px] leading-relaxed text-neutral-600">{family.description}</p><p className="mt-1 text-[9px] font-mono uppercase text-neutral-400">Usos: {family.market}</p></div> : null; })()}
           </div>
           <div className="rounded-2xl border p-4"><div className="flex items-start justify-between gap-3"><div><b className="text-lg">Subestilo · {CHARACTER_STYLE_FAMILIES.find(item=>item.id===appearance.artStyle)?.label}</b><p className="text-xs text-neutral-500 mt-1">Escolha uma linguagem específica. A prévia muda imediatamente.</p></div><button type="button" onClick={surpriseWithinStyle} className="shrink-0 min-h-10 rounded-xl bg-black px-3 text-[10px] font-bold text-white flex items-center gap-1"><Sparkles size={13}/> SURPREENDA-ME</button></div><div className="grid grid-cols-3 gap-3 mt-3">{currentStyleVariants.map(variant => { const selected=activeStyleVariant.id===variant.id; const previewAppearance=applyStyleVariant(appearance,variant.id); return <button type="button" key={variant.id} aria-pressed={selected} onClick={()=>applyGraphicStyle(variant.id)} className={`rounded-xl border-2 p-2 text-left ${selected?'border-teal-700 bg-teal-50':'border-neutral-200'}`}><img alt="" loading="lazy" src={candidateThumbnail(draft, previewAppearance, true)} className="aspect-square w-full rounded-lg bg-[#f7f5f1] object-contain"/><b className="block mt-2 text-sm">{variant.label}</b><span className="block mt-1 text-[10px] leading-snug text-neutral-600">{variant.description}</span><span className="mt-2 flex flex-wrap gap-1">{variant.tags.slice(0,3).map(tag=><span key={tag} className="rounded-full bg-neutral-100 px-2 py-1 text-[8px] uppercase">{tag}</span>)}</span></button>; })}</div></div>
           {appearance.artStyle === 'pixel-art' ? <div className="rounded-2xl border-2 border-black p-4"><div className="flex items-start justify-between gap-3"><div><b className="text-lg">Pixel Art Lab · 2D</b><p className="mt-1 text-xs text-neutral-500">O personagem passa a ser construído em blocos/pixels reais, adequado para sprite sheets e jogos 2D. Não é apenas um filtro sobre a ilustração.</p></div><span className="rounded-full bg-teal-50 px-2 py-1 text-[9px] font-bold text-teal-800">LOCAL · SEM API</span></div><div className="mt-3 grid grid-cols-3 gap-3"><SelectField label="Resolução" value={String(appearance.pixelResolution || 32) as any} options={[{id:'16',label:'16×16'},{id:'24',label:'24×24'},{id:'32',label:'32×32'},{id:'48',label:'48×48'},{id:'64',label:'64×64'},{id:'96',label:'96×96'}] as any} onChange={(value:any)=>patchAppearance({pixelResolution:Number(value) as any})}/><SelectField label="Paleta" value={String(appearance.pixelPaletteSize || 16) as any} options={[{id:'4',label:'4 cores'},{id:'8',label:'8 cores'},{id:'16',label:'16 cores'},{id:'24',label:'24 cores'},{id:'32',label:'32 cores'}] as any} onChange={(value:any)=>patchAppearance({pixelPaletteSize:Number(value) as any})}/><label className="character-option-group"><span className="character-option-label">Contorno</span><button type="button" onClick={()=>patchAppearance({pixelOutline:!(appearance.pixelOutline ?? true)})} className={`character-choice ${(appearance.pixelOutline ?? true)?'is-selected':''}`}><span>{(appearance.pixelOutline ?? true)?'Ligado':'Desligado'}</span></button></label></div><div className="mt-3 rounded-xl bg-neutral-50 p-3 text-[11px] text-neutral-600"><b>Exportação:</b> o SVG continua editável e pode ser rasterizado depois mantendo bordas duras. Para animação, use a aba <b>SPRITES</b> e gere os frames do estado.</div></div> : null}
@@ -981,7 +1026,7 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
       </section></div>}>
 
       <section className="character-live-preview min-h-[55vh] xl:min-h-0 overflow-auto p-4 sm:p-7 flex flex-col items-center gap-4">
-        <div className="w-full max-w-4xl flex items-center justify-between gap-3"><div><div className="text-[9px] font-mono uppercase text-neutral-500">Prévia viva · {activeStyleVariant.label} · {SPECIES.find((item) => item.id === appearance.species)?.label || 'Ser'} · {BODY_PLANS.find((item) => item.id === appearance.bodyPlan)?.label || 'plano corporal'}</div><b className="text-xl">{draft.characterName}</b></div><div className="flex gap-2">{tab === 'animate' && <button onClick={() => setPlaying((value) => !value)} className="h-10 px-3 rounded-xl bg-black text-white text-[10px] font-bold flex items-center gap-2">{playing ? <Pause size={14}/> : <Play size={14}/>} {playing ? 'PAUSAR' : 'PLAY'}</button>}<button onClick={downloadSvg} className="h-10 px-3 rounded-xl border bg-white text-[10px] font-bold flex items-center gap-2"><Download size={14}/> SVG</button></div></div>
+        <div className="w-full max-w-4xl flex items-center justify-between gap-3"><div><div className="text-[9px] font-mono uppercase text-neutral-500">Prévia viva · {activeStyleVariant.label} · {SPECIES.find((item) => item.id === appearance.species)?.label || 'Ser'} · {BODY_PLANS.find((item) => item.id === appearance.bodyPlan)?.label || 'plano corporal'}{appearance.identityRepresentation && appearance.identityRepresentation !== 'open' ? ` · ${IDENTITY_LABELS[appearance.identityRepresentation]}` : ''}{appearance.ageGroup ? ` · ${AGE_LABELS[appearance.ageGroup]}` : ''}</div><b className="text-xl">{draft.characterName}</b></div><div className="flex gap-2">{tab === 'animate' && <button onClick={() => setPlaying((value) => !value)} className="h-10 px-3 rounded-xl bg-black text-white text-[10px] font-bold flex items-center gap-2">{playing ? <Pause size={14}/> : <Play size={14}/>} {playing ? 'PAUSAR' : 'PLAY'}</button>}<button onClick={downloadSvg} className="h-10 px-3 rounded-xl border bg-white text-[10px] font-bold flex items-center gap-2"><Download size={14}/> SVG</button></div></div>
         <div className="character-view-options"><button type="button" aria-pressed={!portraitMode} onClick={() => setPortraitMode(false)}>Corpo inteiro</button>{appearance.bodyPlan === 'biped' && !['pixel-art','voxel'].includes(appearance.artStyle || '') && <button type="button" aria-pressed={portraitMode} onClick={() => setPortraitMode(true)}>Retrato</button>}</div>
         <div className="character-stage w-full max-w-4xl rounded-3xl border bg-white flex items-center justify-center p-6" style={{ background: draft.background }}><motion.div {...animationMotionProps(activeAnimation.frames.length ? 'none' : activeAnimation.motion, tab === 'animate' && playing)} className="flex items-center justify-center max-w-full max-h-full"><img src={portraitMode && !draft.generatedSvg && appearance.bodyPlan === 'biped' && !['pixel-art','voxel'].includes(appearance.artStyle || '') ? svgDataUrl(illustrateCharacter({ ...draft, appearance }, draft.activeView, draft.activeExpression, 'neutral', 0, true)) : previewUrl} alt={draft.characterName} className="max-w-full max-h-[520px] object-contain" style={{ imageRendering: draft.pixelated || appearance.artStyle === 'pixel-art' ? 'pixelated' : 'auto' }}/></motion.div></div>
         {tab === 'animate' && activeAnimation.frames.length ? <div className="w-full max-w-4xl rounded-2xl border bg-white p-3"><div className="flex items-center gap-2"><b className="text-sm">{activeAnimation.name}</b><span className="text-[10px] text-neutral-500">· {activeAnimation.frames.length} frames · {activeAnimation.fps} fps</span></div><div className="mt-2 flex gap-1 overflow-x-auto">{activeAnimation.frames.map((frame, index) => <button key={frame.id} onClick={() => { setFrameIndex(index); setPlaying(false); }} className={`shrink-0 h-16 w-16 rounded-lg border overflow-hidden ${index === frameIndex ? 'ring-2 ring-black' : ''}`}><img src={frame.url} className="w-full h-full object-contain"/></button>)}</div></div> : null}
