@@ -2289,6 +2289,8 @@ export default function Workspace({
             </button>
           </div>
 
+          <div id="workspace-history-slot" className="flex items-center shrink-0" />
+
           <span className="text-[11px] font-mono text-[#70706E] bg-[#F5F5F3] border border-[#E0E0DE] rounded-full px-3 py-1 font-semibold uppercase tracking-wider hidden md:block">
             Draft: {project.projectType}
           </span>
