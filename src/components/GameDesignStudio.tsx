@@ -1,4 +1,5 @@
 import { StudioWorkspace } from './StudioWorkspace';
+import StudioAreaGuide from './StudioAreaGuide';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ChevronRight, Clock3, FileText, Gamepad2, Info, Link2, Pause, Play, Plus,
@@ -126,6 +127,7 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
     <header className="shrink-0 min-h-16 bg-white border-b px-3 sm:px-5 flex items-center gap-3" style={{ paddingTop: 'max(.35rem, env(safe-area-inset-top))' }}>
       <button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={19} /></button>
       <div className="min-w-0 flex-1"><b className="block truncate">{title}</b><div className="text-[10px] font-mono text-neutral-500 uppercase">GDD · roteiro · personagens · ações · playtest · produção</div></div>
+      <StudioAreaGuide area="game-design" />
       <button disabled={!canEdit} onClick={() => onSave({ ...draft, updatedAt: new Date().toISOString() })} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15} /> SALVAR</button>
     </header>
 
