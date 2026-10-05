@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections' | 'data-story';
 
 export type DrawingElementType =
   | 'brush'
@@ -497,7 +497,7 @@ export interface CharacterAppearance {
   surfaceStyle?: CharacterSurfaceStyle;
   footStyle?: CharacterFootStyle;
   whiskers?: boolean;
-  bodyShape: 'slim' | 'average' | 'athletic' | 'stocky' | 'chibi';
+  bodyShape: 'slim' | 'very-slim' | 'average' | 'athletic' | 'stocky' | 'plus-size' | 'chibi';
   torsoShape: 'rectangle' | 'trapezoid' | 'round' | 'triangle';
   armStyle: 'thin' | 'regular' | 'strong';
   legStyle: 'short' | 'regular' | 'long';
@@ -515,6 +515,10 @@ export interface CharacterAppearance {
   outfitPrimary: string;
   outfitSecondary: string;
   lineColor: string;
+  stature?: 'very-short' | 'short' | 'average' | 'tall' | 'giant';
+  representationProfile?: 'none' | 'down-syndrome';
+  mobilityAid?: 'none' | 'wheelchair' | 'crutch' | 'prosthesis-leg';
+  visionAid?: 'none' | 'cane' | 'dark-glasses';
 }
 
 export interface CharacterProfile {
@@ -676,6 +680,21 @@ export interface VisualIdentityDocument {
     assetUrl?: string;
     assetName?: string;
     useUploadedAsset?: boolean;
+    sketchSvg?: string;
+    sketchNote?: string;
+    refinementPrompt?: string;
+    refinementAlternatives?: Array<{
+      id: string;
+      label: string;
+      rationale: string;
+      logo: {
+        kind: 'wordmark' | 'monogram' | 'symbol' | 'combination';
+        symbolStyle: 'geometric' | 'organic' | 'seal' | 'abstract';
+        monogram: string;
+        lockup: 'horizontal' | 'stacked' | 'symbol-only';
+      };
+    }>;
+    activeRefinementId?: string;
   };
   palette: VisualIdentityColor[];
   typography: { display: string; text: string; accent: string };
@@ -685,6 +704,52 @@ export interface VisualIdentityDocument {
   applications: VisualIdentityApplication[];
   manualNotes: string;
   sourceDesignSystemUpdatedAt?: string;
+  updatedAt?: string;
+}
+
+
+export type DataChartType = 'bar' | 'horizontal-bar' | 'line' | 'area' | 'pie' | 'donut' | 'scatter' | 'bubble' | 'stacked' | 'timeline' | 'radar' | 'pictogram' | 'gauge' | 'lollipop' | 'funnel' | 'heatmap' | 'treemap';
+export type DataInfographicFormat = 'vertical' | 'social' | 'square' | 'slide';
+
+export interface DataStoryQuestion {
+  id: string;
+  prompt: string;
+  answer?: string;
+}
+
+export interface DataStoryElement {
+  id: string;
+  kind: 'text' | 'stat' | 'chart' | 'shape' | 'divider';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  color?: string;
+  background?: string;
+  fontSize?: number;
+  chartType?: DataChartType;
+}
+
+export interface DataStoryDocument {
+  title: string;
+  goal: string;
+  rawData: string;
+  chartType: DataChartType;
+  xField?: string;
+  yField?: string;
+  groupField?: string;
+  palette: string[];
+  questions: DataStoryQuestion[];
+  insight?: string;
+  mapGeoJson?: string;
+  mapValueProperty?: string;
+  geoApiPath?: string;
+  metabaseUrl?: string;
+  infographicFormat: DataInfographicFormat;
+  infographicElements: DataStoryElement[];
+  aiPrompt?: string;
+  aiNotes?: string[];
   updatedAt?: string;
 }
 
@@ -777,6 +842,8 @@ export interface ThoughtNode {
   gameDesignName?: string;
   apiConnections?: ApiConnectionsDocument;
   apiConnectionsName?: string;
+  dataStory?: DataStoryDocument;
+  dataStoryName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
