@@ -176,20 +176,33 @@ function hair(a: CharacterAppearance, back: boolean) {
   if (back) {
     if (a.hairStyle === "long")
       return `<path d="M132 118C121 56 143 37 180 37C224 35 241 72 230 123C229 158 249 169 239 196C224 183 219 192 212 198C198 184 177 196 165 192C141 199 128 188 119 199C128 159 126 144 132 118Z" fill="${h}"/>`;
-    if (a.hairStyle === "bob")
+    if (a.hairStyle === "wavy")
+      return `<path d="M128 121Q124 60 154 39Q182 28 208 42Q240 58 233 120Q231 152 245 176Q224 170 212 182Q198 171 184 184Q166 174 151 186Q135 172 122 182Q135 151 128 121Z" fill="${h}"/><path d="M141 150q17 10 32 0m10 0q18 10 36-2" stroke="${light}" stroke-width="2" opacity=".45" fill="none"/>`;
+    if (a.hairStyle === "bob" || a.hairStyle === "blunt")
       return `<path d="M129 130C119 51 150 33 182 36C226 34 244 75 231 173Q178 196 128 174Z" fill="${h}"/>`;
     if (a.hairStyle === "curly")
       return Array.from({ length: 11 }, (_, i) => {
-        let t = Math.PI + (i * Math.PI) / 10;
-        return ellipse(
-          180 + Math.cos(t) * 50,
-          115 + Math.sin(t) * 69,
-          19,
-          23,
-          h,
-        );
+        const t = Math.PI + (i * Math.PI) / 10;
+        return ellipse(180 + Math.cos(t) * 50, 115 + Math.sin(t) * 69, 19, 23, h);
       }).join("");
+    if (a.hairStyle === "afro")
+      return Array.from({ length: 14 }, (_, i) => {
+        const t = Math.PI + (i * Math.PI) / 13;
+        return ellipse(180 + Math.cos(t) * 56, 115 + Math.sin(t) * 75, 22, 24, h);
+      }).join("");
+    if (a.hairStyle === "coily")
+      return Array.from({ length: 15 }, (_, i) => {
+        const t = Math.PI + (i * Math.PI) / 14;
+        return `<g transform="translate(${180 + Math.cos(t) * 54} ${112 + Math.sin(t) * 72})"><path d="M-9 -3q5-10 10 0q5 10 10 0" fill="none" stroke="${h}" stroke-width="7" stroke-linecap="round"/></g>`;
+      }).join("");
+    if (a.hairStyle === "locs")
+      return `<g fill="${h}"><path d="M138 83q8-39 42-43q33-3 46 21q12 20 10 57"/><rect x="135" y="98" width="12" height="82" rx="6"/><rect x="152" y="84" width="12" height="104" rx="6"/><rect x="169" y="78" width="12" height="114" rx="6"/><rect x="186" y="80" width="12" height="112" rx="6"/><rect x="203" y="88" width="12" height="98" rx="6"/><rect x="220" y="100" width="12" height="78" rx="6"/></g>`;
+    if (a.hairStyle === "braids")
+      return `<path d="M132 116Q124 46 181 39Q238 45 228 116L216 96Q180 74 144 96Z" fill="${h}"/><g fill="${h}"><path d="M139 118q-14 33-7 73" stroke="${h}" stroke-width="12" stroke-linecap="round" fill="none"/><path d="M221 118q14 33 7 73" stroke="${h}" stroke-width="12" stroke-linecap="round" fill="none"/><path d="M134 134l11 11m-11 11l11 11m72-33l-11 11m11 11l-11 11" stroke="${light}" stroke-width="2" opacity=".45"/></g>`;
+    if (a.hairStyle === "ponytail")
+      return `<path d="M132 114Q122 42 181 38Q236 44 228 114L214 92Q179 71 146 95Z" fill="${h}"/><path d="M208 110Q250 126 238 172Q226 215 204 179Q217 148 208 110Z" fill="${h}"/>`;
     if (a.hairStyle === "bun") return ellipse(210, 35, 24, 22, h);
+    if (a.hairStyle === "buzz") return `<path d="M142 82Q153 40 181 40Q211 41 220 82Q181 62 142 82Z" fill="${h}" opacity=".85"/>`;
     return `<path d="M133 115Q120 38 180 37Q240 38 227 115L216 94Q180 74 144 94Z" fill="${h}"/>`;
   }
   let d =
@@ -197,6 +210,12 @@ function hair(a: CharacterAppearance, back: boolean) {
   if (a.hairStyle === "short")
     d =
       "M134 103L127 77Q132 44 166 42Q210 22 226 60L230 104Q215 84 207 70Q178 95 147 86Z";
+  if (a.hairStyle === "pixie")
+    d =
+      "M136 104Q126 73 139 53Q150 36 176 41Q207 30 222 55Q233 74 225 106Q212 91 205 75Q183 88 158 89Q147 101 136 104Z";
+  if (a.hairStyle === "undercut")
+    d =
+      "M136 104Q124 79 132 57Q151 31 182 41Q222 35 228 74Q221 64 211 61Q187 85 136 104Z";
   if (a.hairStyle === "spiky")
     d =
       "M132 101L126 68L139 71L138 44L159 56L172 30L185 49L204 31L210 52L231 47L224 69L237 79L226 108Q213 84 207 72Q170 94 132 101Z";
@@ -205,6 +224,24 @@ function hair(a: CharacterAppearance, back: boolean) {
   if (a.hairStyle === "curly")
     d =
       "M132 105Q120 81 136 66Q135 47 153 47Q168 28 180 42Q200 31 211 49Q236 52 224 77Q238 90 225 109Q211 94 204 76Q181 92 166 83Q147 104 132 105Z";
+  if (a.hairStyle === "wavy")
+    d = "M132 103Q124 64 151 46Q181 31 210 47Q239 67 226 107Q210 88 205 74Q184 88 163 84Q146 102 132 103Z";
+  if (a.hairStyle === "afro")
+    return `<g><ellipse cx="180" cy="89" rx="58" ry="58" fill="${h}"/><path d="M140 110Q154 83 180 83Q206 83 220 110Q203 98 180 102Q156 98 140 110Z" fill="${h}"/></g>`;
+  if (a.hairStyle === "coily")
+    return `<g><path d="M136 104Q123 78 138 56Q153 33 180 40Q208 33 222 56Q237 78 224 104" fill="${h}"/>${Array.from({length:9},(_,i)=>{const x=142+i*10;const y=75+(i%2)*7;return `<path d="M${x} ${y}q4-8 8 0q4 8 8 0" fill="none" stroke="${light}" stroke-width="2.5" opacity=".55" stroke-linecap="round"/>`;}).join('')}</g>`;
+  if (a.hairStyle === "locs")
+    return `<g fill="${h}"><path d="M133 105Q125 57 158 43Q189 35 214 51Q234 65 227 108Q212 93 206 78Q180 90 154 85Q143 98 133 105Z"/>${[145,158,171,184,197,210].map((x,i)=>`<rect x="${x}" y="${96+(i%2)*3}" width="10" height="${34+(i%3)*8}" rx="5"/>`).join('')}</g>`;
+  if (a.hairStyle === "braids")
+    return `<g><path d="M133 108Q124 58 160 42Q191 35 214 53Q235 71 227 108Q212 93 205 79Q178 89 154 85Q143 98 133 108Z" fill="${h}"/><path d="M141 111q-13 26-8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M220 111q13 26 8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M137 127l10 9m-10 10l10 9m76-28l-10 9m10 10l-10 9" stroke="${light}" stroke-width="2" opacity=".5"/></g>`;
+  if (a.hairStyle === "ponytail")
+    return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M207 109Q239 122 231 154Q226 178 205 174Q219 143 207 109Z" fill="${h}"/></g>`;
+  if (a.hairStyle === "blunt")
+    d = "M133 104Q126 54 164 41Q192 35 214 52Q231 67 228 111Q215 108 206 98Q176 105 153 99Q142 107 133 104Z";
+  if (a.hairStyle === "bob")
+    d = "M132 105Q126 58 157 44Q190 35 214 51Q233 69 227 111Q212 98 206 82Q178 97 153 91Q142 103 132 105Z";
+  if (a.hairStyle === "buzz")
+    return `<path d="M145 81Q157 45 181 43Q206 44 217 81Q181 69 145 81Z" fill="${h}" opacity=".82"/>`;
   return `<path d="${d}" fill="${h}" stroke-width="2.3"/><path d="M147 62Q170 44 196 52M149 73Q167 61 182 63" stroke="${light}" stroke-width="2" opacity=".6" fill="none"/>`;
 }
 function eyes(a: CharacterAppearance, expression: string) {
@@ -288,6 +325,21 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
       '<path d="M180 116L179 136L187 134" fill="none" stroke="' +
       tint(skin, -38) +
       '" stroke-width="1.8"/>';
+  if (a.noseStyle === "button")
+    nose =
+      '<path d="M176 124Q180 118 184 124Q186 130 180 133Q174 130 176 124Z" fill="none" stroke="' +
+      tint(skin, -38) +
+      '" stroke-width="1.7"/>';
+  if (a.noseStyle === "broad")
+    nose =
+      '<path d="M173 118Q166 133 170 139Q180 145 191 139Q195 133 188 118" fill="none" stroke="' +
+      tint(skin, -38) +
+      '" stroke-width="1.9"/>';
+  if (a.noseStyle === "aquiline")
+    nose =
+      '<path d="M179 114Q184 126 183 135Q186 141 190 139" fill="none" stroke="' +
+      tint(skin, -38) +
+      '" stroke-width="1.8"/>';
   let mouth =
     '<path d="M167 151Q180 157 193 151" fill="none" stroke-width="1.5"/>';
   if (a.mouthStyle === "line")
@@ -299,6 +351,12 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
   if (a.mouthStyle === "full")
     mouth =
       '<path d="M165 151Q174 146 180 149Q186 146 195 151Q180 166 165 151Z" fill="#C9767E" stroke-width=".8"/>';
+  if (a.mouthStyle === "wide")
+    mouth =
+      '<path d="M161 151Q180 157 199 151" fill="none" stroke-width="1.6"/>';
+  if (a.mouthStyle === "bow")
+    mouth =
+      '<path d="M168 152Q174 147 180 151Q186 147 192 152Q180 160 168 152Z" fill="#C9767E" stroke-width=".8"/>';
   if (
     expression === "happy" ||
     expression === "laughing" ||
