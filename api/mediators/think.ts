@@ -749,6 +749,53 @@ REFERÊNCIAS VISUAIS: ${JSON.stringify(body.referenceNames || [])}
 SVG ATUAL PARA EDITAR (somente modo refine): ${body.characterSourceMode !== 'new' && body.characterSourceMode !== 'reference' && body.currentSvg ? sanitizeCharacterSvg(body.currentSvg) : 'não enviado'}`;
   return { system, user };
 }
+
+const CHARACTER_DESIGN_ENUMS = {
+  artStyle:['illustrated','cartoon','anime','manga','comic','storybook','watercolor','pencil','ink','chibi','engraving','lineart','realism','psychedelic','steampunk'],
+  styleVariant:['manga-shounen','manga-shoujo','manga-seinen','manga-chibi','manga-fashion','engraving-copper','engraving-woodcut','engraving-lino','lineart-ornamental','lineart-botanical','lineart-tattoo','realism-editorial','realism-concept','realism-scientific','psychedelic-70s','psychedelic-neon','psychedelic-surreal','steampunk-victorian','steampunk-diesel','steampunk-clockwork','comic-western','comic-noir','comic-indie','storybook-gouache','storybook-pencil','storybook-paper','anime-modern','anime-soft','cartoon-editorial','cartoon-rubber','illustrated-soft','watercolor-soft','pencil-graphite','ink-brush','chibi-kawaii'],
+  species:['human','anthropomorphic','quadruped','bird','reptile','amphibian','fish','arthropod','fantasy','hybrid'],
+  bodyPlan:['biped','quadruped','avian','serpentine','aquatic','six-limbed','eight-limbed','custom'],
+  headShape:['round','oval','square','heart','triangle','wide'], faceShape:['soft','angular','long','wide'], eyeStyle:['round','almond','narrow','dot','large','hooded','monolid','upturned','downturned'], browStyle:['none','soft','straight','arched','bold'], noseStyle:['none','small','straight','wide'], mouthStyle:['line','smile','full','small'], earStyle:['none','simple','round','pointed','long','floppy','large','fin'], hairStyle:['none','short','bob','long','curly','spiky','bun'],
+  muzzleStyle:['none','short','long','round','beak-small','beak-long','beak-hooked'], tailStyle:['none','short','long','fluffy','curled','reptile','fish'], wingStyle:['none','feather','bat','fin'], hornStyle:['none','short','long','antlers','antennae'], surfaceStyle:['skin','fur-short','fur-long','feathers','scales','shell','chitin'], footStyle:['feet','paws','hooves','claws','talons','fins'], bodyShape:['slim','average','athletic','stocky','chibi'], torsoShape:['rectangle','trapezoid','round','triangle'], armStyle:['thin','regular','strong'], legStyle:['short','regular','long'], handStyle:['mitten','simple','defined'],
+  outfitStyle:['none','basic','casual','sport','formal','fantasy','tech','street','school','kawaii','punk','steampunk','historical','scifi','workwear','elegant','adventure']
+};
+const CHARACTER_ACCESSORIES = new Set(['glasses','sunglasses','goggles','monocle','hat','cap','beanie','hood','bandana','headband','hairclip','flower','tiara','scarf','cape','backpack','satchel','headphones','earrings','necklace','brooch','bow','crown','bracelet','watch','belt','pouch','shoulderpad','mask']);
+const CHARACTER_NUMERIC_KEYS = new Set(['hybridBlend','headToBodyRatio','shoulderWidth','limbLength','bodyWidth','headWidth','headHeight','eyeSize','eyeSpacing','eyeHeight','irisScale','browSize','browHeight','noseSize','noseHeight','mouthSize','mouthHeight','earSize','earAngle','hairVolume','muzzleSize','muzzleHeight','armLength','armWidth','legLength','legWidth','handSize','footSize','waistWidth','tailSize','wingSize','hornSize','whiskerLength','strokeWidth']);
+const CHARACTER_COLOR_KEYS = new Set(['skinColor','surfaceColor','hairColor','eyeColor','outfitPrimary','outfitSecondary','lineColor','noseColor','mouthColor','earColor','wingColor','tailColor','hornColor']);
+function cleanCharacterDesignJson(text) {
+  const data=extractJsonObject(text); const src=data.appearance || {}; const appearance={};
+  for (const [key,allowed] of Object.entries(CHARACTER_DESIGN_ENUMS)) if (allowed.includes(String(src[key]||''))) appearance[key]=String(src[key]);
+  for (const key of CHARACTER_NUMERIC_KEYS) { const n=Number(src[key]); if(Number.isFinite(n)) appearance[key]=Math.max(-180,Math.min(180,n)); }
+  for (const key of CHARACTER_COLOR_KEYS) if(/^#[0-9a-f]{6}$/i.test(String(src[key]||''))) appearance[key]=String(src[key]);
+  for (const key of ['speciesPreset','hybridPrimaryPreset','hybridSecondaryPreset']) if(src[key] != null) appearance[key]=String(src[key]).slice(0,80);
+  if(typeof src.whiskers==='boolean') appearance.whiskers=src.whiskers;
+  if(Array.isArray(src.accessories)) appearance.accessories=src.accessories.slice(0,8).filter(x=>CHARACTER_ACCESSORIES.has(String(x?.kind))).map((x,i)=>({id:`ai-${String(x.kind)}-${i}`,kind:String(x.kind),color:/^#[0-9a-f]{6}$/i.test(String(x.color||''))?String(x.color):'#6D5B79',scale:Math.max(.5,Math.min(1.5,Number(x.scale)||1)),x:Math.max(-25,Math.min(25,Number(x.x)||0)),y:Math.max(-25,Math.min(25,Number(x.y)||0))}));
+  const profile=data.profile && typeof data.profile==='object' ? Object.fromEntries(Object.entries(data.profile).filter(([key])=>['role','ageBand','personality','motivation','backstory','silhouetteIntent','shapeLanguageRationale','proportionRationale','colorRationale','costumeRationale'].includes(key)).map(([key,value])=>[key,String(value||'').slice(0,1400)])) : undefined;
+  return { appearance, description:String(data.description||'').slice(0,1200), profile, notes:Array.isArray(data.notes)?data.notes.slice(0,10).map(v=>String(v).slice(0,400)):[] };
+}
+function buildCharacterDesignMessages(body) {
+  const c=body?.character||{};
+  const system=`Você é diretor(a) de arte, concept artist e especialista em character design modular. NÃO gere SVG. Seu trabalho é traduzir o pedido em decisões estruturadas que o renderizador determinístico da aplicação vai desenhar.
+
+A ordem é STYLE-FIRST: escolha primeiro a família visual e um subestilo coerente; depois refine espécie/plano corporal, rosto, proporções, figurino, acessórios e paleta. O estilo selecionado deve ser perceptível imediatamente e afetar características mínimas do personagem. Preserve anatomia e locomoção coerentes: não transforme ave, peixe, réptil, artrópode ou quadrúpede em humano com partes coladas. Híbridos devem ter uma base estrutural dominante e poucos sinais fortes da segunda base.
+
+Famílias/subestilos disponíveis: manga (manga-shounen, manga-shoujo, manga-seinen, manga-chibi, manga-fashion); engraving (engraving-copper, engraving-woodcut, engraving-lino); lineart (lineart-ornamental, lineart-botanical, lineart-tattoo); realism (realism-editorial, realism-concept, realism-scientific); psychedelic (psychedelic-70s, psychedelic-neon, psychedelic-surreal); steampunk (steampunk-victorian, steampunk-diesel, steampunk-clockwork); comic (comic-western, comic-noir, comic-indie); storybook (storybook-gouache, storybook-pencil, storybook-paper); anime (anime-modern, anime-soft); cartoon (cartoon-editorial, cartoon-rubber); illustrated (illustrated-soft); watercolor (watercolor-soft); pencil (pencil-graphite); ink (ink-brush); chibi (chibi-kawaii).
+
+Figurinos disponíveis: none, basic, casual, sport, formal, fantasy, tech, street, school, kawaii, punk, steampunk, historical, scifi, workwear, elegant, adventure.
+Acessórios combináveis: glasses, sunglasses, goggles, monocle, hat, cap, beanie, hood, bandana, headband, hairclip, flower, tiara, scarf, cape, backpack, satchel, headphones, earrings, necklace, brooch, bow, crown, bracelet, watch, belt, pouch, shoulderpad, mask.
+
+Quando modo=refine, preserve tudo que o pedido não manda mudar. Quando modo=reference, use as imagens como direção visual principal, mas converta-as para parâmetros do construtor. Quando modo=new, você pode propor a configuração completa. Retorne SOMENTE JSON válido no formato {"appearance":{...},"description":"...","profile":{... opcional},"notes":["decisão aplicada"]}. Use apenas chaves já presentes em APARÊNCIA ATUAL e styleVariant; acessórios devem ser array de objetos {"kind":"...","color":"#RRGGBB","scale":1,"x":0,"y":0}.`;
+  const user=`PEDIDO: ${String(body?.prompt||'')}
+MODO: ${String(body.characterSourceMode||'refine')}
+NOME: ${String(c.name||'')}
+DESCRIÇÃO ATUAL: ${String(c.description||'')}
+APARÊNCIA ATUAL: ${JSON.stringify(c.appearance||{})}
+FICHA ATUAL: ${JSON.stringify(c.profile||{})}
+VISTA/EXPRESSÃO/POSE: ${String(c.view||'front')} / ${String(c.expression||'neutral')} / ${String(c.pose||'neutral')}
+REFERÊNCIAS VISUAIS: ${JSON.stringify(body.referenceNames||[])}`;
+  return {system,user};
+}
+
 function cleanCharacterSheetJson(text) {
   const data = extractJsonObject(text); const p = data.profile || {};
   return { description:String(data.description || '').slice(0,1200), profile:{ role:String(p.role||'').slice(0,220), ageBand:String(p.ageBand||'').slice(0,160), personality:String(p.personality||'').slice(0,900), motivation:String(p.motivation||'').slice(0,900), backstory:String(p.backstory||'').slice(0,1400), keywords:Array.isArray(p.keywords)?p.keywords.slice(0,12).map(String):[], silhouetteIntent:String(p.silhouetteIntent||'').slice(0,900), shapeLanguageRationale:String(p.shapeLanguageRationale||'').slice(0,900), proportionRationale:String(p.proportionRationale||'').slice(0,900), colorRationale:String(p.colorRationale||'').slice(0,900), costumeRationale:String(p.costumeRationale||'').slice(0,900)}, notes:Array.isArray(data.notes)?data.notes.slice(0,8).map(String):[] };
@@ -1226,6 +1273,16 @@ async function generateMediatorInsight(body) {
 CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma cena executável. Use mediaId EXATAMENTE como listado quando houver mídia; para cenas gráficas ou biblioteca vazia, use mediaId vazio.`, 2600, Math.max(2000,Math.min(timeout,52000-(Date.now()-startedAt))), 0.12);
       return { videoPlan: cleanVideoPlanJson(result.text), provider: result.provider, model: result.model };
     }
+  }
+
+  if (body?.mode === 'character-design') {
+    if (!String(body?.prompt || '').trim()) throw new Error('Descreva como deseja criar ou refinar o personagem.');
+    const { system, user } = buildCharacterDesignMessages(body);
+    const refs = body.visualReferences || [];
+    if (body.characterSourceMode === 'reference' && !refs.length) throw new Error('Escolha ou envie um desenho como referência.');
+    sketchVisualParts(refs);
+    const result = await callGeminiStructured(system, user, 5200, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 45000), 0.16, refs);
+    return { characterDesign: cleanCharacterDesignJson(result.text), provider: result.provider, model: result.model };
   }
 
   if (body?.mode === 'character-svg') {
