@@ -518,6 +518,8 @@ export interface CharacterAppearance {
   stature?: 'very-short' | 'short' | 'average' | 'tall' | 'giant';
   representationProfile?: 'none' | 'down-syndrome';
   mobilityAid?: 'none' | 'wheelchair' | 'crutch' | 'prosthesis-leg';
+  wheelchairStyle?: 'manual' | 'active' | 'sport';
+  wheelchairColor?: string;
   visionAid?: 'none' | 'cane' | 'dark-glasses';
 }
 
