@@ -34,8 +34,14 @@ const DEFAULT_APPLICATIONS: VisualIdentityApplication[] = [
   { id: 'app-card', type: 'card', title: 'Cartão / assinatura' },
   { id: 'app-stationery', type: 'stationery', title: 'Papelaria institucional' },
   { id: 'app-letterhead', type: 'letterhead', title: 'Papel timbrado' },
-  { id: 'app-tshirt', type: 'tshirt', title: 'Camiseta' },
-  { id: 'app-mug', type: 'mug', title: 'Caneca' },
+  { id: 'app-tshirt', type: 'tshirt', title: 'Camiseta', productColor: '#F7F7F4', material: 'fabric', scene: 'studio', artworkScale: 1 },
+  { id: 'app-hoodie', type: 'hoodie', title: 'Moletom / hoodie', productColor: '#EFEFED', material: 'fabric', scene: 'studio', artworkScale: .9 },
+  { id: 'app-mug', type: 'mug', title: 'Caneca', productColor: '#FFFFFF', material: 'glossy', scene: 'studio', artworkScale: .9 },
+  { id: 'app-bottle', type: 'bottle', title: 'Garrafa', productColor: '#F4F4F2', material: 'matte', scene: 'studio', artworkScale: .82 },
+  { id: 'app-can', type: 'can', title: 'Lata', productColor: '#F5F5F2', material: 'glossy', scene: 'studio', artworkScale: .86 },
+  { id: 'app-box', type: 'box', title: 'Caixa', productColor: '#F4F0E8', material: 'kraft', scene: 'studio', artworkScale: .78 },
+  { id: 'app-phone', type: 'phone', title: 'Tela de celular', productColor: '#171717', material: 'glossy', scene: 'dark', artworkScale: .9 },
+  { id: 'app-book', type: 'book', title: 'Livro / publicação', productColor: '#F7F7F3', material: 'matte', scene: 'studio', artworkScale: .85 },
   { id: 'app-pencil', type: 'pencil', title: 'Lápis / material de apoio' },
   { id: 'app-notebook', type: 'notebook', title: 'Caderno' },
   { id: 'app-tote', type: 'tote', title: 'Ecobag' },
@@ -196,12 +202,12 @@ export const blankVisualIdentity = (ds?: DesignSystemDocument): VisualIdentityDo
 
 const applicationLabels: Record<VisualIdentityApplication['type'], string> = {
   social: 'SOCIAL', poster: 'CARTAZ', card: 'CARTÃO', packaging: 'EMBALAGEM', signage: 'SINALIZAÇÃO', interface: 'INTERFACE',
-  tshirt: 'CAMISETA', mug: 'CANECA', pencil: 'LÁPIS', stationery: 'PAPELARIA', letterhead: 'PAPEL TIMBRADO', notebook: 'CADERNO', tote: 'ECOBAG',
+  tshirt: 'CAMISETA', hoodie: 'HOODIE', mug: 'CANECA', bottle: 'GARRAFA', can: 'LATA', box: 'CAIXA', phone: 'CELULAR', book: 'LIVRO', pencil: 'LÁPIS', stationery: 'PAPELARIA', letterhead: 'PAPEL TIMBRADO', notebook: 'CADERNO', tote: 'ECOBAG',
 };
 
 const APPLICATION_TYPES: Array<{ id: VisualIdentityApplication['type']; label: string }> = [
   { id:'social', label:'Social' }, { id:'poster', label:'Cartaz' }, { id:'card', label:'Cartão' }, { id:'stationery', label:'Papelaria' },
-  { id:'letterhead', label:'Papel timbrado' }, { id:'tshirt', label:'Camiseta' }, { id:'mug', label:'Caneca' }, { id:'pencil', label:'Lápis' },
+  { id:'letterhead', label:'Papel timbrado' }, { id:'tshirt', label:'Camiseta' }, { id:'hoodie', label:'Hoodie' }, { id:'mug', label:'Caneca' }, { id:'bottle', label:'Garrafa' }, { id:'can', label:'Lata' }, { id:'box', label:'Caixa' }, { id:'phone', label:'Celular' }, { id:'book', label:'Livro' }, { id:'pencil', label:'Lápis' },
   { id:'notebook', label:'Caderno' }, { id:'tote', label:'Ecobag' }, { id:'packaging', label:'Embalagem' }, { id:'signage', label:'Sinalização' }, { id:'interface', label:'Interface' },
 ];
 
@@ -236,7 +242,23 @@ function ApplicationPreview({ document, app }: { document: VisualIdentityDocumen
   const paper = document.palette[2]?.color || '#F4F2ED';
   const ink = document.palette[3]?.color || '#151515';
   const accent = document.palette[4]?.color || '#D7FF38';
-  const shadow = '0 16px 40px rgba(12, 12, 12, 0.14)';
+  const productColor = app.productColor || paper;
+  const artworkScale = app.artworkScale ?? 1;
+  const artworkX = app.artworkX ?? 0;
+  const artworkY = app.artworkY ?? 0;
+  const angle = app.angle ?? 0;
+  const material = app.material || (['tshirt','hoodie','tote'].includes(app.type) ? 'fabric' : 'matte');
+  const scene = app.scene || 'studio';
+  const sceneBackground = scene === 'dark'
+    ? 'radial-gradient(circle at 50% 18%, #4B4B4B 0, #222 46%, #0D0D0D 100%)'
+    : scene === 'warm'
+      ? 'linear-gradient(180deg, #E9DED0 0, #CFC0AE 100%)'
+      : scene === 'paper'
+        ? 'linear-gradient(180deg, #F2EEE6 0, #E3DDD3 100%)'
+        : 'linear-gradient(180deg, #ECECE9 0, #D8D8D4 100%)';
+  const shadow = '0 20px 46px rgba(12, 12, 12, 0.18)';
+  const artTransform = `translate(${artworkX}px, ${artworkY}px) scale(${artworkScale}) rotate(${angle}deg)`;
+  const artLayer = (inverse = false, size: 'sm' | 'md' | 'lg' = 'md', className = '') => <div className={className} style={{ transform: artTransform, transformOrigin: 'center' }}>{brandPlate(inverse, size)}</div>;
   const label = (
     <div className="absolute inset-x-3 bottom-3 z-20 rounded-xl bg-white/92 backdrop-blur px-2.5 py-2 shadow-sm ring-1 ring-black/5">
       <div className="text-[8px] font-mono tracking-[0.16em] text-neutral-400">{applicationLabels[app.type]}</div>
@@ -294,19 +316,105 @@ function ApplicationPreview({ document, app }: { document: VisualIdentityDocumen
     {label}
   </div>;
 
-  if (app.type === 'tshirt') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E6E1D7 0, #F3F0E8 100%)' }}>
-    <div className="absolute inset-x-[14%] top-[8%] bottom-[12%] flex items-center justify-center">
-      <svg viewBox="0 0 260 220" className="h-full w-full drop-shadow-[0_22px_32px_rgba(0,0,0,0.16)]"><defs><linearGradient id={`shirt-${app.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={mixHex(paper, '#FFFFFF', 0.35)} /><stop offset="100%" stopColor={mixHex(paper, primary, 0.1)} /></linearGradient></defs><path d="M86 22l18-10h52l18 10 42 16-18 44-30-11v114H92V71L62 82 44 38Z" fill={`url(#shirt-${app.id})`} stroke={mixHex(ink, '#FFFFFF', 0.35)} strokeWidth="3"/><path d="M104 13c7 18 45 18 52 0" fill="none" stroke={mixHex(ink, '#FFFFFF', 0.35)} strokeWidth="3"/></svg>
-      <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 scale-[0.95]">{brandPlate(false, 'sm')}</div>
+  if (app.type === 'tshirt') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_22%,rgba(255,255,255,.82),transparent_42%)]" />
+    <div className="absolute inset-x-[9%] top-[4%] bottom-[12%] flex items-center justify-center">
+      <svg viewBox="0 0 300 250" className="h-full w-full drop-shadow-[0_24px_28px_rgba(0,0,0,0.24)]">
+        <defs>
+          <linearGradient id={`shirt-${app.id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor={mixHex(productColor, '#FFFFFF', .34)} /><stop offset="42%" stopColor={productColor} /><stop offset="100%" stopColor={mixHex(productColor, '#000000', .14)} /></linearGradient>
+          <filter id={`fabric-${app.id}`}><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7" result="noise"/><feBlend in="SourceGraphic" in2="noise" mode="soft-light"/></filter>
+        </defs>
+        <path d="M92 30l29-16h58l29 16 57 28-23 52-38-18v129H96V92L58 110 35 58Z" fill={`url(#shirt-${app.id})`} stroke={mixHex(productColor, '#000000', .28)} strokeWidth="2.5" filter={material==='fabric'?`url(#fabric-${app.id})`:undefined}/>
+        <path d="M122 15c8 23 48 23 56 0" fill="none" stroke={mixHex(productColor, '#000000', .28)} strokeWidth="3"/>
+        <path d="M101 92q18 15 37 2M202 91q-20 15-39 2M112 36q20 12 38 8M188 36q-20 12-38 8" fill="none" stroke="rgba(60,60,60,.14)" strokeWidth="2"/>
+        <path d="M123 52q-7 74-5 151M176 52q7 74 5 151M101 121q25 13 48 2M199 121q-25 13-48 2" fill="none" stroke="rgba(255,255,255,.34)" strokeWidth="2"/>
+      </svg>
+      {artLayer(false, 'sm', 'absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2 scale-[.9]')}
     </div>
     {label}
   </div>;
 
-  if (app.type === 'mug') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E4DED4 0, #F0EDE6 100%)' }}>
-    <div className="absolute left-1/2 top-[49%] h-[44%] w-[54%] -translate-x-1/2 -translate-y-1/2">
-      <div className="absolute inset-y-0 left-0 right-[16%] rounded-[18px] border" style={{ background: `linear-gradient(180deg, #FFFFFF 0, ${mixHex(paper, '#FFFFFF', 0.3)} 100%)`, boxShadow: shadow }} />
-      <div className="absolute right-0 top-[16%] h-[56%] w-[28%] rounded-r-full border-[10px]" style={{ borderColor: mixHex(paper, '#FFFFFF', 0.2), boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.08)' }} />
-      <div className="absolute left-[16%] top-[30%] scale-[0.82]">{brandPlate(false, 'sm')}</div>
+  if (app.type === 'hoodie') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,.72),transparent_40%)]" />
+    <div className="absolute inset-x-[8%] top-[2%] bottom-[11%] flex items-center justify-center">
+      <svg viewBox="0 0 310 260" className="h-full w-full drop-shadow-[0_25px_30px_rgba(0,0,0,.24)]">
+        <defs><linearGradient id={`hood-${app.id}`} x1="0" x2="1" y1="0" y2="1"><stop stopColor={mixHex(productColor,'#FFFFFF',.28)}/><stop offset=".5" stopColor={productColor}/><stop offset="1" stopColor={mixHex(productColor,'#000000',.16)}/></linearGradient></defs>
+        <path d="M116 31q39-33 78 0l22 20 54 30-25 49-35-17v123H100V113l-35 17-25-49 54-30Z" fill={`url(#hood-${app.id})`} stroke={mixHex(productColor,'#000000',.3)} strokeWidth="2.5"/>
+        <path d="M117 30q38 47 76 0q18 18 8 47q-49 24-96 0q-8-30 12-47Z" fill={mixHex(productColor,'#000000',.08)} stroke="rgba(0,0,0,.16)" strokeWidth="2"/>
+        <path d="M145 67v50M165 67v50" stroke="rgba(0,0,0,.28)" strokeWidth="2"/><circle cx="145" cy="117" r="3" fill="rgba(0,0,0,.35)"/><circle cx="165" cy="117" r="3" fill="rgba(0,0,0,.35)"/>
+        <path d="M122 176q33 17 66 0v36h-66Z" fill={mixHex(productColor,'#000000',.05)} stroke="rgba(0,0,0,.15)"/>
+        <path d="M110 112q18 10 30 6M200 112q-18 10-30 6M121 46q33 11 66 0" fill="none" stroke="rgba(255,255,255,.28)" strokeWidth="2"/>
+      </svg>
+      {artLayer(false, 'sm', 'absolute left-1/2 top-[47%] -translate-x-1/2 -translate-y-1/2 scale-[.88]')}
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'mug') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_45%_28%,rgba(255,255,255,.82),transparent_36%)]" />
+    <div className="absolute left-1/2 top-[47%] h-[52%] w-[60%] -translate-x-1/2 -translate-y-1/2">
+      <div className="absolute inset-y-0 left-0 right-[17%] rounded-[24px] border" style={{ background: `linear-gradient(90deg, ${mixHex(productColor,'#000000',.1)} 0%, ${mixHex(productColor,'#FFFFFF',.5)} 24%, ${productColor} 56%, ${mixHex(productColor,'#000000',.09)} 100%)`, boxShadow: shadow }} />
+      <div className="absolute right-0 top-[18%] h-[58%] w-[30%] rounded-r-full border-[12px]" style={{ borderColor: mixHex(productColor, '#000000', .04), boxShadow: 'inset -6px 0 10px rgba(0,0,0,.09)' }} />
+      <div className="absolute left-[8%] right-[24%] top-[8%] h-[14%] rounded-full bg-white/35 blur-[1px]" />
+      {artLayer(false, 'sm', 'absolute left-[13%] top-[30%] scale-[.82]')}
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'bottle') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_48%_18%,rgba(255,255,255,.84),transparent_38%)]" />
+    <div className="absolute left-1/2 top-[48%] h-[70%] w-[30%] -translate-x-1/2 -translate-y-1/2 rounded-[26%_26%_18%_18%/12%_12%_16%_16%] border" style={{ background:`linear-gradient(90deg,${mixHex(productColor,'#000000',.12)},${mixHex(productColor,'#FFFFFF',.42)} 24%,${productColor} 56%,${mixHex(productColor,'#000000',.12)})`, boxShadow:shadow }}>
+      <div className="absolute left-[24%] right-[24%] -top-[8%] h-[13%] rounded-t-xl border" style={{ background:mixHex(productColor,'#000000',.14) }} />
+      <div className="absolute left-[14%] right-[14%] top-[28%] bottom-[18%] rounded-xl border bg-white/88 shadow-inner" />
+      {artLayer(false, 'sm', 'absolute left-1/2 top-[47%] -translate-x-1/2 -translate-y-1/2 scale-[.72]')}
+      <div className="absolute left-[14%] top-[7%] h-[75%] w-[8%] rounded-full bg-white/24 blur-[1px]" />
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'can') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(255,255,255,.8),transparent_40%)]" />
+    <div className="absolute left-1/2 top-[47%] h-[66%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-[18%/8%] border" style={{ background:`linear-gradient(90deg,${mixHex(productColor,'#000000',.15)},${mixHex(productColor,'#FFFFFF',.52)} 22%,${productColor} 52%,${mixHex(productColor,'#000000',.18)})`, boxShadow:shadow }}>
+      <div className="absolute inset-x-[-2%] top-[-2%] h-[7%] rounded-full border bg-[#C9C9C9] shadow-inner" />
+      <div className="absolute inset-x-[-2%] bottom-[-2%] h-[7%] rounded-full border bg-[#C7C7C7] shadow-inner" />
+      <div className="absolute inset-x-[8%] top-[24%] bottom-[18%] rounded-xl bg-white/92 border" />
+      {artLayer(false, 'sm', 'absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 scale-[.72]')}
+      <div className="absolute left-[12%] top-[8%] h-[78%] w-[7%] rounded-full bg-white/28" />
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'box') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute left-1/2 top-[48%] h-[58%] w-[62%] -translate-x-1/2 -translate-y-1/2" style={{ perspective:'900px' }}>
+      <div className="absolute inset-[6%] rounded-[8px] border" style={{ background:productColor, boxShadow:shadow, transform:'rotateY(-16deg) rotateX(4deg)', transformStyle:'preserve-3d' }}>
+        <div className="absolute inset-y-0 right-[-18%] w-[18%] origin-left border" style={{ background:mixHex(productColor,'#000000',.12), transform:'rotateY(82deg)' }} />
+        <div className="absolute inset-x-0 top-[-18%] h-[18%] origin-bottom border" style={{ background:mixHex(productColor,'#FFFFFF',.18), transform:'rotateX(82deg)' }} />
+        <div className="absolute left-[10%] right-[10%] top-[20%] bottom-[20%] rounded-xl bg-white/88 border shadow-sm" />
+        {artLayer(false, 'sm', 'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-[.82]')}
+      </div>
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'phone') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute left-1/2 top-[48%] h-[70%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border-[5px] border-black bg-black" style={{ boxShadow:shadow, transform:`translate(-50%,-50%) rotate(${angle}deg)` }}>
+      <div className="absolute inset-[4px] rounded-[21px] overflow-hidden" style={{ background:`linear-gradient(150deg,${mixHex(primary,'#FFFFFF',.82)},${mixHex(support,'#FFFFFF',.7)})` }}>
+        <div className="absolute inset-x-4 top-5">{artLayer(false,'sm')}</div>
+        <div className="absolute left-4 right-4 top-[42%] rounded-2xl bg-white/88 p-3 shadow-lg"><div className="h-3 w-2/3 rounded-full" style={{ background:primary }}/><div className="mt-2 h-2 w-full rounded bg-black/10"/><div className="mt-1 h-2 w-4/5 rounded bg-black/10"/></div>
+      </div>
+      <div className="absolute left-1/2 top-[3px] h-3 w-12 -translate-x-1/2 rounded-b-xl bg-black" />
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'book') return <div className={cardBase} style={{ background: sceneBackground }}>
+    <div className="absolute left-[20%] right-[17%] top-[12%] bottom-[16%]" style={{ perspective:'900px' }}>
+      <div className="absolute inset-0 rounded-r-[12px] border" style={{ background:productColor, boxShadow:shadow, transform:'rotateY(-14deg) rotateZ(-2deg)', transformOrigin:'left center' }}>
+        <div className="absolute left-0 top-0 bottom-0 w-4 bg-black/8 border-r" />
+        <div className="absolute inset-x-[10%] top-[16%] bottom-[18%] rounded-xl bg-white/84 border" />
+        {artLayer(false,'sm','absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 scale-[.8]')}
+        <div className="absolute left-[12%] right-[12%] bottom-[12%] h-2 rounded-full" style={{ background:primary }} />
+      </div>
     </div>
     {label}
   </div>;
@@ -648,8 +756,16 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
 
         {tab === 'applications' && <>
           <div className="rounded-2xl border bg-white p-4"><b className="flex items-center gap-2"><ImageIcon size={15} /> Mockups e pontos de contato</b><p className="mt-1 text-[10px] text-neutral-500">A mesma marca, paleta e tipografia são aplicadas automaticamente em peças físicas e digitais. Use os mockups para testar escala, contraste e consistência.</p></div>
-          <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-2">{draft.applications.map((app) => <div key={app.id} className="rounded-xl border bg-white p-2"><ApplicationPreview document={draft} app={app} /><div className="mt-2 grid grid-cols-[1fr_auto] gap-2"><select value={app.type} onChange={(e)=>patch({applications:draft.applications.map((a)=>a.id===app.id?{...a,type:e.target.value as VisualIdentityApplication['type'],title:APPLICATION_TYPES.find(x=>x.id===e.target.value)?.label||a.title}:a)})} className="h-8 min-w-0 rounded-lg border px-2 text-[9px]">{APPLICATION_TYPES.map(type=><option key={type.id} value={type.id}>{type.label}</option>)}</select><button disabled={draft.applications.length<=1} onClick={()=>patch({applications:draft.applications.filter(a=>a.id!==app.id)})} className="h-8 w-8 rounded-lg border text-red-600 disabled:opacity-20"><Trash2 size={13} className="mx-auto"/></button></div><input value={app.title} onChange={(e) => patch({ applications: draft.applications.map((a) => a.id === app.id ? { ...a, title: e.target.value } : a) })} className="mt-2 h-8 w-full rounded-lg border px-2 text-[10px]" /></div>)}</div>
-          <button onClick={() => patch({ applications: [...draft.applications, { id: uid('app'), type: 'tshirt', title: 'Nova aplicação' }] })} className="h-10 w-full rounded-xl border border-dashed bg-white text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14} /> NOVA APLICAÇÃO</button>
+          <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-3">{draft.applications.map((app) => {
+            const updateApplication = (next: Partial<VisualIdentityApplication>) => patch({ applications: draft.applications.map((a) => a.id === app.id ? { ...a, ...next } : a) });
+            return <div key={app.id} className="rounded-2xl border bg-white p-2.5 shadow-sm"><ApplicationPreview document={draft} app={app} /><div className="mt-2 grid grid-cols-[1fr_auto] gap-2"><select value={app.type} onChange={(e)=>updateApplication({ type:e.target.value as VisualIdentityApplication['type'], title:APPLICATION_TYPES.find(x=>x.id===e.target.value)?.label||app.title })} className="h-8 min-w-0 rounded-lg border px-2 text-[9px]">{APPLICATION_TYPES.map(type=><option key={type.id} value={type.id}>{type.label}</option>)}</select><button disabled={draft.applications.length<=1} onClick={()=>patch({applications:draft.applications.filter(a=>a.id!==app.id)})} className="h-8 w-8 rounded-lg border text-red-600 disabled:opacity-20"><Trash2 size={13} className="mx-auto"/></button></div><input value={app.title} onChange={(e) => updateApplication({ title:e.target.value })} className="mt-2 h-8 w-full rounded-lg border px-2 text-[10px]" />
+            <div className="mt-2 rounded-xl bg-neutral-50 p-2 space-y-2">
+              <div className="grid grid-cols-3 gap-1.5"><label className="text-[8px] font-mono text-neutral-500">PRODUTO<input type="color" value={app.productColor || '#F4F2ED'} onChange={(e)=>updateApplication({productColor:e.target.value})} className="mt-1 h-8 w-full rounded-md border bg-white p-1"/></label><label className="text-[8px] font-mono text-neutral-500">CENA<select value={app.scene || 'studio'} onChange={(e)=>updateApplication({scene:e.target.value as VisualIdentityApplication['scene']})} className="mt-1 h-8 w-full rounded-md border bg-white px-1 text-[9px]"><option value="studio">Estúdio</option><option value="warm">Quente</option><option value="dark">Escura</option><option value="paper">Papel</option></select></label><label className="text-[8px] font-mono text-neutral-500">MATERIAL<select value={app.material || 'matte'} onChange={(e)=>updateApplication({material:e.target.value as VisualIdentityApplication['material']})} className="mt-1 h-8 w-full rounded-md border bg-white px-1 text-[9px]"><option value="matte">Fosco</option><option value="glossy">Brilho</option><option value="fabric">Tecido</option><option value="kraft">Kraft</option></select></label></div>
+              <label className="block text-[8px] font-mono text-neutral-500">ESCALA DA MARCA <span className="float-right">{Math.round((app.artworkScale ?? 1)*100)}%</span><input type="range" min="0.45" max="1.55" step="0.05" value={app.artworkScale ?? 1} onChange={(e)=>updateApplication({artworkScale:Number(e.target.value)})} className="mt-1 w-full"/></label>
+              <div className="grid grid-cols-3 gap-2"><label className="block text-[8px] font-mono text-neutral-500">POSIÇÃO X<input type="range" min="-40" max="40" step="1" value={app.artworkX ?? 0} onChange={(e)=>updateApplication({artworkX:Number(e.target.value)})} className="mt-1 w-full"/></label><label className="block text-[8px] font-mono text-neutral-500">POSIÇÃO Y<input type="range" min="-40" max="40" step="1" value={app.artworkY ?? 0} onChange={(e)=>updateApplication({artworkY:Number(e.target.value)})} className="mt-1 w-full"/></label><label className="block text-[8px] font-mono text-neutral-500">ROTAÇÃO<input type="range" min="-18" max="18" step="1" value={app.angle ?? 0} onChange={(e)=>updateApplication({angle:Number(e.target.value)})} className="mt-1 w-full"/></label></div>
+            </div>
+          </div>})}</div>
+          <button onClick={() => patch({ applications: [...draft.applications, { id: uid('app'), type: 'tshirt', title: 'Nova aplicação', productColor:'#F7F7F4', scene:'studio', material:'fabric', artworkScale:1 }] })} className="h-10 w-full rounded-xl border border-dashed bg-white text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14} /> NOVA APLICAÇÃO</button>
         </>}
 
         {tab === 'manual' && <>
