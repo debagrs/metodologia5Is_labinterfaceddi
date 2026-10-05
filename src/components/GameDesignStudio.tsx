@@ -1,5 +1,4 @@
 import { StudioWorkspace } from './StudioWorkspace';
-import StudioAreaGuide from './StudioAreaGuide';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ChevronRight, Clock3, FileText, Gamepad2, Info, Link2, Pause, Play, Plus,
@@ -82,7 +81,7 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
   const scene = useMemo(() => draft.scenes.find((item) => item.id === selectedSceneId) || draft.scenes[0], [draft.scenes, selectedSceneId]);
   const playScene = draft.scenes.find((item) => item.id === playSceneId) || draft.scenes[0];
   const production = draft.jam!;
-  const spriteAssets = availableAssets.filter((asset) => asset.type === 'sprite-character');
+  const spriteAssets = availableAssets.filter((asset) => asset.type === 'sprite-character' || /(?:sprite|character|personagem)/i.test(asset.type || ''));
   const sceneSprites = spriteAssets.filter((asset) => scene?.spriteIds?.includes(asset.id));
   const currentAction = playScene?.actions?.[playActionIndex];
 
@@ -90,11 +89,49 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
   const addScene = () => { const next: GameScene = { id: id('scene'), name: `Fase ${draft.scenes.length}`, type: 'level', objective: 'Novo objetivo', mechanics: ['toque'], background: '#FFFFFF', spriteIds: [], script: '', actions: [] }; setDraft((current) => ({ ...current, scenes: [...current.scenes, next] })); setSelectedSceneId(next.id); setPlaySceneId(next.id); setPlayActionIndex(-1); };
   const patchProduction = (patch: any) => setDraft((current) => ({ ...current, jam: { ...current.jam!, ...patch } }));
   const toggleSceneSprite = (assetId: string) => { if (!scene) return; const ids = scene.spriteIds || []; const active = ids.includes(assetId); patchScene({ spriteIds: active ? ids.filter((item) => item !== assetId) : [...ids, assetId], actions: active ? (scene.actions || []).filter((action) => action.spriteId !== assetId) : scene.actions }); };
+  const addActionToScene = (sceneId: string, spriteId: string, x?: number, y?: number) => {
+    const assetIndex = Math.max(0, spriteAssets.findIndex((asset) => asset.id === spriteId));
+    setDraft((current) => ({
+      ...current,
+      scenes: current.scenes.map((target) => {
+        if (target.id !== sceneId) return target;
+        const next: GameCharacterAction = {
+          id: id('action'),
+          spriteId,
+          verb: 'entrar',
+          text: '',
+          x: Math.max(5, Math.min(95, x ?? (20 + (assetIndex % 4) * 20))),
+          y: Math.max(20, Math.min(92, y ?? 70)),
+          durationMs: 900,
+        };
+        return {
+          ...target,
+          spriteIds: target.spriteIds?.includes(spriteId) ? target.spriteIds : [...(target.spriteIds || []), spriteId],
+          actions: [...(target.actions || []), next],
+        };
+      }),
+    }));
+  };
   const addAction = (spriteId: string) => {
     if (!scene) return;
-    const assetIndex = Math.max(0, spriteAssets.findIndex((asset) => asset.id === spriteId));
-    const next: GameCharacterAction = { id: id('action'), spriteId, verb: 'entrar', text: '', x: 20 + (assetIndex % 4) * 20, y: 70, durationMs: 900 };
-    patchScene({ spriteIds: scene.spriteIds?.includes(spriteId) ? scene.spriteIds : [...(scene.spriteIds || []), spriteId], actions: [...(scene.actions || []), next] });
+    addActionToScene(scene.id, spriteId);
+  };
+  const dragCharacter = (event: React.DragEvent, spriteId: string) => {
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData('application/x-5is-game-character', spriteId);
+    event.dataTransfer.setData('text/plain', spriteId);
+  };
+  const dropCharacterOnScene = (event: React.DragEvent<HTMLDivElement>, targetSceneId: string) => {
+    event.preventDefault();
+    const spriteId = event.dataTransfer.getData('application/x-5is-game-character') || event.dataTransfer.getData('text/plain');
+    if (!spriteId || !spriteAssets.some((asset) => asset.id === spriteId)) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / Math.max(1, rect.width)) * 100;
+    const y = ((event.clientY - rect.top) / Math.max(1, rect.height)) * 100;
+    setSelectedSceneId(targetSceneId);
+    setPlaySceneId(targetSceneId);
+    setPlayActionIndex(-1);
+    addActionToScene(targetSceneId, spriteId, x, y);
   };
   const patchAction = (actionId: string, patch: Partial<GameCharacterAction>) => patchScene({ actions: (scene?.actions || []).map((action) => action.id === actionId ? { ...action, ...patch } : action) });
   const removeAction = (actionId: string) => patchScene({ actions: (scene?.actions || []).filter((action) => action.id !== actionId) });
@@ -127,7 +164,6 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
     <header className="shrink-0 min-h-16 bg-white border-b px-3 sm:px-5 flex items-center gap-3" style={{ paddingTop: 'max(.35rem, env(safe-area-inset-top))' }}>
       <button onClick={onClose} className="h-11 w-11 rounded-xl flex items-center justify-center"><X size={19} /></button>
       <div className="min-w-0 flex-1"><b className="block truncate">{title}</b><div className="text-[10px] font-mono text-neutral-500 uppercase">GDD · roteiro · personagens · ações · playtest · produção</div></div>
-      <StudioAreaGuide area="game-design" />
       <button disabled={!canEdit} onClick={() => onSave({ ...draft, updatedAt: new Date().toISOString() })} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15} /> SALVAR</button>
     </header>
 
@@ -144,7 +180,7 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
         <div className="grid grid-cols-1 gap-2"><label className="text-[9px] font-mono">CENA<select value={scene?.id || ''} onChange={(e) => { setSelectedSceneId(e.target.value); resetPreview(e.target.value); }} className="mt-1 h-11 w-full rounded-xl border px-3">{draft.scenes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div>
         {scene && <>
           <label className="block text-[9px] font-mono">ROTEIRO DA CENA<textarea value={scene.script || ''} onChange={(e) => patchScene({ script: e.target.value })} className="mt-1 min-h-32 w-full rounded-xl border p-3 text-sm" placeholder="Ex.: Lia entra pela esquerda. A árvore fala. Lia coleta a fruta e caminha até a saída." /></label>
-          <div className="rounded-2xl border bg-white p-4"><div className="flex items-start justify-between gap-2"><div><b className="text-sm">Puxar personagem para a ação</b><p className="mt-1 text-[10px] text-neutral-500">Toque em um personagem para criar uma ação. Depois defina verbo, fala e posição como num editor de eventos.</p></div><Info size={16} className="text-neutral-400" /></div><div className="mt-3 grid grid-cols-2 gap-2">{spriteAssets.map((asset) => <button key={asset.id} onClick={() => addAction(asset.id)} className="rounded-xl border bg-white overflow-hidden text-left"><div className="h-24 bg-neutral-100 flex items-center justify-center">{asset.url ? <img src={asset.url} alt="" className="h-full w-full object-contain" /> : <Gamepad2 className="text-neutral-300" />}</div><div className="p-2 text-[9px] font-bold flex items-center justify-between gap-1"><span className="truncate">{asset.name}</span><Plus size={12} /></div></button>)}{!spriteAssets.length && <div className="col-span-2 rounded-xl border border-dashed p-4 text-[10px] text-neutral-400">Crie personagens em PERSONAGENS. Eles aparecerão automaticamente aqui.</div>}</div></div>
+          <div className="rounded-2xl border bg-white p-4"><div className="flex items-start justify-between gap-2"><div><b className="text-sm">Puxar personagem para a ação</b><p className="mt-1 text-[10px] text-neutral-500">Toque em um personagem para criar uma ação. Depois defina verbo, fala e posição como num editor de eventos.</p></div><Info size={16} className="text-neutral-400" /></div><div className="mt-3 grid grid-cols-2 gap-2">{spriteAssets.map((asset) => <button key={asset.id} draggable onDragStart={(event) => dragCharacter(event, asset.id)} onClick={() => addAction(asset.id)} className="rounded-xl border bg-white overflow-hidden text-left cursor-grab active:cursor-grabbing"><div className="h-24 bg-neutral-100 flex items-center justify-center">{asset.url ? <img src={asset.url} alt="" className="h-full w-full object-contain" /> : <Gamepad2 className="text-neutral-300" />}</div><div className="p-2 text-[9px] font-bold flex items-center justify-between gap-1"><span className="truncate">{asset.name}</span><Plus size={12} /></div><div className="px-2 pb-2 text-[8px] text-neutral-400">CLIQUE ou ARRASTE PARA A CENA</div></button>)}{!spriteAssets.length && <div className="col-span-2 rounded-xl border border-dashed p-4 text-[10px] text-neutral-500"><b>Nenhum personagem sincronizado.</b><div className="mt-1">Salve o personagem em PERSONAGENS. Personagens antigos com payload de sprite também são reconhecidos automaticamente.</div></div>}</div></div>
           <div className="space-y-3">{(scene.actions || []).map((action, index) => { const asset = spriteAssets.find((item) => item.id === action.spriteId); return <div key={action.id} className="rounded-2xl border bg-white p-3"><div className="flex items-center gap-2"><span className="h-6 w-6 rounded-full bg-black text-white text-[9px] flex items-center justify-center shrink-0">{index + 1}</span><b className="min-w-0 flex-1 truncate text-xs">{asset?.name || 'Personagem'}</b><button onClick={() => removeAction(action.id)} className="h-8 w-8 rounded-lg text-red-600 flex items-center justify-center"><Trash2 size={14} /></button></div><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-[8px] font-mono">AÇÃO<select value={action.verb} onChange={(e) => patchAction(action.id, { verb: e.target.value as GameActionVerb })} className="mt-1 h-9 w-full rounded-lg border px-2 text-xs">{ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label className="text-[8px] font-mono">DURAÇÃO<input type="number" min={100} step={100} value={action.durationMs || 900} onChange={(e) => patchAction(action.id, { durationMs: Number(e.target.value) })} className="mt-1 h-9 w-full rounded-lg border px-2 text-xs" /></label></div>{(action.verb === 'falar' || action.verb === 'coletar') && <input value={action.text || ''} onChange={(e) => patchAction(action.id, { text: e.target.value })} placeholder={action.verb === 'falar' ? 'Fala / balão de diálogo' : 'Objeto ou feedback da coleta'} className="mt-2 h-9 w-full rounded-lg border px-2 text-xs" />}<div className="mt-3 grid grid-cols-2 gap-2"><label className="text-[8px] font-mono">X · {Math.round(action.x ?? 50)}<input type="range" min={5} max={95} value={action.x ?? 50} onChange={(e) => patchAction(action.id, { x: Number(e.target.value) })} className="w-full" /></label><label className="text-[8px] font-mono">Y · {Math.round(action.y ?? 70)}<input type="range" min={25} max={92} value={action.y ?? 70} onChange={(e) => patchAction(action.id, { y: Number(e.target.value) })} className="w-full" /></label></div></div>; })}</div>
         </>}
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-[10px] text-emerald-950"><b>Motor gratuito recomendado:</b> o preview desta ferramenta roda localmente, sem API. Para implementação web 2D, use Phaser (MIT, gratuito). PixiJS também é excelente quando o foco é renderização 2D; Matter.js é uma opção gratuita para física. Escolha abaixo o alvo de produção, sem adicionar custo ou função serverless.</div>
@@ -166,7 +202,7 @@ export default function GameDesignStudio({ document, title = 'Game Design', canE
     </div>}>
       <section className="max-w-7xl mx-auto rounded-2xl bg-[#111] text-white p-4 sm:p-5 w-full">
         <div className="flex flex-wrap justify-between gap-3"><div><b className="flex gap-2"><Play size={16} /> Preview jogável · estilo Construct</b><div className="text-[10px] text-white/50 mt-1">Sem API externa: teste cena, posição, personagem, fala e sequência de ações diretamente no navegador.</div></div><div className="flex gap-2"><button onClick={() => resetPreview(playScene?.id || draft.scenes[0]?.id || '')} className="h-10 w-10 bg-white text-black rounded-xl flex items-center justify-center"><RotateCcw size={15} /></button><button onClick={() => setPlaying((value) => !value)} className="h-10 px-4 bg-white text-black rounded-xl text-[10px] font-bold flex items-center gap-2">{playing ? <Pause size={14} /> : <Play size={14} />}{playing ? 'PAUSAR' : 'RODAR'}</button></div></div>
-        {playScene && <div className="mt-4 rounded-2xl overflow-hidden border border-white/20"><div className="h-9 bg-[#252525] border-b border-white/10 px-3 flex items-center gap-2 overflow-x-auto">{draft.scenes.map((item) => <button key={item.id} onClick={() => resetPreview(item.id)} className={`h-6 px-2 rounded-md text-[8px] shrink-0 ${playScene.id === item.id ? 'bg-white text-black' : 'bg-white/10'}`}>{item.name}</button>)}</div><div className="relative min-h-[330px] overflow-hidden" style={{ backgroundColor: playScene.background, backgroundImage: 'linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px)', backgroundSize: '32px 32px' }}><div className="absolute left-3 top-3 rounded-lg bg-black/60 px-3 py-2 text-left"><div className="text-[8px] font-mono opacity-60">{SCENE_TYPES.find((type) => type.id === playScene.type)?.label}</div><b className="text-sm">{playScene.name}</b><div className="text-[9px] opacity-65 max-w-64">{playScene.objective}</div></div>{spriteAssets.filter((asset) => playScene.spriteIds?.includes(asset.id)).map(renderSprite)}{!playScene.spriteIds?.length && <div className="absolute inset-0 flex items-center justify-center text-center p-6"><div><Gamepad2 className="mx-auto opacity-25" size={48} /><div className="mt-2 text-sm opacity-50">Puxe personagens para esta cena.</div></div></div>}<div className="absolute left-3 right-3 bottom-3 rounded-xl bg-black/65 p-3 backdrop-blur-sm"><div className="text-[8px] font-mono opacity-50">EVENTO {Math.max(0, playActionIndex + 1)} / {playScene.actions?.length || 0}</div><div className="mt-1 min-h-5 text-xs">{currentAction ? `${spriteAssets.find((a) => a.id === currentAction.spriteId)?.name || 'Personagem'} · ${ACTIONS.find((a) => a.id === currentAction.verb)?.label}${currentAction.text ? ` — ${currentAction.text}` : ''}` : 'Pronto para iniciar a sequência.'}</div></div></div><div className="bg-[#1D1D1D] p-3 flex items-center justify-between gap-3"><div className="text-[9px] text-white/50 truncate">{playScene.script || 'Sem roteiro de cena.'}</div>{playScene.nextSceneId && <button onClick={nextScene} className="h-9 px-3 rounded-xl border border-white/30 text-[9px] shrink-0">PRÓXIMA CENA</button>}</div></div>}
+        {playScene && <div className="mt-4 rounded-2xl overflow-hidden border border-white/20"><div className="h-9 bg-[#252525] border-b border-white/10 px-3 flex items-center gap-2 overflow-x-auto">{draft.scenes.map((item) => <button key={item.id} onClick={() => resetPreview(item.id)} className={`h-6 px-2 rounded-md text-[8px] shrink-0 ${playScene.id === item.id ? 'bg-white text-black' : 'bg-white/10'}`}>{item.name}</button>)}</div><div className="relative min-h-[330px] overflow-hidden" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; }} onDrop={(event) => dropCharacterOnScene(event, playScene.id)} style={{ backgroundColor: playScene.background, backgroundImage: 'linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px)', backgroundSize: '32px 32px' }}><div className="absolute left-3 top-3 rounded-lg bg-black/60 px-3 py-2 text-left"><div className="text-[8px] font-mono opacity-60">{SCENE_TYPES.find((type) => type.id === playScene.type)?.label}</div><b className="text-sm">{playScene.name}</b><div className="text-[9px] opacity-65 max-w-64">{playScene.objective}</div></div>{spriteAssets.filter((asset) => playScene.spriteIds?.includes(asset.id)).map(renderSprite)}{!playScene.spriteIds?.length && <div className="absolute inset-0 flex items-center justify-center text-center p-6"><div><Gamepad2 className="mx-auto opacity-25" size={48} /><div className="mt-2 text-sm opacity-50">Arraste um personagem da coluna de ferramentas para qualquer ponto desta cena.</div><div className="mt-1 text-[9px] opacity-35">Ou clique no personagem para criar a ação automaticamente.</div></div></div>}<div className="absolute left-3 right-3 bottom-3 rounded-xl bg-black/65 p-3 backdrop-blur-sm"><div className="text-[8px] font-mono opacity-50">EVENTO {Math.max(0, playActionIndex + 1)} / {playScene.actions?.length || 0}</div><div className="mt-1 min-h-5 text-xs">{currentAction ? `${spriteAssets.find((a) => a.id === currentAction.spriteId)?.name || 'Personagem'} · ${ACTIONS.find((a) => a.id === currentAction.verb)?.label}${currentAction.text ? ` — ${currentAction.text}` : ''}` : 'Pronto para iniciar a sequência.'}</div></div></div><div className="bg-[#1D1D1D] p-3 flex items-center justify-between gap-3"><div className="text-[9px] text-white/50 truncate">{playScene.script || 'Sem roteiro de cena.'}</div>{playScene.nextSceneId && <button onClick={nextScene} className="h-9 px-3 rounded-xl border border-white/30 text-[9px] shrink-0">PRÓXIMA CENA</button>}</div></div>}
       </section>
     </StudioWorkspace>
   </div>;
