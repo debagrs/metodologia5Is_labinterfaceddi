@@ -160,8 +160,21 @@ const FEET: Option<CharacterFootStyle>[] = [
   { id: 'feet', label: 'Pés' }, { id: 'paws', label: 'Patas' }, { id: 'hooves', label: 'Cascos' }, { id: 'claws', label: 'Garras' }, { id: 'talons', label: 'Talões' }, { id: 'fins', label: 'Nadadeiras' },
 ];
 const BODY_SHAPES = [
-  { id: 'slim', label: 'Esguio' }, { id: 'average', label: 'Equilibrado' }, { id: 'athletic', label: 'Atlético' }, { id: 'stocky', label: 'Robusto' }, { id: 'chibi', label: 'Chibi / compacto' },
+  { id: 'very-slim', label: 'Bem magrinho' }, { id: 'slim', label: 'Esguio' }, { id: 'average', label: 'Equilibrado' }, { id: 'athletic', label: 'Atlético' }, { id: 'stocky', label: 'Robusto' }, { id: 'plus-size', label: 'Mais corpulento' }, { id: 'chibi', label: 'Chibi / compacto' },
 ] as Option<CharacterAppearance['bodyShape']>[];
+const STATURES = [
+  { id: 'very-short', label: 'Anão / muito baixo' }, { id: 'short', label: 'Baixo' }, { id: 'average', label: 'Médio' }, { id: 'tall', label: 'Alto' }, { id: 'giant', label: 'Gigante' },
+] as Option<NonNullable<CharacterAppearance['stature']>>[];
+const REPRESENTATION_PROFILES = [
+  { id: 'none', label: 'Sem preset' },
+  { id: 'down-syndrome', label: 'Representação de síndrome de Down' },
+] as Option<NonNullable<CharacterAppearance['representationProfile']>>[];
+const MOBILITY_AIDS = [
+  { id: 'none', label: 'Nenhum' }, { id: 'wheelchair', label: 'Cadeirante' }, { id: 'crutch', label: 'Muleta' }, { id: 'prosthesis-leg', label: 'Prótese na perna' },
+] as Option<NonNullable<CharacterAppearance['mobilityAid']>>[];
+const VISION_AIDS = [
+  { id: 'none', label: 'Nenhum' }, { id: 'cane', label: 'Bengala' }, { id: 'dark-glasses', label: 'Óculos escuros' },
+] as Option<NonNullable<CharacterAppearance['visionAid']>>[];
 const TORSOS = [
   { id: 'rectangle', label: 'Retângulo' }, { id: 'trapezoid', label: 'Trapézio' }, { id: 'round', label: 'Redondo' }, { id: 'triangle', label: 'Triângulo' },
 ] as Option<CharacterAppearance['torsoShape']>[];
@@ -231,6 +244,10 @@ const DEFAULT_APPEARANCE: CharacterAppearance = {
   outfitStyle: 'casual',
   accessory: 'none',
   accessories: [],
+  stature: 'average',
+  representationProfile: 'none',
+  mobilityAid: 'none',
+  visionAid: 'none',
 
   // Proporções adultas e menos masculinizadas que o antigo estado zero.
   headToBodyRatio: 5.6,
@@ -604,6 +621,48 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
     });
   };
 
+  const applyStature = (stature: NonNullable<CharacterAppearance['stature']>) => {
+    const presets: Record<NonNullable<CharacterAppearance['stature']>, Partial<CharacterAppearance>> = {
+      'very-short': { stature, limbLength: 0.72, headToBodyRatio: 4.3, legStyle: 'short' },
+      short: { stature, limbLength: 0.84, headToBodyRatio: 4.8, legStyle: 'short' },
+      average: { stature, limbLength: 1.03, headToBodyRatio: 5.6, legStyle: 'regular' },
+      tall: { stature, limbLength: 1.18, headToBodyRatio: 6.2, legStyle: 'long' },
+      giant: { stature, limbLength: 1.34, headToBodyRatio: 6.8, legStyle: 'long', bodyWidth: Math.max(appearance.bodyWidth || 1, 1.04) },
+    };
+    patchAppearance(presets[stature]);
+  };
+
+  const applyRepresentationProfile = (profile: NonNullable<CharacterAppearance['representationProfile']>) => {
+    if (profile === 'down-syndrome') {
+      patchAppearance({
+        representationProfile: profile,
+        species: 'human',
+        bodyPlan: 'biped',
+        speciesPreset: 'human',
+        headShape: 'round',
+        faceShape: 'soft',
+        eyeStyle: 'upturned',
+        noseStyle: 'small',
+        mouthStyle: 'full',
+        earStyle: 'simple',
+        bodyShape: appearance.bodyShape === 'very-slim' ? 'average' : appearance.bodyShape,
+      });
+      return;
+    }
+    patchAppearance({ representationProfile: 'none' });
+  };
+
+  const applyMobilityAid = (mobilityAid: NonNullable<CharacterAppearance['mobilityAid']>) => {
+    patchAppearance({ mobilityAid });
+    if (mobilityAid === 'wheelchair') {
+      setDraft((current) => ({ ...current, activePose: 'sit' }));
+    }
+  };
+
+  const applyVisionAid = (visionAid: NonNullable<CharacterAppearance['visionAid']>) => {
+    patchAppearance({ visionAid, accessory: visionAid === 'dark-glasses' ? 'glasses' : appearance.accessory });
+  };
+
   const addAnimation = (kind: SpriteAnimationKind) => {
     const next = blankAnimation(kind);
     setDraft((current) => ({ ...current, animations: [...current.animations, next], activeAnimationId: next.id }));
@@ -741,7 +800,7 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
 
 </>}{builderSection === 'face' && <>          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between"><b className="text-lg">Cabeça e rosto</b><span className="text-[9px] font-mono text-neutral-400">FORMA ≠ PERSONALIDADE</span></div><div className="mt-3 rounded-xl bg-neutral-50 p-3 text-[11px] text-neutral-600">Use <b>matrizes de traços</b> apenas como ponto de partida visual. Depois refine livremente cabelo, olhos, nariz, boca e pele para construir diversidade real sem estereótipos rígidos.</div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Matriz de traços" value={appearance.featureProfile || 'neutral'} options={FEATURE_PROFILES} onChange={applyFeatureProfile} tip="Presets inclusivos para iniciar personagens negros, indígenas, aborígenes, orientais, indianos, latinos, europeus e mistos. Tudo permanece totalmente editável."/><SelectField label="Cabeça" value={appearance.headShape} options={HEADS} onChange={(value) => patchAppearance({ headShape: value })}/><SelectField label="Rosto" value={appearance.faceShape} options={FACES} onChange={(value) => patchAppearance({ faceShape: value })}/><SelectField label="Olhos" value={appearance.eyeStyle} options={EYES} onChange={(value) => patchAppearance({ eyeStyle: value })}/><SelectField label="Sobrancelha" value={appearance.browStyle} options={BROWS} onChange={(value) => patchAppearance({ browStyle: value })} tip="Pode ser nenhuma. Em animais, sobrancelha anatômica muitas vezes não faz sentido; a expressão pode vir de pálpebras, orelhas, postura e focinho."/><SelectField label="Nariz" value={appearance.noseStyle} options={NOSES} onChange={(value) => patchAppearance({ noseStyle: value })}/><SelectField label="Boca" value={appearance.mouthStyle} options={MOUTHS} onChange={(value) => patchAppearance({ mouthStyle: value })}/><SelectField label="Orelha" value={appearance.earStyle} options={EARS} onChange={(value) => patchAppearance({ earStyle: value })}/><SelectField label="Cabelo" value={appearance.hairStyle} options={HAIR} onChange={(value) => patchAppearance({ hairStyle: value })}/><SelectField label="Focinho / bico" value={appearance.muzzleStyle || 'none'} options={MUZZLES} onChange={(value) => patchAppearance({ muzzleStyle: value })}/><label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">Bigodes <InfoTip>Bigodes podem ser um traço anatômico ou estilização. Em felinos e roedores ajudam a reconhecer a espécie.</InfoTip></span><button type="button" onClick={() => patchAppearance({ whiskers: !appearance.whiskers })} className={`mt-1 h-11 w-full rounded-xl border text-sm ${appearance.whiskers ? 'bg-black text-white' : 'bg-white'}`}>{appearance.whiskers ? 'SIM' : 'NÃO'}</button></label></div></div>
 
-{refinementSliders('face')}</>}{builderSection === 'body' && <>          <div className="rounded-2xl border p-4"><b className="text-lg">Corpo e proporção</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Corpo" value={appearance.bodyShape} options={BODY_SHAPES} onChange={(value) => patchAppearance({ bodyShape: value })}/><SelectField label="Torso" value={appearance.torsoShape} options={TORSOS} onChange={(value) => patchAppearance({ torsoShape: value })}/><SelectField label="Braços" value={appearance.armStyle} options={ARMS} onChange={(value) => patchAppearance({ armStyle: value })}/><SelectField label="Pernas" value={appearance.legStyle} options={LEGS} onChange={(value) => patchAppearance({ legStyle: value })}/><SelectField label="Mãos" value={appearance.handStyle} options={HANDS} onChange={(value) => patchAppearance({ handStyle: value })}/><SelectField label="Pés / patas" value={appearance.footStyle || 'feet'} options={FEET} onChange={(value) => patchAppearance({ footStyle: value })}/></div><div className="mt-3 grid gap-2"><RangeField label="Proporção cabeça × corpo" value={appearance.headToBodyRatio} min={2.8} max={7} step={.1} onChange={(value) => patchAppearance({ headToBodyRatio: value })} tip="Números menores aumentam a cabeça em relação ao corpo. É uma convenção de estilização, não um indicador de idade ou personalidade por si só."/><RangeField label="Largura corporal" value={appearance.bodyWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ bodyWidth: value })}/><RangeField label="Ombros" value={appearance.shoulderWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ shoulderWidth: value })}/><RangeField label="Comprimento dos membros" value={appearance.limbLength} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ limbLength: value })}/></div></div>
+{refinementSliders('face')}</>}{builderSection === 'body' && <>          <div className="rounded-2xl border p-4"><b className="text-lg">Corpo e proporção</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Corpo" value={appearance.bodyShape} options={BODY_SHAPES} onChange={(value) => patchAppearance({ bodyShape: value })}/><SelectField label="Estatura" value={appearance.stature || 'average'} options={STATURES} onChange={applyStature}/><SelectField label="Torso" value={appearance.torsoShape} options={TORSOS} onChange={(value) => patchAppearance({ torsoShape: value })}/><SelectField label="Braços" value={appearance.armStyle} options={ARMS} onChange={(value) => patchAppearance({ armStyle: value })}/><SelectField label="Pernas" value={appearance.legStyle} options={LEGS} onChange={(value) => patchAppearance({ legStyle: value })}/><SelectField label="Mãos" value={appearance.handStyle} options={HANDS} onChange={(value) => patchAppearance({ handStyle: value })}/><SelectField label="Pés / patas" value={appearance.footStyle || 'feet'} options={FEET} onChange={(value) => patchAppearance({ footStyle: value })}/><SelectField label="Perfil inclusivo" value={appearance.representationProfile || 'none'} options={REPRESENTATION_PROFILES} onChange={applyRepresentationProfile} tip="Use como ponto de partida e depois refine livremente. A ideia é ampliar repertórios, não padronizar corpos."/><SelectField label="Apoio de mobilidade" value={appearance.mobilityAid || 'none'} options={MOBILITY_AIDS} onChange={applyMobilityAid}/><SelectField label="Apoio visual" value={appearance.visionAid || 'none'} options={VISION_AIDS} onChange={applyVisionAid}/></div><div className="mt-3 rounded-2xl bg-neutral-50 p-3 text-[11px] text-neutral-600"><b>Diversidade corporal e acessibilidade</b><div className="mt-1">Agora você pode combinar corpos bem magrinhos ou corpulentos, diferentes estaturas, cadeira de rodas, muleta, bengala e um preset inicial para síndrome de Down. Tudo continua editável para evitar personagens estereotipados.</div></div><div className="mt-3 grid gap-2"><RangeField label="Proporção cabeça × corpo" value={appearance.headToBodyRatio} min={2.8} max={7} step={.1} onChange={(value) => patchAppearance({ headToBodyRatio: value })} tip="Números menores aumentam a cabeça em relação ao corpo. É uma convenção de estilização, não um indicador de idade ou personalidade por si só."/><RangeField label="Largura corporal" value={appearance.bodyWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ bodyWidth: value })}/><RangeField label="Ombros" value={appearance.shoulderWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ shoulderWidth: value })}/><RangeField label="Comprimento dos membros" value={appearance.limbLength} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ limbLength: value })}/></div></div>
 
 {refinementSliders('body')}</>}{builderSection === 'details' && <>          <div className="rounded-2xl border p-4"><b className="text-lg">Anatomia especial</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Superfície" value={appearance.surfaceStyle || 'skin'} options={SURFACES} onChange={(value) => patchAppearance({ surfaceStyle: value })}/><SelectField label="Cauda" value={appearance.tailStyle || 'none'} options={TAILS} onChange={(value) => patchAppearance({ tailStyle: value })}/><SelectField label="Asas" value={appearance.wingStyle || 'none'} options={WINGS} onChange={(value) => patchAppearance({ wingStyle: value })}/><SelectField label="Chifres / antenas" value={appearance.hornStyle || 'none'} options={HORNS} onChange={(value) => patchAppearance({ hornStyle: value })}/></div></div>
 
@@ -775,4 +834,3 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
     </StudioWorkspace></VisualCharacterContext.Provider>
   </div>;
 }
-
