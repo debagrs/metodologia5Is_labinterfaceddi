@@ -85,6 +85,32 @@ const BODY_PLANS: Option<CharacterBodyPlan>[] = [
   { id: 'custom', label: 'Personalizado' },
 ];
 
+const FEATURE_PROFILES: Option<NonNullable<CharacterAppearance['featureProfile']>>[] = [
+  { id: 'neutral', label: 'Neutro / livre' },
+  { id: 'afrodiasporic', label: 'Afrodiaspórico' },
+  { id: 'indigenous', label: 'Indígena ameríndio' },
+  { id: 'aboriginal', label: 'Aborígene / povos originários da Oceania' },
+  { id: 'east-asian', label: 'Leste asiático' },
+  { id: 'south-asian', label: 'Sul-asiático / indiano' },
+  { id: 'west-asian', label: 'Oeste asiático / árabe' },
+  { id: 'latine', label: 'Latino / mestiço' },
+  { id: 'european', label: 'Europeu' },
+  { id: 'mixed', label: 'Misturado / híbrido humano' },
+];
+
+const FEATURE_PROFILE_PATCHES: Record<NonNullable<CharacterAppearance['featureProfile']>, Partial<CharacterAppearance>> = {
+  neutral: {},
+  afrodiasporic: { featureProfile:'afrodiasporic', eyeStyle:'almond', noseStyle:'broad', mouthStyle:'full', hairStyle:'coily', skinColor:'#8B5A3C', surfaceColor:'#8B5A3C', hairColor:'#2F211C', eyeColor:'#442C1E' },
+  indigenous: { featureProfile:'indigenous', eyeStyle:'almond', noseStyle:'straight', mouthStyle:'wide', hairStyle:'long', skinColor:'#B57D55', surfaceColor:'#B57D55', hairColor:'#1B1514', eyeColor:'#2E211E' },
+  aboriginal: { featureProfile:'aboriginal', eyeStyle:'almond', noseStyle:'broad', mouthStyle:'wide', hairStyle:'curly', skinColor:'#7A5038', surfaceColor:'#7A5038', hairColor:'#241A17', eyeColor:'#3B261D' },
+  'east-asian': { featureProfile:'east-asian', eyeStyle:'monolid', noseStyle:'small', mouthStyle:'small', hairStyle:'blunt', skinColor:'#E7C5A5', surfaceColor:'#E7C5A5', hairColor:'#1F1715', eyeColor:'#31231E' },
+  'south-asian': { featureProfile:'south-asian', eyeStyle:'almond', noseStyle:'aquiline', mouthStyle:'full', hairStyle:'wavy', skinColor:'#A36844', surfaceColor:'#A36844', hairColor:'#211815', eyeColor:'#3A281F' },
+  'west-asian': { featureProfile:'west-asian', eyeStyle:'almond', noseStyle:'aquiline', mouthStyle:'wide', hairStyle:'wavy', skinColor:'#C68D66', surfaceColor:'#C68D66', hairColor:'#2B1E19', eyeColor:'#3E281F' },
+  latine: { featureProfile:'latine', eyeStyle:'almond', noseStyle:'button', mouthStyle:'full', hairStyle:'wavy', skinColor:'#D5A27C', surfaceColor:'#D5A27C', hairColor:'#2E221D', eyeColor:'#4A3228' },
+  european: { featureProfile:'european', eyeStyle:'round', noseStyle:'straight', mouthStyle:'bow', hairStyle:'bob', skinColor:'#F1D2B9', surfaceColor:'#F1D2B9', hairColor:'#5D4335', eyeColor:'#5E463B' },
+  mixed: { featureProfile:'mixed', eyeStyle:'almond', noseStyle:'button', mouthStyle:'full', hairStyle:'curly', skinColor:'#C1906D', surfaceColor:'#C1906D', hairColor:'#34251F', eyeColor:'#4B3328' },
+};
+
 const HEADS = [
   { id: 'round', label: 'Redonda' }, { id: 'oval', label: 'Oval' }, { id: 'square', label: 'Quadrada' },
   { id: 'heart', label: 'Coração' }, { id: 'triangle', label: 'Triangular' }, { id: 'wide', label: 'Larga' },
@@ -99,18 +125,18 @@ const BROWS = [
   { id: 'none', label: 'Nenhuma' }, { id: 'soft', label: 'Suave' }, { id: 'straight', label: 'Reta' }, { id: 'arched', label: 'Arqueada' }, { id: 'bold', label: 'Marcada' },
 ] as Option<CharacterAppearance['browStyle']>[];
 const NOSES = [
-  { id: 'none', label: 'Nenhum' }, { id: 'small', label: 'Pequeno' }, { id: 'straight', label: 'Reto' }, { id: 'wide', label: 'Largo' },
+  { id: 'none', label: 'Nenhum' }, { id: 'small', label: 'Pequeno' }, { id: 'button', label: 'Arrebitado' }, { id: 'straight', label: 'Reto' }, { id: 'wide', label: 'Largo' }, { id: 'broad', label: 'Base larga' }, { id: 'aquiline', label: 'Aquilino' },
 ] as Option<CharacterAppearance['noseStyle']>[];
 const MOUTHS = [
-  { id: 'line', label: 'Linha' }, { id: 'smile', label: 'Sorriso' }, { id: 'full', label: 'Cheia' }, { id: 'small', label: 'Pequena' },
+  { id: 'line', label: 'Linha' }, { id: 'smile', label: 'Sorriso' }, { id: 'full', label: 'Cheia' }, { id: 'small', label: 'Pequena' }, { id: 'wide', label: 'Larga' }, { id: 'bow', label: 'Arco' },
 ] as Option<CharacterAppearance['mouthStyle']>[];
 const EARS = [
   { id: 'none', label: 'Nenhuma' }, { id: 'simple', label: 'Simples' }, { id: 'round', label: 'Redonda' }, { id: 'pointed', label: 'Pontuda' },
   { id: 'long', label: 'Longa' }, { id: 'floppy', label: 'Caída' }, { id: 'large', label: 'Grande' }, { id: 'fin', label: 'Barbatana' },
 ] as Option<CharacterAppearance['earStyle']>[];
 const HAIR = [
-  { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Curto' }, { id: 'bob', label: 'Bob' }, { id: 'long', label: 'Longo' },
-  { id: 'curly', label: 'Cacheado' }, { id: 'spiky', label: 'Espetado' }, { id: 'bun', label: 'Coque' },
+  { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Curto' }, { id: 'pixie', label: 'Pixie' }, { id: 'buzz', label: 'Raspado' }, { id: 'bob', label: 'Bob' }, { id: 'blunt', label: 'Bob reto' }, { id: 'long', label: 'Longo' }, { id: 'wavy', label: 'Ondulado' },
+  { id: 'curly', label: 'Cacheado' }, { id: 'afro', label: 'Afro' }, { id: 'coily', label: 'Crespo / coily' }, { id: 'locs', label: 'Locs' }, { id: 'braids', label: 'Tranças' }, { id: 'ponytail', label: 'Rabo de cavalo' }, { id: 'spiky', label: 'Espetado' }, { id: 'undercut', label: 'Undercut' }, { id: 'bun', label: 'Coque' },
 ] as Option<CharacterAppearance['hairStyle']>[];
 const MUZZLES: Option<CharacterMuzzleStyle>[] = [
   { id: 'none', label: 'Nenhum' }, { id: 'short', label: 'Focinho curto' }, { id: 'round', label: 'Focinho redondo' }, { id: 'long', label: 'Focinho longo' },
@@ -173,6 +199,7 @@ const DEFAULT_APPEARANCE: CharacterAppearance = {
   artStyle: 'illustrated',
   styleVariant: 'illustrated-soft',
   species: 'human',
+  featureProfile: 'neutral',
   bodyPlan: 'biped',
   speciesPreset: 'human',
   hybridPrimaryPreset: 'human',
@@ -431,7 +458,7 @@ function RangeField({ label, value, min, max, step, onChange, tip }: { label: st
 }
 
 function HexField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
- const colors=label.includes('Pele') ? ['#FFF0E4','#F5D5BF','#E8B99A','#C68B68','#A36B4D','#724831','#4A3026','#D4AD80','#95B6A0','#B7A1C8'] : ['#F5EEE6','#DBAB79','#997358','#403133','#191B26','#7EA7A0','#73B7D8','#98A970','#DB9698','#C1A1CF'];
+ const colors=label.includes('Pele') ? ['#FFF0E4','#F5D5BF','#E8B99A','#D4AD80','#C68B68','#B57D55','#A36B4D','#8B5A3C','#724831','#4A3026','#E7C5A5','#C1906D','#95B6A0','#B7A1C8'] : ['#F5EEE6','#DBAB79','#997358','#403133','#191B26','#7EA7A0','#73B7D8','#98A970','#DB9698','#C1A1CF','#0F0F14','#A0522D','#D7C2F0'];
  return <div className="character-color-field"><span className="character-option-label">{label}</span><div className="character-swatches">{colors.map(color=><button key={color} type="button" aria-label={`${label}: ${color}`} aria-pressed={normalizeHex(value)===color} onClick={()=>onChange(color)} style={{background:color}}/>)}</div><div className="flex gap-2 mt-2"><input type="color" aria-label={`${label}: seletor de cor`} value={normalizeHex(value)} onChange={e=>onChange(e.target.value)} className="w-10 h-10 rounded-lg border"/><input aria-label={`${label}: hexadecimal`} value={value} onChange={e=>onChange(e.target.value)} className="min-w-0 flex-1 h-10 border rounded-lg px-2 font-mono"/></div></div>;
 }
 
@@ -557,6 +584,24 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
     if (value === 'human') { applyPreset('human'); return; }
     const plans:Partial<Record<CharacterSpecies,CharacterBodyPlan>> = {anthropomorphic:'biped',quadruped:'quadruped',bird:'avian',reptile:'quadruped',amphibian:'quadruped',fish:'aquatic',arthropod:'six-limbed',fantasy:'biped'};
     patchAppearance({ species: value, bodyPlan:plans[value] || 'biped' });
+  };
+
+  const applyFeatureProfile = (profileId: NonNullable<CharacterAppearance['featureProfile']>) => {
+    const patch = FEATURE_PROFILE_PATCHES[profileId] || {};
+    patchAppearance({
+      ...patch,
+      featureProfile: profileId,
+      species: 'human',
+      bodyPlan: 'biped',
+      speciesPreset: 'human',
+      muzzleStyle: 'none',
+      tailStyle: 'none',
+      wingStyle: 'none',
+      hornStyle: 'none',
+      surfaceStyle: 'skin',
+      footStyle: 'feet',
+      whiskers: false,
+    });
   };
 
   const addAnimation = (kind: SpriteAnimationKind) => {
@@ -694,7 +739,7 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
               <div className="grid grid-cols-3 gap-1 text-[9px]"><div className="rounded-lg bg-neutral-100 p-2"><b>Silhueta</b><div>{BODY_PLANS.find((item) => item.id === appearance.bodyPlan)?.label}</div></div><div className="rounded-lg bg-neutral-100 p-2"><b>Superfície</b><div>{SURFACES.find((item) => item.id === appearance.surfaceStyle)?.label}</div></div><div className="rounded-lg bg-neutral-100 p-2"><b>Traço forte</b><div>{appearance.wingStyle !== 'none' ? 'Asas' : appearance.tailStyle !== 'none' ? 'Cauda' : appearance.hornStyle !== 'none' ? 'Chifres' : appearance.muzzleStyle !== 'none' ? 'Focinho/bico' : 'Forma'}</div></div></div>
             </div> : <div className="character-preset-grid mt-3 grid grid-cols-3 gap-2">{PRESETS.map((preset) => <button key={preset.id} onClick={() => applyPreset(preset.id)} className={`rounded-xl border p-2 text-left hover:border-black ${appearance.speciesPreset === preset.id ? 'bg-black text-white' : ''}`}><div className="character-preset-preview"><img loading="lazy" alt="" src={candidateThumbnail(draft, { ...DEFAULT_APPEARANCE, ...preset.patch, surfaceColor:preset.patch.surfaceColor || '#D4AD80', outfitStyle:preset.id === 'human' ? DEFAULT_APPEARANCE.outfitStyle : 'none' })}/><AnimalMark kind={preset.id}/></div><b className="text-[11px]">{preset.label}</b><div className={`text-[9px] leading-tight mt-1 ${appearance.speciesPreset === preset.id ? 'text-white/70' : 'text-neutral-500'}`}>{preset.description}</div></button>)}</div>}</div>
 
-</>}{builderSection === 'face' && <>          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between"><b className="text-lg">Cabeça e rosto</b><span className="text-[9px] font-mono text-neutral-400">FORMA ≠ PERSONALIDADE</span></div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Cabeça" value={appearance.headShape} options={HEADS} onChange={(value) => patchAppearance({ headShape: value })}/><SelectField label="Rosto" value={appearance.faceShape} options={FACES} onChange={(value) => patchAppearance({ faceShape: value })}/><SelectField label="Olhos" value={appearance.eyeStyle} options={EYES} onChange={(value) => patchAppearance({ eyeStyle: value })}/><SelectField label="Sobrancelha" value={appearance.browStyle} options={BROWS} onChange={(value) => patchAppearance({ browStyle: value })} tip="Pode ser nenhuma. Em animais, sobrancelha anatômica muitas vezes não faz sentido; a expressão pode vir de pálpebras, orelhas, postura e focinho."/><SelectField label="Nariz" value={appearance.noseStyle} options={NOSES} onChange={(value) => patchAppearance({ noseStyle: value })}/><SelectField label="Boca" value={appearance.mouthStyle} options={MOUTHS} onChange={(value) => patchAppearance({ mouthStyle: value })}/><SelectField label="Orelha" value={appearance.earStyle} options={EARS} onChange={(value) => patchAppearance({ earStyle: value })}/><SelectField label="Cabelo" value={appearance.hairStyle} options={HAIR} onChange={(value) => patchAppearance({ hairStyle: value })}/><SelectField label="Focinho / bico" value={appearance.muzzleStyle || 'none'} options={MUZZLES} onChange={(value) => patchAppearance({ muzzleStyle: value })}/><label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">Bigodes <InfoTip>Bigodes podem ser um traço anatômico ou estilização. Em felinos e roedores ajudam a reconhecer a espécie.</InfoTip></span><button type="button" onClick={() => patchAppearance({ whiskers: !appearance.whiskers })} className={`mt-1 h-11 w-full rounded-xl border text-sm ${appearance.whiskers ? 'bg-black text-white' : 'bg-white'}`}>{appearance.whiskers ? 'SIM' : 'NÃO'}</button></label></div></div>
+</>}{builderSection === 'face' && <>          <div className="rounded-2xl border p-4"><div className="flex items-center justify-between"><b className="text-lg">Cabeça e rosto</b><span className="text-[9px] font-mono text-neutral-400">FORMA ≠ PERSONALIDADE</span></div><div className="mt-3 rounded-xl bg-neutral-50 p-3 text-[11px] text-neutral-600">Use <b>matrizes de traços</b> apenas como ponto de partida visual. Depois refine livremente cabelo, olhos, nariz, boca e pele para construir diversidade real sem estereótipos rígidos.</div><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Matriz de traços" value={appearance.featureProfile || 'neutral'} options={FEATURE_PROFILES} onChange={applyFeatureProfile} tip="Presets inclusivos para iniciar personagens negros, indígenas, aborígenes, orientais, indianos, latinos, europeus e mistos. Tudo permanece totalmente editável."/><SelectField label="Cabeça" value={appearance.headShape} options={HEADS} onChange={(value) => patchAppearance({ headShape: value })}/><SelectField label="Rosto" value={appearance.faceShape} options={FACES} onChange={(value) => patchAppearance({ faceShape: value })}/><SelectField label="Olhos" value={appearance.eyeStyle} options={EYES} onChange={(value) => patchAppearance({ eyeStyle: value })}/><SelectField label="Sobrancelha" value={appearance.browStyle} options={BROWS} onChange={(value) => patchAppearance({ browStyle: value })} tip="Pode ser nenhuma. Em animais, sobrancelha anatômica muitas vezes não faz sentido; a expressão pode vir de pálpebras, orelhas, postura e focinho."/><SelectField label="Nariz" value={appearance.noseStyle} options={NOSES} onChange={(value) => patchAppearance({ noseStyle: value })}/><SelectField label="Boca" value={appearance.mouthStyle} options={MOUTHS} onChange={(value) => patchAppearance({ mouthStyle: value })}/><SelectField label="Orelha" value={appearance.earStyle} options={EARS} onChange={(value) => patchAppearance({ earStyle: value })}/><SelectField label="Cabelo" value={appearance.hairStyle} options={HAIR} onChange={(value) => patchAppearance({ hairStyle: value })}/><SelectField label="Focinho / bico" value={appearance.muzzleStyle || 'none'} options={MUZZLES} onChange={(value) => patchAppearance({ muzzleStyle: value })}/><label className="block text-[10px] font-mono text-neutral-500 uppercase"><span className="flex items-center gap-1">Bigodes <InfoTip>Bigodes podem ser um traço anatômico ou estilização. Em felinos e roedores ajudam a reconhecer a espécie.</InfoTip></span><button type="button" onClick={() => patchAppearance({ whiskers: !appearance.whiskers })} className={`mt-1 h-11 w-full rounded-xl border text-sm ${appearance.whiskers ? 'bg-black text-white' : 'bg-white'}`}>{appearance.whiskers ? 'SIM' : 'NÃO'}</button></label></div></div>
 
 {refinementSliders('face')}</>}{builderSection === 'body' && <>          <div className="rounded-2xl border p-4"><b className="text-lg">Corpo e proporção</b><div className="mt-3 grid grid-cols-2 gap-3"><SelectField label="Corpo" value={appearance.bodyShape} options={BODY_SHAPES} onChange={(value) => patchAppearance({ bodyShape: value })}/><SelectField label="Torso" value={appearance.torsoShape} options={TORSOS} onChange={(value) => patchAppearance({ torsoShape: value })}/><SelectField label="Braços" value={appearance.armStyle} options={ARMS} onChange={(value) => patchAppearance({ armStyle: value })}/><SelectField label="Pernas" value={appearance.legStyle} options={LEGS} onChange={(value) => patchAppearance({ legStyle: value })}/><SelectField label="Mãos" value={appearance.handStyle} options={HANDS} onChange={(value) => patchAppearance({ handStyle: value })}/><SelectField label="Pés / patas" value={appearance.footStyle || 'feet'} options={FEET} onChange={(value) => patchAppearance({ footStyle: value })}/></div><div className="mt-3 grid gap-2"><RangeField label="Proporção cabeça × corpo" value={appearance.headToBodyRatio} min={2.8} max={7} step={.1} onChange={(value) => patchAppearance({ headToBodyRatio: value })} tip="Números menores aumentam a cabeça em relação ao corpo. É uma convenção de estilização, não um indicador de idade ou personalidade por si só."/><RangeField label="Largura corporal" value={appearance.bodyWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ bodyWidth: value })}/><RangeField label="Ombros" value={appearance.shoulderWidth} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ shoulderWidth: value })}/><RangeField label="Comprimento dos membros" value={appearance.limbLength} min={.65} max={1.45} step={.05} onChange={(value) => patchAppearance({ limbLength: value })}/></div></div>
 
