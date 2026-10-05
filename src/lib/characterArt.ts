@@ -464,37 +464,71 @@ function animalHead(a: CharacterAppearance, expression: string) {
   const isFish=species==='fish' || a.bodyPlan==='aquatic' || preset==='fish';
   const isArthropod=species==='arthropod' || ['insect','spider','butterfly'].includes(preset);
   const blink=expression==='calm' || expression==='laughing';
-  const eyePair=(x1:number,x2:number,y:number,rx:number,ry:number)=> blink
-    ? `<path d="M${x1-rx} ${y}q${rx} ${-ry} ${rx*2} 0M${x2-rx} ${y}q${rx} ${-ry} ${rx*2} 0" fill="none" stroke="${line}" stroke-width="3"/>`
-    : `<g fill="#fff" stroke="${line}" stroke-width="2"><ellipse cx="${x1}" cy="${y}" rx="${rx}" ry="${ry}"/><ellipse cx="${x2}" cy="${y}" rx="${rx}" ry="${ry}"/></g><g fill="${eye}" stroke="none"><ellipse cx="${x1}" cy="${y+1}" rx="${Math.max(3,rx*.48)}" ry="${Math.max(4,ry*.58)}"/><ellipse cx="${x2}" cy="${y+1}" rx="${Math.max(3,rx*.48)}" ry="${Math.max(4,ry*.58)}"/></g>`;
+  const eyeScale=Math.max(.55,Math.min(1.7,a.eyeSize || 1));
+  const spacing=Math.max(.65,Math.min(1.45,a.eyeSpacing || 1));
+  const irisScale=Math.max(.45,Math.min(1.55,a.irisScale || 1));
+  const eyeShape=String(a.eyeStyle || 'round');
+  const eyePair=(center:number,y:number,baseRx:number,baseRy:number)=>{
+    const half=24*spacing;
+    const x1=center-half,x2=center+half;
+    let rx=baseRx*eyeScale, ry=baseRy*eyeScale;
+    if(eyeShape==='narrow'){ry*=.55;rx*=1.12;}
+    if(eyeShape==='large'){rx*=1.18;ry*=1.18;}
+    if(eyeShape==='dot') return `<g fill="${eye}" stroke="none"><circle cx="${x1}" cy="${y}" r="${Math.max(3,rx*.45)}"/><circle cx="${x2}" cy="${y}" r="${Math.max(3,rx*.45)}"/></g>`;
+    if(blink) return `<path d="M${x1-rx} ${y}q${rx} ${-ry*.7} ${rx*2} 0M${x2-rx} ${y}q${rx} ${-ry*.7} ${rx*2} 0" fill="none" stroke="${line}" stroke-width="3"/>`;
+    const tilt=eyeShape==='upturned'?-2:eyeShape==='downturned'?2:0;
+    return `<g transform="rotate(${tilt} ${center} ${y})"><g fill="#fff" stroke="${line}" stroke-width="2"><ellipse cx="${x1}" cy="${y}" rx="${rx}" ry="${ry}"/><ellipse cx="${x2}" cy="${y}" rx="${rx}" ry="${ry}"/></g><g fill="${eye}" stroke="none"><ellipse cx="${x1}" cy="${y+1}" rx="${Math.max(3,rx*.45*irisScale)}" ry="${Math.max(4,ry*.56*irisScale)}"/><ellipse cx="${x2}" cy="${y+1}" rx="${Math.max(3,rx*.45*irisScale)}" ry="${Math.max(4,ry*.56*irisScale)}"/></g></g>`;
+  };
+  const mouth=(x=180,y=150,width=28)=>{
+    const w=width*Math.max(.55,Math.min(1.55,a.mouthSize || 1));
+    const c=color(a.mouthColor,'#B86C78');
+    if(a.mouthStyle==='small') return `<path d="M${x-w*.35} ${y}Q${x} ${y+3} ${x+w*.35} ${y}" fill="none" stroke="${line}" stroke-width="2"/>`;
+    if(a.mouthStyle==='full') return `<path d="M${x-w*.55} ${y}Q${x} ${y-5} ${x+w*.55} ${y}Q${x} ${y+11} ${x-w*.55} ${y}Z" fill="${c}" stroke="${line}" stroke-width="1.2"/>`;
+    if(a.mouthStyle==='wide') return `<path d="M${x-w} ${y}Q${x} ${y+8} ${x+w} ${y}" fill="none" stroke="${line}" stroke-width="2"/>`;
+    if(a.mouthStyle==='bow') return `<path d="M${x-w*.6} ${y}Q${x-w*.2} ${y-5} ${x} ${y}Q${x+w*.2} ${y-5} ${x+w*.6} ${y}Q${x} ${y+9} ${x-w*.6} ${y}Z" fill="${c}" stroke="${line}" stroke-width="1"/>`;
+    if(a.mouthStyle==='smile') return `<path d="M${x-w*.7} ${y-2}Q${x} ${y+12} ${x+w*.7} ${y-2}" fill="none" stroke="${line}" stroke-width="2"/>`;
+    return `<path d="M${x-w*.65} ${y}Q${x} ${y+4} ${x+w*.65} ${y}" fill="none" stroke="${line}" stroke-width="2"/>`;
+  };
+  const nose=(x=180,y=136,w=18)=>{
+    const n=color(a.noseColor,line);
+    if(a.noseStyle==='none') return '';
+    if(a.noseStyle==='small' || a.noseStyle==='button') return `<ellipse cx="${x}" cy="${y}" rx="${w*.42}" ry="${w*.28}" fill="${n}" stroke="${line}" stroke-width="1"/>`;
+    if(a.noseStyle==='wide' || a.noseStyle==='broad') return `<path d="M${x-w} ${y-3}Q${x} ${y-10} ${x+w} ${y-3}Q${x} ${y+9} ${x-w} ${y-3}Z" fill="${n}" stroke="${line}" stroke-width="1"/>`;
+    return `<path d="M${x-w*.55} ${y-5}Q${x} ${y-11} ${x+w*.55} ${y-5}Q${x} ${y+7} ${x-w*.55} ${y-5}Z" fill="${n}" stroke="${line}" stroke-width="1"/>`;
+  };
+  const muzzleScale=Math.max(.55,Math.min(1.65,a.muzzleSize || 1));
+  const muzzleY=1+(Math.max(.7,Math.min(1.35,a.muzzleHeight || 1))-1)*22;
   if(isBird){
     const owl=preset==='owl'; const parrot=preset==='parrot'; const beak=color(a.noseColor,parrot?'#D9A33F':'#E7B55D');
     const base=`<path d="M126 112Q124 48 180 42Q236 48 234 112Q236 170 180 181Q124 170 126 112Z" fill="${fill}"/>`;
     const feather=owl?`<path d="M128 79l24-24 15 13 13-24 14 24 15-13 23 24" fill="${tint(fill,-18)}" stroke="${line}" stroke-width="2"/>`:`<path d="M139 67Q180 47 221 67" fill="none" stroke="${tint(fill,-28)}" stroke-width="3" opacity=".55"/>`;
-    const eyesMarkup=eyePair(158,202,110,owl?17:13,owl?18:13);
-    const beakMarkup=parrot?`<path d="M169 128Q210 116 202 145Q197 162 179 158L183 143Q170 144 169 128Z" fill="${beak}" stroke="${line}" stroke-width="2"/>`:`<path d="M165 127L202 138L180 156Z" fill="${beak}" stroke="${line}" stroke-width="2"/><path d="M169 137h25" stroke="${tint(beak,-38)}"/>`;
+    const eyesMarkup=eyePair(180,110,owl?17:13,owl?18:13);
+    const beakW=(parrot?38:34)*muzzleScale;
+    const beakMarkup=parrot?`<path d="M${180-beakW*.28} ${126+muzzleY}Q${180+beakW*.9} ${116+muzzleY} ${180+beakW*.62} ${146+muzzleY}Q${180+beakW*.5} ${161+muzzleY} ${180} ${157+muzzleY}L${180+4} ${143+muzzleY}Q${180-beakW*.25} ${144+muzzleY} ${180-beakW*.28} ${126+muzzleY}Z" fill="${beak}" stroke="${line}" stroke-width="2"/>`:`<path d="M${180-beakW*.45} ${127+muzzleY}L${180+beakW*.65} ${138+muzzleY}L180 ${156+muzzleY}Z" fill="${beak}" stroke="${line}" stroke-width="2"/>`;
     return `<g>${base}${feather}${eyesMarkup}${beakMarkup}${accessories(a,'head')}</g>`;
   }
   if(isAmphibian){
-    return `<g><path d="M122 115Q118 63 151 66Q180 43 209 66Q242 63 238 115Q240 170 180 181Q120 170 122 115Z" fill="${fill}"/>${ellipse(148,78,18,17,fill)}${ellipse(212,78,18,17,fill)}${eyePair(148,212,82,11,12)}<path d="M164 145Q180 151 196 145" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+    return `<g><path d="M122 115Q118 63 151 66Q180 43 209 66Q242 63 238 115Q240 170 180 181Q120 170 122 115Z" fill="${fill}"/>${ellipse(148,78,18,17,fill)}${ellipse(212,78,18,17,fill)}${eyePair(180,82,11,12)}${nose(180,132,10)}${mouth(180,146,25)}${accessories(a,'head')}</g>`;
   }
   if(isReptile){
-    const snout=preset==='snake'?20:28;
-    return `<g><path d="M128 105Q134 53 180 51Q226 53 232 105L218 159Q180 180 142 159Z" fill="${fill}"/><path d="M142 85l14-8 14 8m20 0 14-8 14 8" fill="none" stroke="${tint(fill,-35)}" stroke-width="2"/>${eyePair(154,206,106,10,8)}<path d="M${180-snout} 139Q180 148 ${180+snout} 139" fill="none" stroke="${line}" stroke-width="2"/>${preset==='snake'?'<path d="M180 145v13m0 0-7 6m7-6 7 6" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
+    const snout=(preset==='snake'?20:28)*muzzleScale;
+    return `<g><path d="M128 105Q134 53 180 51Q226 53 232 105L218 159Q180 180 142 159Z" fill="${fill}"/><path d="M142 85l14-8 14 8m20 0 14-8 14 8" fill="none" stroke="${tint(fill,-35)}" stroke-width="2"/>${eyePair(180,106,10,8)}${nose(180,134+muzzleY,snout*.45)}${mouth(180,145+muzzleY,snout*.7)}${preset==='snake'?'<path d="M180 150v12m0 0-7 6m7-6 7 6" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
   }
   if(isFish){
-    return `<g><path d="M126 111Q126 61 180 55Q234 61 234 111Q228 168 180 178Q132 168 126 111Z" fill="${fill}"/><path d="M128 103L105 80L110 124Z" fill="${tint(fill,-18)}"/><path d="M232 103L255 80L250 124Z" fill="${tint(fill,-18)}"/>${eyePair(155,205,108,11,12)}<path d="M166 146Q180 153 194 146" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+    return `<g><path d="M126 111Q126 61 180 55Q234 61 234 111Q228 168 180 178Q132 168 126 111Z" fill="${fill}"/><path d="M128 103L105 80L110 124Z" fill="${tint(fill,-18)}"/><path d="M232 103L255 80L250 124Z" fill="${tint(fill,-18)}"/>${eyePair(180,108,11,12)}${mouth(180,146+muzzleY,24)}${accessories(a,'head')}</g>`;
   }
   if(isArthropod){
-    const compound=expression==='surprised'?15:13;
-    return `<g><ellipse cx="180" cy="114" rx="48" ry="62" fill="${fill}"/><path d="M153 64Q142 32 126 31M207 64Q218 32 234 31" fill="none" stroke="${line}" stroke-width="3"/><g fill="${eye}" opacity=".92"><ellipse cx="155" cy="105" rx="${compound}" ry="20"/><ellipse cx="205" cy="105" rx="${compound}" ry="20"/></g><g fill="#fff" opacity=".6">${[[-6,-8],[2,-3],[7,7]].map(([dx,dy])=>`<circle cx="${155+dx}" cy="${105+dy}" r="2"/><circle cx="${205+dx}" cy="${105+dy}" r="2"/>`).join('')}</g><path d="M168 148Q180 153 192 148" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+    const compound=(expression==='surprised'?15:13)*eyeScale;
+    return `<g><ellipse cx="180" cy="114" rx="48" ry="62" fill="${fill}"/><path d="M153 64Q142 32 126 31M207 64Q218 32 234 31" fill="none" stroke="${line}" stroke-width="3"/><g fill="${eye}" opacity=".92"><ellipse cx="${180-24*spacing}" cy="105" rx="${compound}" ry="${20*eyeScale}"/><ellipse cx="${180+24*spacing}" cy="105" rx="${compound}" ry="${20*eyeScale}"/></g><g fill="#fff" opacity=".6">${[[-6,-8],[2,-3],[7,7]].map(([dx,dy])=>`<circle cx="${180-24*spacing+dx}" cy="${105+dy}" r="2"/><circle cx="${180+24*spacing+dx}" cy="${105+dy}" r="2"/>`).join('')}</g>${mouth(180,148,20)}${accessories(a,'head')}</g>`;
   }
-  // Mamíferos quadrúpedes: focinho, orelhas e olhos próprios, sem nariz/boca humanos.
   const ear=String(a.earStyle||'round');
-  const ears=ear==='pointed'?`<path d="M137 91L130 42L158 76M202 76L230 42L223 91" fill="${fill}"/>`:ear==='long'?`${ellipse(148,55,13,39,fill)}${ellipse(212,55,13,39,fill)}`:ear==='floppy'?`<path d="M140 81Q112 75 118 141Q124 158 139 132M220 81Q248 75 242 141Q236 158 221 132" fill="${fill}"/>`:`${ellipse(137,91,19,22,fill)}${ellipse(223,91,19,22,fill)}`;
-  const muzzleFill=tint(fill,20); const muzzleLong=(a.muzzleStyle==='long');
-  const muzzle=`<ellipse cx="180" cy="143" rx="${muzzleLong?29:22}" ry="${muzzleLong?18:15}" fill="${muzzleFill}"/><path d="M171 134Q180 130 189 134Q180 146 171 134Z" fill="${line}" stroke="none"/><path d="M166 151Q180 158 194 151" fill="none" stroke="${line}" stroke-width="2"/>`;
-  return `<g>${ears}<path d="M129 108Q128 54 180 50Q232 54 231 108Q229 168 180 181Q131 168 129 108Z" fill="${fill}"/>${eyePair(156,204,110,11,12)}${muzzle}${a.whiskers?'<path d="M155 143l-24-6m24 13l-27 5m77-12 24-6m-24 13 27 5" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
+  const ears=ear==='pointed'?`<path d="M137 91L130 42L158 76M202 76L230 42L223 91" fill="${fill}"/>`:ear==='long'?`${ellipse(148,55,13,39,fill)}${ellipse(212,55,13,39,fill)}`:ear==='floppy'?`<path d="M140 81Q112 75 118 141Q124 158 139 132M220 81Q248 75 242 141Q236 158 221 132" fill="${fill}"/>`:ear==='none'?'':`${ellipse(137,91,19,22,fill)}${ellipse(223,91,19,22,fill)}`;
+  const muzzleFill=tint(fill,20);
+  const muzzleLong=(a.muzzleStyle==='long');
+  const muzzleRx=(muzzleLong?29:22)*muzzleScale;
+  const muzzleRy=(muzzleLong?18:15)*muzzleScale;
+  const muzzle=`<ellipse cx="180" cy="${143+muzzleY}" rx="${muzzleRx}" ry="${muzzleRy}" fill="${muzzleFill}"/>${nose(180,136+muzzleY,muzzleRx*.55)}${mouth(180,151+muzzleY,muzzleRx*.72)}`;
+  return `<g>${ears}<path d="M129 108Q128 54 180 50Q232 54 231 108Q229 168 180 181Q131 168 129 108Z" fill="${fill}"/>${eyePair(180,110,11,12)}${muzzle}${a.whiskers?'<path d="M155 143l-24-6m24 13l-27 5m77-12 24-6m-24 13 27 5" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
 }
 
 function wings(a: CharacterAppearance, x: number, y: number) {
@@ -573,7 +607,8 @@ function biped(
     line = color(a.lineColor, "#382a29"),
     shirt = color(a.outfitPrimary, "#3D8C8C"),
     pants = color(a.outfitSecondary, "#465D75");
-  const r = characterRig(pose, phase);
+  const inWheelchair = a.mobilityAid === "wheelchair";
+  const r = characterRig(inWheelchair ? "neutral" : pose, phase);
   for(const key of Object.keys(r) as Array<keyof typeof r>)r[key]+=(adjustments[key] || 0);
   const stature = a.stature === 'very-short' ? 0.72 : a.stature === 'short' ? 0.86 : a.stature === 'tall' ? 1.16 : a.stature === 'giant' ? 1.34 : 1;
   const stock =
@@ -584,8 +619,7 @@ function biped(
   const legLength =
     (a.limbLength || 1) * metric(a,"legLength") * stature *
     (a.legStyle === "long" ? 1.13 : a.legStyle === "short" ? 0.78 : 1);
-  const inWheelchair = a.mobilityAid === "wheelchair";
-  const hipY = inWheelchair ? 300 : 310 - (stature - 1) * 24;
+  const hipY = inWheelchair ? 292 : 310 - (stature - 1) * 24;
   let sl = pt(180 - shoulder, inWheelchair ? 205 : 207),
     sr = pt(180 + shoulder, inWheelchair ? 205 : 207),
     hl = pt(inWheelchair ? 164 : 162, hipY),
@@ -600,10 +634,10 @@ function biped(
     fr = joint(kr, 76 * legLength, r.lr + r.kr);
   if (inWheelchair) {
     const sport = a.wheelchairStyle === 'sport';
-    el = pt(150, 257); er = pt(210, 257);
-    wl = pt(sport ? 119 : 129, sport ? 333 : 325); wr = pt(sport ? 241 : 231, sport ? 333 : 325);
-    kl = pt(153, 340); kr = pt(207, 340);
-    fl = pt(146, 390); fr = pt(214, 390);
+    el = pt(149, 252); er = pt(211, 252);
+    wl = pt(sport ? 120 : 130, sport ? 326 : 321); wr = pt(sport ? 240 : 230, sport ? 326 : 321);
+    kl = pt(158, 333); kr = pt(202, 333);
+    fl = pt(158, 387); fr = pt(202, 387);
   }
   const shoe = (p: P, k: number) =>
     `<g transform="translate(${p.x} ${p.y}) scale(${metric(a,"footSize")})"><path d="M-9-7H8L12 0Q${k * 23} 3 ${k * 22} 11H-10Q-14 5-9-7Z" fill="${line}"/><path d="M-9 8H${k * 19}" stroke="#8C939E" stroke-width="2"/><path d="M-3 1h9m-8 3h10" stroke="#CCD0D5" stroke-width="1"/></g>`;
@@ -622,9 +656,11 @@ function biped(
         : a.torsoShape === "round"
           ? 1.18
           : 1);
-  const torso = `<path d="M${180 - shoulder + 5} 195Q158 183 166 179L194 179Q205 185 ${180 + shoulder - 5} 195C${180 + shoulder + 3} 229 ${180 + 29 * width * waist} 259 ${180 + 28 * width * waist} 280Q208 306 180 306Q152 306 ${180 - 28 * width * waist} 280C${180 - 29 * width * waist} 259 ${180 - shoulder - 3} 229 ${180 - shoulder + 5} 195Z" fill="${a.outfitStyle === "none" ? skin : shirt}"/>`;
+  const torso = inWheelchair
+    ? `<path d="M${180 - shoulder + 6} 195Q158 183 166 179L194 179Q205 185 ${180 + shoulder - 6} 195C${180 + shoulder} 224 ${180 + 26 * width * waist} 250 ${180 + 24 * width * waist} 278Q180 292 ${180 - 24 * width * waist} 278C${180 - 26 * width * waist} 250 ${180 - shoulder} 224 ${180 - shoulder + 6} 195Z" fill="${a.outfitStyle === "none" ? skin : shirt}"/>`
+    : `<path d="M${180 - shoulder + 5} 195Q158 183 166 179L194 179Q205 185 ${180 + shoulder - 5} 195C${180 + shoulder + 3} 229 ${180 + 29 * width * waist} 259 ${180 + 28 * width * waist} 280Q208 306 180 306Q152 306 ${180 - 28 * width * waist} 280C${180 - 29 * width * waist} 259 ${180 - shoulder - 3} 229 ${180 - shoulder + 5} 195Z" fill="${a.outfitStyle === "none" ? skin : shirt}"/>`;
   const lower = inWheelchair
-    ? `<path d="M${180 - 30 * width * waist} 278Q180 292 ${180 + 30 * width * waist} 278L211 316Q180 328 149 316Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`
+    ? `<path d="M${180 - 24 * width * waist} 274Q180 286 ${180 + 24 * width * waist} 274L205 302Q180 311 155 302Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`
     : `<path d="M${180 - 28 * width * waist} 281Q180 292 ${180 + 28 * width * waist} 281L214 320Q198 330 180 318Q160 329 146 320Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`;
   const neck =
     '<path d="M166 164V184Q180 198 194 184V164Z" fill="' + skin + '"/>';
