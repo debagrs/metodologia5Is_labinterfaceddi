@@ -485,10 +485,11 @@ export interface CharacterAppearance {
   faceShape: 'soft' | 'angular' | 'long' | 'wide';
   eyeStyle: 'round' | 'almond' | 'narrow' | 'dot' | 'large' | 'hooded' | 'monolid' | 'upturned' | 'downturned';
   browStyle: 'none' | 'soft' | 'straight' | 'arched' | 'bold';
-  noseStyle: 'none' | 'small' | 'straight' | 'wide';
-  mouthStyle: 'line' | 'smile' | 'full' | 'small';
+  featureProfile?: 'neutral' | 'afrodiasporic' | 'indigenous' | 'aboriginal' | 'east-asian' | 'south-asian' | 'west-asian' | 'latine' | 'european' | 'mixed';
+  noseStyle: 'none' | 'small' | 'straight' | 'wide' | 'button' | 'broad' | 'aquiline';
+  mouthStyle: 'line' | 'smile' | 'full' | 'small' | 'wide' | 'bow';
   earStyle: 'none' | 'simple' | 'round' | 'pointed' | 'long' | 'floppy' | 'large' | 'fin';
-  hairStyle: 'none' | 'short' | 'bob' | 'long' | 'curly' | 'spiky' | 'bun';
+  hairStyle: 'none' | 'short' | 'bob' | 'long' | 'curly' | 'spiky' | 'bun' | 'wavy' | 'afro' | 'coily' | 'locs' | 'braids' | 'pixie' | 'buzz' | 'ponytail' | 'undercut' | 'blunt';
   muzzleStyle?: CharacterMuzzleStyle;
   tailStyle?: CharacterTailStyle;
   wingStyle?: CharacterWingStyle;
