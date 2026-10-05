@@ -426,11 +426,11 @@ export interface HardwareDocument {
 }
 
 
-export type SpriteAnimationKind = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'custom';
+export type SpriteAnimationKind = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'swim' | 'glide' | 'slither' | 'crawl' | 'flutter' | 'custom';
 export type SpriteMotionPreset = 'none' | 'bob' | 'bounce' | 'shake' | 'pulse' | 'squash';
 export type CharacterView = 'front' | 'three-quarter' | 'side' | 'back';
 export type CharacterExpression = 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'determined' | 'winking' | 'laughing' | 'worried' | 'calm';
-export type CharacterPoseKind = 'neutral' | 'wave' | 'walk' | 'run' | 'jump' | 'sit' | 'action';
+export type CharacterPoseKind = 'neutral' | 'wave' | 'walk' | 'run' | 'jump' | 'sit' | 'action' | 'swim' | 'glide' | 'slither' | 'crawl';
 
 export interface SpriteFrame {
   id: string;
@@ -754,6 +754,27 @@ export interface DataStoryDocument {
   mapGeoJson?: string;
   mapValueProperty?: string;
   geoApiPath?: string;
+  mapSource?: 'natural-earth' | 'custom';
+  mapScope?: 'world' | 'continent' | 'country';
+  mapContinent?: string;
+  mapCountry?: string;
+  mapJoinGeoProperty?: 'name' | 'iso_a3';
+  mapJoinDataField?: string;
+  mapDataValueField?: string;
+  mapVisualEncoding?: 'fill' | 'bubble' | 'fill-bubble' | 'outline';
+  mapColorMode?: 'sequential' | 'diverging' | 'categorical';
+  mapColorCount?: number;
+  mapHuePath?: 'short' | 'long';
+  mapColorStart?: string;
+  mapColorMid?: string;
+  mapColorEnd?: string;
+  mapBackground?: 'light' | 'dark' | 'transparent';
+  mapShowTooltips?: boolean;
+  mapShowLabels?: boolean;
+  mapLabelProperty?: 'name' | 'iso_a3';
+  mapBubbleScale?: number;
+  mapStrokeColor?: string;
+  mapStrokeWidth?: number;
   metabaseUrl?: string;
   infographicFormat: DataInfographicFormat;
   infographicElements: DataStoryElement[];
