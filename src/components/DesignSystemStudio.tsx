@@ -1,8 +1,8 @@
 import {loadGraphicFont} from '../lib/graphicFonts';
 import { StudioWorkspace } from './StudioWorkspace';
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Eye, Plus, Save, Search, ShieldCheck, Trash2, Type, X } from 'lucide-react';
-import { DesignColorToken, DesignSystemDocument, DesignTypeToken } from '../types';
+import { CheckCircle2, Eye, Plus, RefreshCw, Save, Search, ShieldCheck, Trash2, Type, X } from 'lucide-react';
+import { DesignColorToken, DesignSystemDocument, DesignTypeToken, VisualIdentityDocument } from '../types';
 
 interface DesignSystemStudioProps {
   document: DesignSystemDocument;
@@ -10,6 +10,7 @@ interface DesignSystemStudioProps {
   canEdit?: boolean;
   onSave: (document: DesignSystemDocument) => void;
   onClose: () => void;
+  visualIdentitySuggestion?: VisualIdentityDocument;
 }
 
 const FALLBACK_FONTS = ['Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Nunito','Raleway','Merriweather','Playfair Display','Source Sans 3','Source Serif 4','IBM Plex Sans','IBM Plex Serif','IBM Plex Mono','Space Grotesk','DM Sans','DM Serif Display','Work Sans','Ubuntu','Oswald','Bebas Neue','Libre Baskerville','Crimson Text','Fira Sans','Fira Mono','Noto Sans','Noto Serif','Manrope','Mulish','Archivo','Archivo Black','Barlow','Cabin','Karla','Rubik','Quicksand','Josefin Sans','PT Sans','PT Serif'];
@@ -18,16 +19,25 @@ const normalizeHex=(value:string,fallback='#000000')=>{const c=String(value||'')
 const hslToHex=(h:number,s:number,l:number)=>{s/=100;l/=100;const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs(((h/60)%2)-1)),m=l-c/2;let r=0,g=0,b=0;if(h<60)[r,g,b]=[c,x,0];else if(h<120)[r,g,b]=[x,c,0];else if(h<180)[r,g,b]=[0,c,x];else if(h<240)[r,g,b]=[0,x,c];else if(h<300)[r,g,b]=[x,0,c];else[r,g,b]=[c,0,x];const p=(v:number)=>Math.round((v+m)*255).toString(16).padStart(2,'0');return `#${p(r)}${p(g)}${p(b)}`.toUpperCase();};
 const COLOR_LIBRARY=[...Array.from({length:24},(_,i)=>i*15).flatMap(h=>[24,34,44,54,64,74,84].map(l=>hslToHex(h,82,l))),...Array.from({length:13},(_,i)=>{const v=Math.round(i/12*255).toString(16).padStart(2,'0');return `#${v}${v}${v}`.toUpperCase();})];
 
-export const blankDesignSystem=():DesignSystemDocument=>({
-  name:'Design System do projeto',primaryFont:'Inter',fontFamilies:{display:'Inter',text:'Inter',notes:'IBM Plex Mono'},
-  colors:[{id:makeId('color'),name:'Brand',value:'#111111',role:'brand'},{id:makeId('color'),name:'Accent',value:'#7C3AED',role:'accent'},{id:makeId('color'),name:'Surface',value:'#FFFFFF',role:'surface'},{id:makeId('color'),name:'Text',value:'#111111',role:'text'}],
-  typography:[
-    {id:makeId('type'),name:'Display',family:'Inter',familyRole:'display',size:48,weight:700,lineHeight:1.05,letterSpacing:-0.02,wordSpacing:0},
-    {id:makeId('type'),name:'Heading',family:'Inter',familyRole:'display',size:28,weight:700,lineHeight:1.15,letterSpacing:-0.01,wordSpacing:0},
-    {id:makeId('type'),name:'Body',family:'Inter',familyRole:'text',size:16,weight:400,lineHeight:1.5,letterSpacing:0,wordSpacing:0},
-    {id:makeId('type'),name:'Notes',family:'IBM Plex Mono',familyRole:'notes',size:12,weight:500,lineHeight:1.45,letterSpacing:0.02,wordSpacing:0},
-  ],spacing:[4,8,12,16,24,32,48,64],radii:[0,4,8,12,16,24,999],layoutSpacing:{pagePadding:24,sectionGap:32,componentGap:16,controlHeight:44},updatedAt:new Date().toISOString()
-});
+export function designSystemFromIdentity(identity?: VisualIdentityDocument, base?: DesignSystemDocument): DesignSystemDocument {
+  const fallback:DesignSystemDocument=base||{
+    name:'Design System do projeto',primaryFont:'Inter',fontFamilies:{display:'Inter',text:'Inter',notes:'IBM Plex Mono'},
+    colors:[{id:makeId('color'),name:'Brand',value:'#111111',role:'brand'},{id:makeId('color'),name:'Accent',value:'#7C3AED',role:'accent'},{id:makeId('color'),name:'Surface',value:'#FFFFFF',role:'surface'},{id:makeId('color'),name:'Text',value:'#111111',role:'text'}],
+    typography:[
+      {id:makeId('type'),name:'Display',family:'Inter',familyRole:'display',size:48,weight:700,lineHeight:1.05,letterSpacing:-0.02,wordSpacing:0},
+      {id:makeId('type'),name:'Heading',family:'Inter',familyRole:'display',size:28,weight:700,lineHeight:1.15,letterSpacing:-0.01,wordSpacing:0},
+      {id:makeId('type'),name:'Body',family:'Inter',familyRole:'text',size:16,weight:400,lineHeight:1.5,letterSpacing:0,wordSpacing:0},
+      {id:makeId('type'),name:'Notes',family:'IBM Plex Mono',familyRole:'notes',size:12,weight:500,lineHeight:1.45,letterSpacing:0.02,wordSpacing:0},
+    ],spacing:[4,8,12,16,24,32,48,64],radii:[0,4,8,12,16,24,999],layoutSpacing:{pagePadding:24,sectionGap:32,componentGap:16,controlHeight:44},updatedAt:new Date().toISOString()
+  };
+  if(!identity)return fallback;
+  const roleFor=(index:number):DesignColorToken['role']=>index===0?'brand':index===1?'accent':index===2?'surface':index===3?'text':'custom';
+  const colors=identity.palette.slice(0,8).map((c,index)=>({id:makeId('color'),name:c.name||`Cor ${index+1}`,value:c.color,role:roleFor(index)}));
+  const ff={display:identity.typography.display||fallback.fontFamilies?.display||'Inter',text:identity.typography.text||fallback.fontFamilies?.text||'Inter',notes:identity.typography.accent||fallback.fontFamilies?.notes||'IBM Plex Mono'};
+  return {...fallback,name:identity.brandName&&identity.brandName!=='Nome da marca'?`Design System · ${identity.brandName}`:fallback.name,primaryFont:ff.text,fontFamilies:ff,colors:colors.length>=4?colors:fallback.colors,typography:fallback.typography.map(t=>({...t,family:t.familyRole==='display'?ff.display:t.familyRole==='notes'?ff.notes:ff.text})),updatedAt:new Date().toISOString()};
+}
+
+export const blankDesignSystem=(identity?:VisualIdentityDocument):DesignSystemDocument=>designSystemFromIdentity(identity);
 
 const loadGoogleFont=(family:string)=>{void loadGraphicFont(family).catch(()=>{})};
 const luminance=(hex:string)=>{const c=normalizeHex(hex).slice(1);const rgb=[0,2,4].map(i=>parseInt(c.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];};
@@ -49,7 +59,7 @@ export function DesignSystemPreview({document,className=''}:{document:DesignSyst
   return <div className={`bg-white p-4 overflow-hidden ${className}`}><div className="text-[9px] font-mono uppercase tracking-widest text-neutral-400">Design System</div><div className="mt-1 text-lg font-bold ds-preview-title" style={{fontFamily:f.display}}>{document.name}</div><div className="mt-4 flex gap-1.5 flex-wrap">{document.colors.slice(0,8).map(c=><span key={c.id} className="h-8 w-8 rounded-lg border border-black/10" style={{background:c.value}} title={`${c.name}: ${c.value}`}/>)}</div><div className="mt-4 space-y-2"><div className="text-xl font-bold" style={{fontFamily:f.display}}>Display · {f.display}</div><div className="text-sm" style={{fontFamily:f.text}}>Texto · {f.text} — Aa Bb Cc 0123456789</div><div className="text-xs text-neutral-500" style={{fontFamily:f.notes}}>Notas · {f.notes}</div></div><div className="mt-4 flex flex-wrap gap-1.5">{document.spacing.slice(0,8).map(v=><span key={v} className="rounded-full bg-neutral-100 px-2 py-1 text-[9px] font-mono">{v}px</span>)}</div></div>;
 }
 
-export default function DesignSystemStudio({document,title='Design System',canEdit=true,onSave,onClose}:DesignSystemStudioProps){
+export default function DesignSystemStudio({document,title='Design System',canEdit=true,onSave,onClose,visualIdentitySuggestion}:DesignSystemStudioProps){
   const initial=JSON.parse(JSON.stringify(document)) as DesignSystemDocument;
   initial.fontFamilies ||= {display:initial.primaryFont||'Inter',text:initial.primaryFont||'Inter',notes:'IBM Plex Mono'};
   initial.layoutSpacing ||= {pagePadding:24,sectionGap:32,componentGap:16,controlHeight:44};
@@ -61,10 +71,11 @@ export default function DesignSystemStudio({document,title='Design System',canEd
   const patchColor=(id:string,p:Partial<DesignColorToken>)=>setDraft(d=>({...d,colors:d.colors.map(c=>c.id===id?{...c,...p}:c)}));
   const patchType=(id:string,p:Partial<DesignTypeToken>)=>setDraft(d=>({...d,typography:d.typography.map(t=>t.id===id?{...t,...p}:t)}));
   const selectFont=(family:string)=>{loadGoogleFont(family);setDraft(d=>{const ff={...(d.fontFamilies||{display:d.primaryFont,text:d.primaryFont,notes:d.primaryFont}),[fontTarget]:family};return {...d,primaryFont:ff.text,fontFamilies:ff,typography:d.typography.map(t=>(t.familyRole||'text')===fontTarget?{...t,family}:t)}})};
+  const applyIdentitySuggestion=()=>{if(!visualIdentitySuggestion)return;setDraft(current=>designSystemFromIdentity(visualIdentitySuggestion,current));};
   return <div className="design-system-editor studio-editor fixed inset-0 z-[125] bg-[#F2F1ED] flex flex-col canvas-control atelier-studio" onPointerDown={e=>e.stopPropagation()}>
     <header className="shrink-0 min-h-16 bg-white border-b border-black/10 px-3 sm:px-5 flex items-center gap-3" style={{paddingTop:'max(.35rem, env(safe-area-inset-top))'}}><button onClick={onClose} className="h-11 w-11 rounded-xl hover:bg-black/5 flex items-center justify-center"><X size={19}/></button><div className="min-w-0 flex-1"><div className="font-bold truncate">{title}</div><div className="text-[10px] font-mono text-neutral-500 uppercase">tokens · até 3 famílias · paleta · espaçamento · acessibilidade</div></div><button disabled={!canEdit} onClick={()=>onSave({...draft,updatedAt:new Date().toISOString()})} className="h-11 px-4 rounded-xl bg-black text-white text-xs font-bold flex items-center gap-2 disabled:opacity-40"><Save size={15}/> SALVAR</button></header>
 <StudioWorkspace tools={      <section className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
-        <div className="rounded-2xl bg-white border border-black/10 p-4"><label className="text-[9px] font-mono font-bold uppercase text-neutral-500">Nome do sistema</label><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} className="mt-2 h-11 w-full rounded-xl border border-black/10 px-3 font-semibold"/></div>
+        <div className="rounded-2xl bg-white border border-black/10 p-4"><label className="text-[9px] font-mono font-bold uppercase text-neutral-500">Nome do sistema</label><input value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} className="mt-2 h-11 w-full rounded-xl border border-black/10 px-3 font-semibold"/></div>{visualIdentitySuggestion && <div className="rounded-2xl border-2 border-teal-700 bg-teal-50 p-4"><div className="flex items-start gap-3"><RefreshCw size={17} className="mt-0.5 text-teal-800"/><div className="min-w-0 flex-1"><div className="text-sm font-bold">Identidade visual disponível</div><div className="mt-1 text-[10px] text-teal-950/70">Use a paleta e as famílias tipográficas da identidade como sugestão inicial. Espaçamentos, raios e critérios de acessibilidade permanecem próprios do Design System.</div></div></div><button onClick={applyIdentitySuggestion} className="mt-3 h-10 w-full rounded-xl bg-teal-800 text-white text-[10px] font-bold">APLICAR IDENTIDADE → DESIGN SYSTEM</button></div>}
         <div className="rounded-2xl bg-white border border-black/10 p-4"><div className="flex items-start justify-between gap-3"><div><div className="text-sm font-bold">Paleta e HEX</div><div className="text-[10px] text-neutral-500">Cole, digite ou escolha qualquer HEX. Os tokens alimentam os demais módulos.</div></div><button onClick={()=>setDraft(d=>({...d,colors:[...d.colors,{id:makeId('color'),name:'Nova cor',value:'#7C3AED',role:'custom'}]}))} className="h-10 px-3 rounded-xl border border-black text-[10px] font-mono font-bold flex items-center gap-2"><Plus size={14}/> COR</button></div>
           <div className="ds-color-library mt-3 max-h-36 overflow-y-auto grid gap-1.5">{COLOR_LIBRARY.map((v,i)=><button key={`${v}-${i}`} onClick={()=>setDraft(d=>({...d,colors:[...d.colors,{id:makeId('color'),name:`Cor ${d.colors.length+1}`,value:v,role:'custom'}]}))} className="aspect-square min-h-6 rounded-md border border-black/10" style={{background:v}} title={v}/>)}</div>
           <div className="mt-4 grid md:grid-cols-2 2xl:grid-cols-3 gap-3">{draft.colors.map(c=><div key={c.id} className="rounded-xl border border-black/10 p-3"><div className="flex gap-2 items-start"><div className="min-w-0 flex-1"><input value={c.name} onChange={e=>patchColor(c.id,{name:e.target.value})} className="w-full text-xs font-bold outline-none mb-2"/><HexField value={c.value} onChange={v=>patchColor(c.id,{value:v})}/></div><button disabled={draft.colors.length<=2} onClick={()=>setDraft(d=>({...d,colors:d.colors.filter(x=>x.id!==c.id)}))} className="h-9 w-9 rounded-lg text-red-600 disabled:opacity-20 flex items-center justify-center"><Trash2 size={14}/></button></div><select value={c.role||'custom'} onChange={e=>patchColor(c.id,{role:e.target.value as any})} className="mt-2 h-9 w-full rounded-lg border border-black/10 px-2 text-[10px]"><option value="brand">Brand</option><option value="accent">Accent</option><option value="surface">Surface</option><option value="text">Text</option><option value="success">Success</option><option value="warning">Warning</option><option value="danger">Danger</option><option value="custom">Custom</option></select></div>)}</div>
