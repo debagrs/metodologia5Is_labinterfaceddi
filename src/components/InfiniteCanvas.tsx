@@ -17,7 +17,7 @@ import RichNote from './RichNote';
 import DrawingStudio, { DrawingPreview, drawingToSvgString, drawingToVideoSvg } from './DrawingStudio';
 import InteractiveStudio, { InteractivePreview, blankInteractiveDocument } from './InteractiveStudio';
 import WireframeStudio, { WireframePreview, blankWireframe, WireframeImportSource } from './WireframeStudio';
-import DesignSystemStudio, { DesignSystemPreview, blankDesignSystem } from './DesignSystemStudio';
+import DesignSystemStudio, { DesignSystemPreview, blankDesignSystem, designSystemFromIdentity } from './DesignSystemStudio';
 import VideoStudio, { VideoPreview, blankVideo } from './VideoStudio';
 import UXWritingStudio, { UXWritingPreview, blankUXWriting } from './UXWritingStudio';
 import SoundStudio, { SoundPreview, blankSound } from './SoundStudio';
@@ -26,7 +26,7 @@ import SpriteStudio, { SpriteCharacterPreview, blankSpriteCharacter, buildCharac
 import type { SpriteAssetOption } from './SpriteStudio';
 import GameDesignStudio, { GameDesignPreview, blankGameDesign } from './GameDesignStudio';
 import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from './ApiConnectionsStudio';
-import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity } from './VisualIdentityStudio';
+import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity, mergeIdentityWithDesignSystem } from './VisualIdentityStudio';
 import DataStoryStudio, { DataStoryPreview, blankDataStory } from './DataStoryStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
@@ -179,6 +179,21 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
   const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
   const projectVisualIdentity = [...nodes].reverse().find((item) => item.type === 'visual-identity' && item.visualIdentity)?.visualIdentity;
+
+  const syncDesignSystemNodesFromIdentity = (identity: VisualIdentityDocument, nodeList: ThoughtNode[]) => nodeList.map((item) => item.type === 'design-system' && item.designSystem ? ({
+    ...item,
+    designSystem: designSystemFromIdentity(identity, item.designSystem),
+    designSystemName: designSystemFromIdentity(identity, item.designSystem).name || item.designSystemName,
+    content: 'Paleta, tipografia, tokens e critérios de acessibilidade.',
+  }) : item);
+
+  const syncVisualIdentityNodesFromDesignSystem = (designSystem: DesignSystemDocument, nodeList: ThoughtNode[]) => nodeList.map((item) => item.type === 'visual-identity' && item.visualIdentity ? ({
+    ...item,
+    visualIdentity: mergeIdentityWithDesignSystem(item.visualIdentity, designSystem),
+    visualIdentityName: mergeIdentityWithDesignSystem(item.visualIdentity, designSystem).brandName || item.visualIdentityName,
+    title: mergeIdentityWithDesignSystem(item.visualIdentity, designSystem).brandName || item.title,
+    content: `${mergeIdentityWithDesignSystem(item.visualIdentity, designSystem).personality.join(', ')} · ${mergeIdentityWithDesignSystem(item.visualIdentity, designSystem).palette.map((c) => c.color).join(' ')}`
+  }) : item);
 
   const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId || newDataStory || dataStoryEditorNodeId);
   useEffect(() => {
@@ -2158,18 +2173,22 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
 
       {newDesignSystem && <DesignSystemStudio document={newDesignSystem} visualIdentitySuggestion={projectVisualIdentity} title="Novo Design System" canEdit={canEditCanvas} onSave={(designSystem)=>{
+        const syncedNodes = syncVisualIdentityNodesFromDesignSystem(designSystem, nodes);
+        onUpdateNodes(syncedNodes);
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:400; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?250:300; const position=getCenteredPosition(startWidth,startHeight);
         onAddNode({type:'design-system',title:'Design System',designSystemName:designSystem.name||`Design System ${nodes.filter((item)=>item.type==='design-system').length+1}`,content:'Paleta, tipografia, tokens e critérios de acessibilidade.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,designSystem,connections:[]}); setNewDesignSystem(null);
       }} onClose={()=>setNewDesignSystem(null)}/>} 
 
-      {designSystemEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===designSystemEditorNodeId&&item.type==='design-system'); if(!node)return null; return <DesignSystemStudio key={node.id} document={node.designSystem||blankDesignSystem(projectVisualIdentity)} visualIdentitySuggestion={projectVisualIdentity} title={node.designSystemName||'Design System'} canEdit={canEditCanvas} onSave={(designSystem)=>onUpdateNode({...node,designSystem,designSystemName:designSystem.name||node.designSystemName})} onClose={()=>setDesignSystemEditorNodeId(null)}/>})()}
+      {designSystemEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===designSystemEditorNodeId&&item.type==='design-system'); if(!node)return null; return <DesignSystemStudio key={node.id} document={node.designSystem||blankDesignSystem(projectVisualIdentity)} visualIdentitySuggestion={projectVisualIdentity} title={node.designSystemName||'Design System'} canEdit={canEditCanvas} onSave={(designSystem)=>{const updatedNodes = syncVisualIdentityNodesFromDesignSystem(designSystem, nodes).map((item)=>item.id===node.id?{...item,designSystem,designSystemName:designSystem.name||node.designSystemName}:item); onUpdateNodes(updatedNodes);} } onClose={()=>setDesignSystemEditorNodeId(null)}/>})()}
 
       {newVisualIdentity && <VisualIdentityStudio document={newVisualIdentity} designSystem={projectDesignSystem} title="Nova identidade visual" canEdit={canEditCanvas} onSave={(visualIdentity)=>{
+        const syncedNodes = syncDesignSystemNodesFromIdentity(visualIdentity, nodes);
+        onUpdateNodes(syncedNodes);
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:410; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:310; const position=getCenteredPosition(startWidth,startHeight);
         onAddNode({type:'visual-identity',title:visualIdentity.brandName||'Identidade visual',visualIdentityName:visualIdentity.brandName||`Identidade visual ${nodes.filter((item)=>item.type==='visual-identity').length+1}`,content:`${visualIdentity.personality.join(', ')} · ${visualIdentity.palette.map((c)=>c.color).join(' ')}`,phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,visualIdentity,connections:[]}); setNewVisualIdentity(null);
       }} onAddToNotes={(noteTitle,noteContent)=>{const position=getCenteredPosition(340,220);onAddNode({type:'user-thought',title:noteTitle,content:noteContent,phase:activePhase,x:position.x+36,y:position.y+36,width:340,height:220,connections:[]})}} onClose={()=>setNewVisualIdentity(null)}/>}
 
-      {visualIdentityEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===visualIdentityEditorNodeId&&item.type==='visual-identity'); if(!node)return null; return <VisualIdentityStudio key={node.id} document={node.visualIdentity||blankVisualIdentity(projectDesignSystem)} designSystem={projectDesignSystem} title={node.visualIdentityName||'Identidade visual'} canEdit={canEditCanvas} onSave={(visualIdentity)=>onUpdateNode({...node,visualIdentity,visualIdentityName:visualIdentity.brandName||node.visualIdentityName,title:visualIdentity.brandName||node.title,content:`${visualIdentity.personality.join(', ')} · ${visualIdentity.palette.map((c)=>c.color).join(' ')}`})} onAddToNotes={(noteTitle,noteContent)=>{const position=getCenteredPosition(340,220);onAddNode({type:'user-thought',title:noteTitle,content:noteContent,phase:activePhase,x:position.x+36,y:position.y+36,width:340,height:220,connections:[]})}} onClose={()=>setVisualIdentityEditorNodeId(null)}/>})()}
+      {visualIdentityEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===visualIdentityEditorNodeId&&item.type==='visual-identity'); if(!node)return null; return <VisualIdentityStudio key={node.id} document={node.visualIdentity||blankVisualIdentity(projectDesignSystem)} designSystem={projectDesignSystem} title={node.visualIdentityName||'Identidade visual'} canEdit={canEditCanvas} onSave={(visualIdentity)=>{const updatedNodes = syncDesignSystemNodesFromIdentity(visualIdentity, nodes).map((item)=>item.id===node.id?{...item,visualIdentity,visualIdentityName:visualIdentity.brandName||node.visualIdentityName,title:visualIdentity.brandName||node.title,content:`${visualIdentity.personality.join(', ')} · ${visualIdentity.palette.map((c)=>c.color).join(' ')}`}:item); onUpdateNodes(updatedNodes);} } onAddToNotes={(noteTitle,noteContent)=>{const position=getCenteredPosition(340,220);onAddNode({type:'user-thought',title:noteTitle,content:noteContent,phase:activePhase,x:position.x+36,y:position.y+36,width:340,height:220,connections:[]})}} onClose={()=>setVisualIdentityEditorNodeId(null)}/>})()}
 
       {newVideo && <VideoStudio document={newVideo} designSystem={projectDesignSystem} availableMedia={projectVideoMedia} title="Novo vídeo" canEdit={canEditCanvas} onSave={(video)=>{
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?300:380; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?360:430; const position=getCenteredPosition(startWidth,startHeight);
