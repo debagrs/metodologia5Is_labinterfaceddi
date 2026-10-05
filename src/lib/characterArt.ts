@@ -36,6 +36,10 @@ function accessories(a:CharacterAppearance,place:'head'|'body-back'|'body-front'
  const f=color(item.color,'#6D5B79');let art='',x=180,y=110;
  if(place==='head'){
  if(item.kind==='glasses' || item.kind==='sunglasses')art=`<g stroke="${f}" stroke-width="2.5" fill="${item.kind==='sunglasses'?tint(f,-28):'none'}"><rect x="139" y="98" width="35" height="27" rx="10"/><rect x="186" y="98" width="35" height="27" rx="10"/><path d="M174 108Q180 104 186 108M133 105h6m82 0h6"/></g>`;
+ if(item.kind==='goggles')art=`<g stroke="${tint(f,-35)}" stroke-width="4" fill="${tint(f,22)}"><circle cx="157" cy="108" r="17"/><circle cx="203" cy="108" r="17"/><path d="M174 108h12M138 104l-14-5m98 5 14-5"/></g>`;
+ if(item.kind==='monocle')art=`<g stroke="${f}" stroke-width="2.5" fill="none"><circle cx="203" cy="109" r="16"/><path d="M215 121Q224 147 211 168"/></g>`;
+ if(item.kind==='mask')art=`<path d="M137 99Q180 86 223 99L216 126Q180 139 144 126Z" fill="${f}" opacity=".92"/><path d="M148 108q9-8 18 0m28 0q9-8 18 0" fill="none" stroke="#fff" stroke-width="3"/>`;
+
  if(item.kind==='hat')art=`<path d="M121 74Q180 65 239 74L231 86Q180 80 129 86ZM145 73L151 33Q180 26 209 33L215 73Z" fill="${f}"/><path d="M148 64Q180 69 212 64" stroke="${tint(f,-35)}" stroke-width="6"/>`;
  if(item.kind==='cap')art=`<path d="M132 78Q135 36 180 37Q225 36 228 78Z" fill="${f}"/><path d="M169 77Q206 69 241 80Q237 92 171 87Z" fill="${tint(f,-20)}"/>`;
  if(item.kind==='beanie')art=`<path d="M129 86Q126 32 179 31Q234 32 231 86Z" fill="${f}"/><path d="M128 73H232V91Q180 84 128 91Z" fill="${tint(f,20)}"/><path d="M148 65V47m15 16V40m17 23V37m17 26V40m15 25V48" opacity=".25"/>`;
@@ -43,12 +47,28 @@ function accessories(a:CharacterAppearance,place:'head'|'body-back'|'body-front'
  if(item.kind==='earrings')art=`<g stroke="${f}" fill="none" stroke-width="3"><ellipse cx="131" cy="139" rx="6" ry="9"/><ellipse cx="229" cy="139" rx="6" ry="9"/></g>`;
  if(item.kind==='bow')art=`<path d="M181 62Q149 35 149 55Q146 78 180 66Q214 79 211 55Q211 35 181 62Z" fill="${f}"/><circle cx="181" cy="64" r="6" fill="${tint(f,-20)}"/>`;
  if(item.kind==='crown')art=`<path d="M137 75L132 45L155 59L180 34L205 59L229 45L223 75Z" fill="${f}"/><path d="M142 68H218" stroke="${tint(f,-30)}"/>`;
- } else if(place==='body-back' && item.kind==='backpack'){x=180;y=235;art=`<path d="M139 205Q139 177 180 177Q221 177 221 205V285Q180 301 139 285Z" fill="${f}"/><path d="M152 211V273Q180 287 208 273V211" fill="none" stroke="${tint(f,-25)}" stroke-width="3"/>`;}
+ if(item.kind==='hood')art=`<path d="M122 124Q119 47 180 34Q241 47 238 124L222 103Q210 66 180 58Q150 66 138 103Z" fill="${f}" opacity=".92"/>`;
+ if(item.kind==='bandana')art=`<path d="M128 75Q180 66 232 75L229 88Q180 80 131 88Z" fill="${f}"/><path d="M228 80l24 14-20 7 17 15-30-11Z" fill="${tint(f,-18)}"/>`;
+ if(item.kind==='headband')art=`<path d="M128 76Q180 60 232 76" fill="none" stroke="${f}" stroke-width="8"/>`;
+ if(item.kind==='hairclip')art=`<path d="M137 72l20-8 5 8-20 8Z" fill="${f}"/>`;
+ if(item.kind==='flower')art=`<g transform="translate(143 69)" fill="${f}"><circle r="6"/><circle cx="-9" r="7"/><circle cx="9" r="7"/><circle cy="-9" r="7"/><circle cy="9" r="7"/><circle r="3" fill="${tint(f,-35)}"/></g>`;
+ if(item.kind==='tiara')art=`<path d="M139 77Q180 45 221 77" fill="none" stroke="${f}" stroke-width="5"/><path d="M173 55l7-12 7 12" fill="${f}"/>`;
+
+ } else if(place==='body-back'){
+ if(item.kind==='backpack'){x=180;y=235;art=`<path d="M139 205Q139 177 180 177Q221 177 221 205V285Q180 301 139 285Z" fill="${f}"/><path d="M152 211V273Q180 287 208 273V211" fill="none" stroke="${tint(f,-25)}" stroke-width="3"/>`;}
+ if(item.kind==='cape'){x=180;y=250;art=`<path d="M151 185Q180 203 209 185L232 350Q180 383 128 350Z" fill="${f}" opacity=".92"/><path d="M152 188Q180 203 208 188" fill="none" stroke="${tint(f,-35)}" stroke-width="4"/>`;}
+ if(item.kind==='satchel'){x=180;y=250;art=`<path d="M145 186L211 310" stroke="${f}" stroke-width="6"/><rect x="195" y="274" width="42" height="38" rx="7" fill="${f}"/><path d="M199 287h34" stroke="${tint(f,-30)}"/>`;}
+ }
  else if(place==='body-front'){
  if(item.kind==='scarf'){y=190;art=`<path d="M158 183Q180 198 202 183L200 201Q180 214 160 201L151 249L170 254L179 205Z" fill="${f}"/><path d="M160 193Q180 205 199 193" fill="none" stroke="${tint(f,-24)}"/>`;}
  if(item.kind==='necklace'){y=210;art=`<path d="M157 190Q159 231 180 236Q201 231 203 190" stroke="${f}" stroke-width="2.5" fill="none"/><path d="M180 231l-6 8 6 8 6-8Z" fill="${f}"/>`;}
  if(item.kind==='belt'){y=282;art=`<path d="M151 277Q180 287 209 277V286Q180 296 151 286Z" fill="${f}"/><rect x="175" y="281" width="10" height="9" rx="2" fill="#D4B378"/>`;}
  if(item.kind==='bracelet'){y=298;art=(wrists || [pt(134,295),pt(225,292)]).map(w=>`<path d="M${w.x-7} ${w.y-4}l14 0" stroke="${f}" stroke-width="5"/>`).join('');}
+ if(item.kind==='brooch'){y=215;art=`<circle cx="161" cy="205" r="8" fill="${f}"/><path d="M161 211l-6 16 7-4 6 5-3-17Z" fill="${tint(f,-18)}"/>`;}
+ if(item.kind==='pouch'){y=287;art=`<rect x="202" y="274" width="29" height="31" rx="5" fill="${f}"/><path d="M204 284h25" stroke="${tint(f,-30)}"/>`;}
+ if(item.kind==='shoulderpad'){y=202;art=`<path d="M135 191Q151 176 166 192L158 210Q143 207 132 201Z" fill="${f}"/><path d="M225 191Q209 176 194 192L202 210Q217 207 228 201Z" fill="${f}"/>`;}
+ if(item.kind==='watch'){y=298;const w=(wrists || [pt(134,295),pt(225,292)])[1];art=`<g transform="translate(${w.x} ${w.y})"><rect x="-7" y="-10" width="14" height="20" rx="4" fill="${f}"/><circle r="5" fill="${tint(f,40)}"/><path d="M0 0l3-2" stroke="${tint(f,-40)}"/></g>`;}
+
  }
  return art?around(art,x,y,clamp(item.scale||1,.5,1.5),clamp(item.scale||1,.5,1.5),0,item.y||0).replace('translate('+x+' ', 'translate('+(x+(item.x||0))+' '):'';
  }).join('');
@@ -373,6 +393,52 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
       : "";
   return `<g transform="translate(180 0) scale(${faceWidth} 1) translate(-180 0)">${mane}${around(horns,180,77,metric(a,"hornSize")).replaceAll(tint(skin,30),color(a.hornColor,tint(skin,30)))}${animal ? "" : around(hair(a, true),180,90,metric(a,"hairVolume"))}${around(ears,180,103,metric(a,'earSize'),metric(a,'earSize'),metric(a,'earAngle',0)).replaceAll(skin,color(a.earColor,skin))}<path d="${jaw}" fill="${skin}"/>${shadow}${modeling}${ellipse(151, 134, 10, 5, "#DB908A", 'stroke="none" opacity=".22"')}${ellipse(210, 134, 10, 5, "#DB908A", 'stroke="none" opacity=".22"')}${eyes(a, expression)}${brows}${nose}${muzzle}${mouth}${freckles}${a.whiskers ? around('<path d="M156 143l-20 -4m20 9l-23 5m71-10l20-4m-20 9l23 5" fill="none" stroke-width="1.1"/>',180,143,metric(a,'whiskerLength'),1) : ""}${animal ? "" : around(hair(a, false),180,90,metric(a,"hairVolume"))}${accessories(a,"head")}</g>`;
 }
+
+function animalHead(a: CharacterAppearance, expression: string) {
+  const fill=color(a.surfaceColor || a.skinColor,'#D4AD80');
+  const line=color(a.lineColor,'#382a29');
+  const eye=color(a.eyeColor,'#49372F');
+  const preset=String(a.speciesPreset || '');
+  const species=String(a.species || '');
+  const isBird=a.bodyPlan==='avian' || species==='bird' || ['bird','owl','parrot'].includes(preset);
+  const isReptile=species==='reptile' || ['lizard','turtle','snake'].includes(preset);
+  const isAmphibian=species==='amphibian' || preset==='frog';
+  const isFish=species==='fish' || a.bodyPlan==='aquatic' || preset==='fish';
+  const isArthropod=species==='arthropod' || ['insect','spider','butterfly'].includes(preset);
+  const blink=expression==='calm' || expression==='laughing';
+  const eyePair=(x1:number,x2:number,y:number,rx:number,ry:number)=> blink
+    ? `<path d="M${x1-rx} ${y}q${rx} ${-ry} ${rx*2} 0M${x2-rx} ${y}q${rx} ${-ry} ${rx*2} 0" fill="none" stroke="${line}" stroke-width="3"/>`
+    : `<g fill="#fff" stroke="${line}" stroke-width="2"><ellipse cx="${x1}" cy="${y}" rx="${rx}" ry="${ry}"/><ellipse cx="${x2}" cy="${y}" rx="${rx}" ry="${ry}"/></g><g fill="${eye}" stroke="none"><ellipse cx="${x1}" cy="${y+1}" rx="${Math.max(3,rx*.48)}" ry="${Math.max(4,ry*.58)}"/><ellipse cx="${x2}" cy="${y+1}" rx="${Math.max(3,rx*.48)}" ry="${Math.max(4,ry*.58)}"/></g>`;
+  if(isBird){
+    const owl=preset==='owl'; const parrot=preset==='parrot'; const beak=color(a.noseColor,parrot?'#D9A33F':'#E7B55D');
+    const base=`<path d="M126 112Q124 48 180 42Q236 48 234 112Q236 170 180 181Q124 170 126 112Z" fill="${fill}"/>`;
+    const feather=owl?`<path d="M128 79l24-24 15 13 13-24 14 24 15-13 23 24" fill="${tint(fill,-18)}" stroke="${line}" stroke-width="2"/>`:`<path d="M139 67Q180 47 221 67" fill="none" stroke="${tint(fill,-28)}" stroke-width="3" opacity=".55"/>`;
+    const eyesMarkup=eyePair(158,202,110,owl?17:13,owl?18:13);
+    const beakMarkup=parrot?`<path d="M169 128Q210 116 202 145Q197 162 179 158L183 143Q170 144 169 128Z" fill="${beak}" stroke="${line}" stroke-width="2"/>`:`<path d="M165 127L202 138L180 156Z" fill="${beak}" stroke="${line}" stroke-width="2"/><path d="M169 137h25" stroke="${tint(beak,-38)}"/>`;
+    return `<g>${base}${feather}${eyesMarkup}${beakMarkup}${accessories(a,'head')}</g>`;
+  }
+  if(isAmphibian){
+    return `<g><path d="M122 115Q118 63 151 66Q180 43 209 66Q242 63 238 115Q240 170 180 181Q120 170 122 115Z" fill="${fill}"/>${ellipse(148,78,18,17,fill)}${ellipse(212,78,18,17,fill)}${eyePair(148,212,82,11,12)}<path d="M164 145Q180 151 196 145" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+  }
+  if(isReptile){
+    const snout=preset==='snake'?20:28;
+    return `<g><path d="M128 105Q134 53 180 51Q226 53 232 105L218 159Q180 180 142 159Z" fill="${fill}"/><path d="M142 85l14-8 14 8m20 0 14-8 14 8" fill="none" stroke="${tint(fill,-35)}" stroke-width="2"/>${eyePair(154,206,106,10,8)}<path d="M${180-snout} 139Q180 148 ${180+snout} 139" fill="none" stroke="${line}" stroke-width="2"/>${preset==='snake'?'<path d="M180 145v13m0 0-7 6m7-6 7 6" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
+  }
+  if(isFish){
+    return `<g><path d="M126 111Q126 61 180 55Q234 61 234 111Q228 168 180 178Q132 168 126 111Z" fill="${fill}"/><path d="M128 103L105 80L110 124Z" fill="${tint(fill,-18)}"/><path d="M232 103L255 80L250 124Z" fill="${tint(fill,-18)}"/>${eyePair(155,205,108,11,12)}<path d="M166 146Q180 153 194 146" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+  }
+  if(isArthropod){
+    const compound=expression==='surprised'?15:13;
+    return `<g><ellipse cx="180" cy="114" rx="48" ry="62" fill="${fill}"/><path d="M153 64Q142 32 126 31M207 64Q218 32 234 31" fill="none" stroke="${line}" stroke-width="3"/><g fill="${eye}" opacity=".92"><ellipse cx="155" cy="105" rx="${compound}" ry="20"/><ellipse cx="205" cy="105" rx="${compound}" ry="20"/></g><g fill="#fff" opacity=".6">${[[-6,-8],[2,-3],[7,7]].map(([dx,dy])=>`<circle cx="${155+dx}" cy="${105+dy}" r="2"/><circle cx="${205+dx}" cy="${105+dy}" r="2"/>`).join('')}</g><path d="M168 148Q180 153 192 148" fill="none" stroke="${line}" stroke-width="2"/>${accessories(a,'head')}</g>`;
+  }
+  // Mamíferos quadrúpedes: focinho, orelhas e olhos próprios, sem nariz/boca humanos.
+  const ear=String(a.earStyle||'round');
+  const ears=ear==='pointed'?`<path d="M137 91L130 42L158 76M202 76L230 42L223 91" fill="${fill}"/>`:ear==='long'?`${ellipse(148,55,13,39,fill)}${ellipse(212,55,13,39,fill)}`:ear==='floppy'?`<path d="M140 81Q112 75 118 141Q124 158 139 132M220 81Q248 75 242 141Q236 158 221 132" fill="${fill}"/>`:`${ellipse(137,91,19,22,fill)}${ellipse(223,91,19,22,fill)}`;
+  const muzzleFill=tint(fill,20); const muzzleLong=(a.muzzleStyle==='long');
+  const muzzle=`<ellipse cx="180" cy="143" rx="${muzzleLong?29:22}" ry="${muzzleLong?18:15}" fill="${muzzleFill}"/><path d="M171 134Q180 130 189 134Q180 146 171 134Z" fill="${line}" stroke="none"/><path d="M166 151Q180 158 194 151" fill="none" stroke="${line}" stroke-width="2"/>`;
+  return `<g>${ears}<path d="M129 108Q128 54 180 50Q232 54 231 108Q229 168 180 181Q131 168 129 108Z" fill="${fill}"/>${eyePair(156,204,110,11,12)}${muzzle}${a.whiskers?'<path d="M155 143l-24-6m24 13l-27 5m77-12 24-6m-24 13 27 5" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
+}
+
 function wings(a: CharacterAppearance, x: number, y: number) {
   const fill = color(a.wingColor || a.surfaceColor || a.skinColor, "#EAC3A9"),
     line = color(a.lineColor, "#382a29");
@@ -447,22 +513,20 @@ function biped(
   const lower = `<path d="M${180 - 28 * width * waist} 281Q180 292 ${180 + 28 * width * waist} 281L214 320Q198 330 180 318Q160 329 146 320Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`;
   const neck =
     '<path d="M166 164V184Q180 198 194 184V164Z" fill="' + skin + '"/>';
-  const details =
-    a.outfitStyle === "fantasy"
-      ? '<path d="M148 200Q180 216 212 200L205 269Q180 284 155 269Z" fill="' +
-        pants +
-        '"/><path d="M180 213V271M152 242H208" stroke="#DEC28D" stroke-width="3"/>'
-      : a.outfitStyle === "tech"
-        ? '<path d="M154 210V259L180 278L206 259V210" fill="none" stroke="' +
-          pants +
-          '" stroke-width="5"/><circle cx="180" cy="225" r="7" fill="#BCEFEA"/>'
-        : a.outfitStyle === "formal"
-          ? '<path d="M165 187L180 209L195 187" fill="#fff"/><path d="M180 198L174 216L180 256L186 216Z" fill="#553D50"/>'
-          : a.outfitStyle === "sport"
-            ? '<path d="M150 205V270M210 205V270" stroke="#fff" stroke-width="5" fill="none"/>'
-            : a.outfitStyle === "street"
-              ? '<path d="M160 250Q180 245 200 250V271H160Z" fill="#fff" opacity=".3"/>'
-              : "";
+  let details = "";
+  if (a.outfitStyle === "fantasy") details = '<path d="M148 200Q180 216 212 200L205 269Q180 284 155 269Z" fill="' + pants + '"/><path d="M180 213V271M152 242H208" stroke="#DEC28D" stroke-width="3"/>';
+  else if (a.outfitStyle === "tech" || a.outfitStyle === "scifi") details = '<path d="M154 210V259L180 278L206 259V210" fill="none" stroke="' + pants + '" stroke-width="5"/><circle cx="180" cy="225" r="7" fill="#BCEFEA"/><path d="M161 236h38M169 248h22" stroke="#BCEFEA" stroke-width="2"/>';
+  else if (a.outfitStyle === "formal" || a.outfitStyle === "elegant") details = '<path d="M165 187L180 209L195 187" fill="#fff"/><path d="M180 198L174 216L180 256L186 216Z" fill="#553D50"/>' + (a.outfitStyle === 'elegant' ? '<path d="M151 278Q180 303 209 278L222 326Q180 348 138 326Z" fill="'+shirt+'" opacity=".85"/>' : '');
+  else if (a.outfitStyle === "sport") details = '<path d="M150 205V270M210 205V270" stroke="#fff" stroke-width="5" fill="none"/><path d="M166 218h28" stroke="#fff" stroke-width="3"/>';
+  else if (a.outfitStyle === "street") details = '<path d="M160 250Q180 245 200 250V271H160Z" fill="#fff" opacity=".3"/><path d="M154 202Q180 219 206 202" fill="none" stroke="'+pants+'" stroke-width="4"/>';
+  else if (a.outfitStyle === "school") details = '<path d="M158 188Q180 208 202 188" fill="#fff"/><path d="M164 193l16 21 16-21" fill="none" stroke="'+pants+'" stroke-width="4"/><path d="M148 286Q180 302 212 286L218 322Q180 337 142 322Z" fill="'+pants+'"/>';
+  else if (a.outfitStyle === "kawaii") details = '<path d="M164 195Q180 212 196 195" fill="#fff"/><path d="M180 202l-12 9 12 8 12-8Z" fill="'+pants+'"/><path d="M151 284Q180 303 209 284L219 319Q180 339 141 319Z" fill="'+shirt+'"/>';
+  else if (a.outfitStyle === "punk") details = '<path d="M151 207L209 257M209 207L151 257" stroke="'+pants+'" stroke-width="7"/><path d="M153 273h54" stroke="#C9C9C9" stroke-width="3" stroke-dasharray="5 4"/>';
+  else if (a.outfitStyle === "steampunk") details = '<path d="M157 192L180 211L203 192V271H157Z" fill="'+tint(shirt,-15)+'"/><path d="M170 195v73m20-73v73" stroke="'+pants+'" stroke-width="4"/><circle cx="180" cy="226" r="9" fill="#B88B46"/><circle cx="180" cy="226" r="4" fill="none" stroke="#6E4C2E" stroke-width="2"/><path d="M161 246h38" stroke="#B88B46" stroke-width="3"/>';
+  else if (a.outfitStyle === "historical") details = '<path d="M153 190Q180 214 207 190L211 277Q180 296 149 277Z" fill="'+shirt+'"/><path d="M162 194Q180 209 198 194M160 214h40" fill="none" stroke="#E5D6B7" stroke-width="3"/>';
+  else if (a.outfitStyle === "workwear") details = '<path d="M151 206H209V274H151Z" fill="'+tint(shirt,-18)+'" opacity=".75"/><rect x="158" y="218" width="19" height="18" rx="2" fill="'+pants+'"/><rect x="184" y="218" width="19" height="18" rx="2" fill="'+pants+'"/><path d="M165 188v26m30-26v26" stroke="'+pants+'" stroke-width="5"/>';
+  else if (a.outfitStyle === "adventure") details = '<path d="M153 205L207 205L202 271H158Z" fill="'+tint(shirt,-12)+'"/><path d="M158 217h44M180 205v66" stroke="'+pants+'" stroke-width="4"/><path d="M151 274h58" stroke="#77583F" stroke-width="7"/>';
+  else if (a.outfitStyle === "casual") details = '<path d="M159 204Q180 214 201 204" fill="none" stroke="'+tint(shirt,-28)+'" stroke-width="3"/><path d="M166 248h28" stroke="'+tint(shirt,-20)+'" stroke-width="2" opacity=".55"/>';
   const body = `${wings(a, 180, 220)}${tail(a, 210, 275)}${link(sl, el, wl, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(sr, er, wr, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(hl, kl, fl, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${link(hr, kr, fr, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${shoe(fl, -1)}${shoe(fr, 1)}${lower}${sleeves}${torso}${neck}${details}<path d="M${180 - shoulder + 9} 215Q${180 - shoulder + 3} 252 ${180 - 24 * width} 279Q180 294 ${180 + 27 * width} 279" fill="none" stroke="${tint(shirt, -25)}" stroke-width="4" opacity=".35"/><path d="M166 181Q180 192 194 181" stroke="${tint(shirt, -45)}" fill="none"/>${hand(wl, -1)}${hand(wr, 1)}`;
   const headScale = clamp(
     (a.bodyShape === "chibi" ? 5.5 : 4.8) / (a.headToBodyRatio || 4.8),
@@ -508,7 +572,7 @@ function animal(
    const torsoX=192,torsoY=pose==='sit'?326:300,torsoW=68*(a.bodyWidth || 1)*metric(a,'waistWidth'),torsoH=42,limb=(a.limbLength || 1)*metric(a,'legLength');
    const legs=[0,1,2,3].map(i=>{const near=i%2===1,front=i<2,origin=pt(torsoX+(front?-45:43),torsoY+20+(near?5:-6)),angle=gait?Math.sin(phase*Math.PI*2+(i===0||i===3?0:Math.PI))*(running?45:26):pose==='sit'&&!front?65:0;const length=(a.limbLength || 1)*metric(a,front?'armLength':'legLength');const knee=joint(origin,39*length,angle+(adjustments[front?(near?'ar':'al'):(near?'lr':'ll')]||0));const foot=joint(knee,38*length,angle+(standing?Math.max(0,-angle)*1.2:-60)+(adjustments[front?(near?'er':'el'):(near?'kr':'kl')]||0));const fillLeg=near?fill:tint(fill,-25);return `<g>${link(origin,knee,foot,18*metric(a,front?'armWidth':'legWidth'),fillLeg,line)}${ellipse(foot.x-3,foot.y+3,13*metric(a,front?'handSize':'footSize'),7,fillLeg)}</g>`;});
    const neck=`<path d="M${torsoX-49} ${torsoY-7}Q109 284 109 239L142 240Q149 267 ${torsoX-18} ${torsoY-30}Z" fill="${fill}"/>`;
-   const head=around(face({...a,hairStyle:'none'},expression,true),180,165,.74*metric(a,'headWidth'),.74*metric(a,'headHeight'),adjustments.headTilt||0);
+   const head=around(animalHead({...a,hairStyle:'none'},expression),180,165,.74*metric(a,'headWidth'),.74*metric(a,'headHeight'),adjustments.headTilt||0);
    return `<g transform="translate(0 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 180 310)">${legs.filter((_,i)=>i%2===0).join('')}${tail(a,torsoX+torsoW-8,torsoY)}${ellipse(torsoX,torsoY,torsoW,torsoH,fill)}${neck}${wings(a,torsoX,torsoY-12)}${legs.filter((_,i)=>i%2===1).join('')}<g transform="translate(-63 85) scale(${view==='side'?.84:1} 1)">${head}</g>${accessories(a,'body-front')}</g>`;
   }
   let body = "";
@@ -563,7 +627,7 @@ function animal(
         .join("") +
       "</g>";
   body += surfaceAccent(a);
-  const scaledHead = `<g transform="translate(180 287) rotate(${adjustments.headTilt||0}) scale(${metric(a,"headWidth")} ${metric(a,"headHeight")}) translate(-180 -177)">${view === "back" ? ellipse(180, 122, 46, 59, fill) : face({ ...a, hairStyle: "none" }, expression, true)}</g>`;
+  const scaledHead = `<g transform="translate(180 287) rotate(${adjustments.headTilt||0}) scale(${metric(a,"headWidth")} ${metric(a,"headHeight")}) translate(-180 -177)">${view === "back" ? ellipse(180, 122, 46, 59, fill) : animalHead({ ...a, hairStyle: "none" }, expression)}</g>`;
   return `<g transform="translate(180 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 0 310) scale(${a.bodyWidth || 1} 1) translate(-180 0)">${accessories(a,"body-back")}${wings(a, 180, 280)}${body}${scaledHead}${accessories(a,"body-front")}</g>`;
 }
 export function illustrateCharacter(
