@@ -729,11 +729,26 @@ function cleanCharacterSvgJson(text) {
   const data = extractJsonObject(text);
   return { svg: sanitizeCharacterSvg(data.svg), notes: Array.isArray(data.notes) ? data.notes.slice(0, 8).map(String) : [] };
 }
+
+function cleanGeneratedImageJson(text) {
+  const data = extractJsonObject(text);
+  return {
+    svg: sanitizeCharacterSvg(data.svg),
+    name: String(data.name || 'imagem-gerada').slice(0, 80),
+    notes: Array.isArray(data.notes) ? data.notes.slice(0, 8).map(String) : [],
+  };
+}
+function buildGeneralImageSvgMessages(body) {
+  const system = `Você é ilustrador(a), designer gráfico e diretor(a) de arte. Gere uma IMAGEM VETORIAL SVG EDITÁVEL para uso em projeto de design. O resultado deve ser autocontido, sem scripts, sem foreignObject, sem imagens externas e sem URLs. Use formas vetoriais reais: path, circle, ellipse, rect, line, polygon ou polyline. Não produza HTML. Não use marcas registradas ou personagens protegidos como imitação exata. Quando o pedido citar um estilo, traduza-o em atributos gráficos gerais sem copiar a assinatura de um artista vivo. Para line art, trabalhe contorno, ritmo e espaço negativo; para infográfico, preserve legibilidade; para ilustração, use composição, profundidade, textura vetorial e hierarquia. Se o usuário pedir fundo transparente, não crie retângulo de fundo. Use viewBox 0 0 1200 800, salvo quando o pedido exigir claramente outro formato. Retorne SOMENTE JSON válido no formato {"name":"nome-curto","svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
+  const user = `PEDIDO: ${String(body?.prompt || '')}
+Crie uma peça visual útil como material de design, com acabamento suficiente para continuar sendo editada em SVG ou Photopea.`;
+  return { system, user };
+}
 function buildCharacterSvgMessages(body) {
   const c = body?.character || {};
   const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. O ser pode ser HUMANO, ANIMAL, CRIATURA, MASCOTE ou HÍBRIDO. Quando species="hybrid", trate hybridPrimaryPreset, hybridSecondaryPreset e hybridBlend como um DNA visual explícito: preserve sinais reconhecíveis das duas bases sem simplesmente somar todas as partes. Respeite rigorosamente species, bodyPlan e partes opcionais recebidas: se browStyle, earStyle, muzzleStyle, tailStyle, wingStyle ou hornStyle forem "none", NÃO desenhe essa parte. Não force anatomia humana em quadrúpedes, aves, peixes, répteis, artrópodes ou seres serpentinos. Preserve locomoção, centro de massa e silhueta compatíveis com o plano corporal. Para animais estilizados, use anatomia observável como base antes de simplificar. Em híbridos, priorize silhueta coerente, centro de massa plausível e 2–4 traços fortes de cada origem; o valor hybridBlend indica qual base domina a morfologia.
 
-O campo artStyle define a linguagem visual: illustrated=realismo ilustrado com volume e íris detalhada; cartoon=cartoon expressivo; anime=anime com cel shading; manga=mangá monocromático; comic=quadrinhos; storybook=livro ilustrado; watercolor=aquarela vetorial; pencil=lápis/hachuras; ink=nanquim; chibi=proporções compactas; minimal-lineart=line art minimalista com traço simples/contínuo, foco no gesto e pouquíssimos detalhes. Não entregue apenas figuras geométricas: use curvas anatômicas, articulações contínuas, mãos/patas coerentes, conexão do pescoço e cabelo com o rosto e acabamento consistente. Se houver bico, não desenhe nariz humano.
+O campo artStyle define a linguagem visual: illustrated=realismo ilustrado com volume e íris detalhada; cartoon=cartoon expressivo; anime=anime com cel shading; manga=mangá monocromático; comic=quadrinhos; storybook=livro ilustrado; watercolor=aquarela vetorial; pencil=lápis/hachuras; ink=nanquim; chibi=proporções compactas. Não entregue apenas figuras geométricas: use curvas anatômicas, articulações contínuas, mãos/patas coerentes, conexão do pescoço e cabelo com o rosto e acabamento consistente. Se houver bico, não desenhe nariz humano.
 Quando modo=refine, edite o SVG atual e preserve identidade, paleta, acessórios e partes não mencionadas no pedido. Quando modo=reference, as imagens enviadas são a fonte principal: preserve seus traços identificadores, silhueta e intenção autoral; a aparência modular é secundária. Quando modo=new, crie a partir do prompt e estilo selecionado. Nunca diga que leu uma imagem quando nenhuma foi enviada. O resultado é uma ilustração SVG, não uma reconstrução ou rig de animação automático.
 Princípios de projeto: silhueta clara, shape language coerente, leitura em tamanho pequeno, model sheet consistente, pose compatível com a espécie e acessibilidade cromática. Forma não determina personalidade de modo universal e não deve ser usada para estereotipar corpo, gênero, raça, deficiência, idade ou espécie. Use viewBox 0 0 360 520. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
   const user = `PEDIDO: ${String(body?.prompt || '')}
@@ -751,8 +766,8 @@ SVG ATUAL PARA EDITAR (somente modo refine): ${body.characterSourceMode !== 'new
 }
 
 const CHARACTER_DESIGN_ENUMS = {
-  artStyle:['illustrated','cartoon','anime','manga','comic','storybook','watercolor','pencil','ink','chibi','engraving','lineart','minimal-lineart','realism','psychedelic','steampunk'],
-  styleVariant:['manga-shounen','manga-shoujo','manga-seinen','manga-chibi','manga-fashion','engraving-copper','engraving-woodcut','engraving-lino','lineart-ornamental','lineart-botanical','lineart-tattoo','minimal-lineart-continuous','minimal-lineart-editorial','minimal-lineart-boho','realism-editorial','realism-concept','realism-scientific','psychedelic-70s','psychedelic-neon','psychedelic-surreal','steampunk-victorian','steampunk-diesel','steampunk-clockwork','comic-western','comic-noir','comic-indie','storybook-gouache','storybook-pencil','storybook-paper','anime-modern','anime-soft','cartoon-editorial','cartoon-rubber','illustrated-soft','watercolor-soft','pencil-graphite','ink-brush','chibi-kawaii'],
+  artStyle:['illustrated','cartoon','anime','manga','comic','storybook','watercolor','pencil','ink','chibi','engraving','lineart','realism','psychedelic','steampunk'],
+  styleVariant:['manga-shounen','manga-shoujo','manga-seinen','manga-chibi','manga-fashion','engraving-copper','engraving-woodcut','engraving-lino','lineart-ornamental','lineart-botanical','lineart-tattoo','realism-editorial','realism-concept','realism-scientific','psychedelic-70s','psychedelic-neon','psychedelic-surreal','steampunk-victorian','steampunk-diesel','steampunk-clockwork','comic-western','comic-noir','comic-indie','storybook-gouache','storybook-pencil','storybook-paper','anime-modern','anime-soft','cartoon-editorial','cartoon-rubber','illustrated-soft','watercolor-soft','pencil-graphite','ink-brush','chibi-kawaii'],
   species:['human','anthropomorphic','quadruped','bird','reptile','amphibian','fish','arthropod','fantasy','hybrid'],
   bodyPlan:['biped','quadruped','avian','serpentine','aquatic','six-limbed','eight-limbed','custom'],
   headShape:['round','oval','square','heart','triangle','wide'], faceShape:['soft','angular','long','wide'], eyeStyle:['round','almond','narrow','dot','large','hooded','monolid','upturned','downturned'], browStyle:['none','soft','straight','arched','bold'], noseStyle:['none','small','straight','wide'], mouthStyle:['line','smile','full','small'], earStyle:['none','simple','round','pointed','long','floppy','large','fin'], hairStyle:['none','short','bob','long','curly','spiky','bun'],
@@ -779,7 +794,7 @@ function buildCharacterDesignMessages(body) {
 
 A ordem é STYLE-FIRST: escolha primeiro a família visual e um subestilo coerente; depois refine espécie/plano corporal, rosto, proporções, figurino, acessórios e paleta. O estilo selecionado deve ser perceptível imediatamente e afetar características mínimas do personagem. Preserve anatomia e locomoção coerentes: não transforme ave, peixe, réptil, artrópode ou quadrúpede em humano com partes coladas. Híbridos devem ter uma base estrutural dominante e poucos sinais fortes da segunda base.
 
-Famílias/subestilos disponíveis: manga (manga-shounen, manga-shoujo, manga-seinen, manga-chibi, manga-fashion); engraving (engraving-copper, engraving-woodcut, engraving-lino); lineart (lineart-ornamental, lineart-botanical, lineart-tattoo); minimal-lineart (minimal-lineart-continuous, minimal-lineart-editorial, minimal-lineart-boho); realism (realism-editorial, realism-concept, realism-scientific); psychedelic (psychedelic-70s, psychedelic-neon, psychedelic-surreal); steampunk (steampunk-victorian, steampunk-diesel, steampunk-clockwork); comic (comic-western, comic-noir, comic-indie); storybook (storybook-gouache, storybook-pencil, storybook-paper); anime (anime-modern, anime-soft); cartoon (cartoon-editorial, cartoon-rubber); illustrated (illustrated-soft); watercolor (watercolor-soft); pencil (pencil-graphite); ink (ink-brush); chibi (chibi-kawaii).
+Famílias/subestilos disponíveis: manga (manga-shounen, manga-shoujo, manga-seinen, manga-chibi, manga-fashion); engraving (engraving-copper, engraving-woodcut, engraving-lino); lineart (lineart-ornamental, lineart-botanical, lineart-tattoo); realism (realism-editorial, realism-concept, realism-scientific); psychedelic (psychedelic-70s, psychedelic-neon, psychedelic-surreal); steampunk (steampunk-victorian, steampunk-diesel, steampunk-clockwork); comic (comic-western, comic-noir, comic-indie); storybook (storybook-gouache, storybook-pencil, storybook-paper); anime (anime-modern, anime-soft); cartoon (cartoon-editorial, cartoon-rubber); illustrated (illustrated-soft); watercolor (watercolor-soft); pencil (pencil-graphite); ink (ink-brush); chibi (chibi-kawaii).
 
 Figurinos disponíveis: none, basic, casual, sport, formal, fantasy, tech, street, school, kawaii, punk, steampunk, historical, scifi, workwear, elegant, adventure.
 Acessórios combináveis: glasses, sunglasses, goggles, monocle, hat, cap, beanie, hood, bandana, headband, hairclip, flower, tiara, scarf, cape, backpack, satchel, headphones, earrings, necklace, brooch, bow, crown, bracelet, watch, belt, pouch, shoulderpad, mask.
@@ -1318,6 +1333,23 @@ function offlineInsight(body) {
 }
 
 async function generateMediatorInsight(body) {
+  if (body?.mode === 'image-svg') {
+    if (!String(body?.prompt || '').trim()) throw new Error('Descreva a imagem que deseja gerar.');
+    const { system, user } = buildGeneralImageSvgMessages(body);
+    const startedAt = Date.now();
+    const timeout = Math.min(45000, Math.max(5000, Number(process.env.AI_IMAGE_TIMEOUT_MS || 42000)));
+    let result = await callGeminiStructured(system, user, 10000, timeout, 0.24);
+    let generatedImage;
+    try { generatedImage = cleanGeneratedImageJson(result.text); }
+    catch (error) {
+      const remaining = 52000 - (Date.now() - startedAt);
+      if (remaining < 3000) throw error;
+      result = await callGeminiStructured(system, user + `\nCORREÇÃO OBRIGATÓRIA: devolva JSON puro e um SVG completo, autocontido, sem scripts, sem imagens externas e não vazio.`, 10000, Math.min(timeout, remaining), 0.14);
+      generatedImage = cleanGeneratedImageJson(result.text);
+    }
+    return { generatedImage, provider: result.provider, model: result.model };
+  }
+
   if (body?.mode === 'wireframe-interpret') {
     if (!body?.wireframeSource) throw new Error('Escolha um desenho ou imagem para interpretar.');
     const { system, user } = buildWireframeInterpretationMessages(body);
