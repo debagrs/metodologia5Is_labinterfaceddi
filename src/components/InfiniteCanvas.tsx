@@ -10,7 +10,7 @@ import {
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
   ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2, ChevronUp, ChevronDown, Plug, Fingerprint
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument, VisualIdentityDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument, VisualIdentityDocument, DataStoryDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
@@ -27,6 +27,7 @@ import type { SpriteAssetOption } from './SpriteStudio';
 import GameDesignStudio, { GameDesignPreview, blankGameDesign } from './GameDesignStudio';
 import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from './ApiConnectionsStudio';
 import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity } from './VisualIdentityStudio';
+import DataStoryStudio, { DataStoryPreview, blankDataStory } from './DataStoryStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -157,7 +158,21 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [newGame, setNewGame] = useState<GameDesignDocument | null>(null);
   const [apiEditorNodeId, setApiEditorNodeId] = useState<string | null>(null);
   const [newApiConnections, setNewApiConnections] = useState<ApiConnectionsDocument | null>(null);
-  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [dataStoryEditorNodeId, setDataStoryEditorNodeId] = useState<string | null>(null);
+  const [newDataStory, setNewDataStory] = useState<DataStoryDocument | null>(null);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = window.localStorage.getItem('canvas-tools-open');
+      if (stored === '1') return true;
+      if (stored === '0') return false;
+    } catch {}
+    return window.matchMedia('(min-width: 640px)').matches;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try { window.localStorage.setItem('canvas-tools-open', mobileToolsOpen ? '1' : '0'); } catch {}
+  }, [mobileToolsOpen]);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
@@ -165,7 +180,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
   const projectVisualIdentity = [...nodes].reverse().find((item) => item.type === 'visual-identity' && item.visualIdentity)?.visualIdentity;
 
-  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId);
+  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId || newDataStory || dataStoryEditorNodeId);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('atelier-open', atelierOpen);
@@ -242,6 +257,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
     if (node.type === 'api-connections') {
       return { width: node.width || (compactCanvas ? 320 : 410), height: node.height || (compactCanvas ? 240 : 290) };
+    }
+    if (node.type === 'data-story') {
+      return { width: node.width || (compactCanvas ? 320 : 430), height: node.height || (compactCanvas ? 260 : 320) };
     }
     if (node.type === 'core') {
       return { width: node.width || (compactCanvas ? 360 : 480), height: node.height || 320 };
@@ -394,7 +412,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'visual-identity' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design' || node.type === 'api-connections';
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'visual-identity' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design' || node.type === 'api-connections' || node.type === 'data-story';
     const minWidth = isVisualNode ? 100 : 240;
     const minHeight = isVisualNode ? 80 : 150;
     const maxWidth = isVisualNode ? 1400 : 820;
@@ -1105,6 +1123,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isSpriteCharacter = node.type === 'sprite-character';
             const isGameDesign = node.type === 'game-design';
             const isApiConnections = node.type === 'api-connections';
+            const isDataStory = node.type === 'data-story';
             const isSelected = selectedNodeId === node.id;
             const isActive = node.phase === activePhase;
             const phasePalette = PHASE_NOTE_PALETTE[node.phase];
@@ -1455,7 +1474,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             }
 
 
-            if (isWireframeBoard || isDesignSystem || isVisualIdentity || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign || isApiConnections) {
+            if (isWireframeBoard || isDesignSystem || isVisualIdentity || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign || isApiConnections || isDataStory) {
               const label = isWireframeBoard ? (node.wireframeName || 'Wireframes')
                 : isDesignSystem ? (node.designSystemName || 'Design System')
                 : isVisualIdentity ? (node.visualIdentityName || 'Identidade visual')
@@ -1465,7 +1484,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 : isHardwareBoard ? (node.hardwareName || 'Hardware')
                 : isSpriteCharacter ? (node.spriteName || 'Personagem')
                 : isGameDesign ? (node.gameDesignName || 'Game Design')
-                : (node.apiConnectionsName || 'APIs & Conexões');
+                : isApiConnections ? (node.apiConnectionsName || 'APIs & Conexões')
+                : (node.dataStoryName || 'Infodesign & Dados');
               const edit = () => {
                 if (isWireframeBoard) setWireframeEditorNodeId(node.id);
                 else if (isDesignSystem) setDesignSystemEditorNodeId(node.id);
@@ -1476,7 +1496,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                 else if (isHardwareBoard) setHardwareEditorNodeId(node.id);
                 else if (isSpriteCharacter) setSpriteEditorNodeId(node.id);
                 else if (isGameDesign) setGameEditorNodeId(node.id);
-                else setApiEditorNodeId(node.id);
+                else if (isApiConnections) setApiEditorNodeId(node.id);
+                else setDataStoryEditorNodeId(node.id);
               };
               return (
                 <motion.div
@@ -1507,6 +1528,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     {isSpriteCharacter && node.sprite && <SpriteCharacterPreview document={node.sprite} className="h-full w-full" />}
                     {isGameDesign && node.gameDesign && <GameDesignPreview document={node.gameDesign} className="h-full w-full" />}
                     {isApiConnections && node.apiConnections && <ApiConnectionsPreview document={node.apiConnections} className="h-full w-full" />}
+                    {isDataStory && node.dataStory && <DataStoryPreview document={node.dataStory} className="h-full w-full" />}
                   </div>
                   <div className="absolute left-2 bottom-2 rounded-lg bg-black/75 text-white px-2 py-1 text-[9px] font-mono pointer-events-none">{label}</div>
                   {isConnectionTarget && <button type="button" onClick={(event)=>{event.stopPropagation();toggleConnection(node.id)}} className="absolute inset-0 z-20 rounded-xl border-2 border-dashed border-black bg-white/20 cursor-crosshair" aria-label={`Conectar com ${label}`} />}
@@ -1878,26 +1900,26 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       )}
 
       {/* Floating Canvas Controls (Zoom / Recenter / Spawn guide) */}
-      <div id="canvas-actions-panel" className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-20 flex flex-col gap-2 sm:gap-3 canvas-control max-w-[calc(100vw-2rem)]">
+      <div id="canvas-actions-panel" className="fixed bottom-[max(.55rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-30 flex w-[calc(100vw-1rem)] max-w-[1680px] flex-col items-center gap-2 canvas-control pointer-events-none">
         
         {/* Double-click hint */}
-        <div className="bg-white/85 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[12px] font-mono text-neutral-500 hidden sm:flex items-center gap-1.5 shadow-sm max-w-[calc(100vw-3rem)]">
+        {mobileToolsOpen && <div className="pointer-events-auto bg-white/90 backdrop-blur-md border border-[#E0E0DE] rounded-full px-4 py-2 text-[11px] font-mono text-neutral-500 hidden sm:flex items-center gap-1.5 shadow-sm max-w-[min(100%,980px)]">
           <HelpCircle size={12} className="text-black shrink-0" />
           <span className="truncate">Dica: arraste a alça de conexão entre itens; toque numa seta para inverter ou reposicionar suas pontas</span>
-        </div>
+        </div>}
 
         {canvasImageError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 shadow-sm flex items-center justify-between gap-2">
+          <div className="pointer-events-auto rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 shadow-sm flex items-center justify-between gap-2">
             <span>{canvasImageError}</span>
             <button type="button" onClick={() => setCanvasImageError('')} className="p-1 cursor-pointer" aria-label="Fechar aviso"><X size={12} /></button>
           </div>
         )}
 
-        {/* Mobile: collapsed by default. One arrow opens the complete Ateliê. */}
-        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="sm:hidden self-center h-11 w-14 rounded-2xl border border-[#E0E0DE] bg-white/95 shadow-lg flex items-center justify-center" aria-label={mobileToolsOpen ? 'Fechar ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={22}/> : <ChevronUp size={22}/>}</button>
+        {/* Collapsible Ateliê dock: same control on mobile and desktop. */}
+        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="pointer-events-auto self-center h-9 w-16 rounded-t-2xl rounded-b-xl border border-[#D8D8D4] bg-white/95 shadow-lg flex items-center justify-center hover:bg-black hover:text-white transition-colors" aria-label={mobileToolsOpen ? 'Recolher barra de ferramentas' : 'Abrir barra de ferramentas'} title={mobileToolsOpen ? 'Recolher ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}</button>
 
         {/* Action button bar */}
-        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} sm:flex flex-wrap items-center justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl p-1.5 shadow-lg max-h-[46vh] sm:max-h-none overflow-y-auto sm:overflow-visible`}>
+        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} canvas-bottom-tools pointer-events-auto w-full flex-nowrap items-center justify-start sm:justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl px-2 py-1.5 shadow-lg overflow-x-auto overflow-y-hidden overscroll-x-contain`}>
           <button 
             onClick={() => handleZoom(0.1)} 
             className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
@@ -1973,6 +1995,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               <button type="button" data-tour="atelier-sprite" onClick={() => setNewSprite(blankSpriteCharacter())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · personagens, sprites, estados e pequenas animações locais"><User size={14}/><span className="hidden sm:inline">PERSONAGENS</span></button>
               <button type="button" data-tour="atelier-game" onClick={() => setNewGame(blankGameDesign())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · GDD, fases, sprites, mecânicas e playtest"><Gamepad2 size={14}/><span className="hidden sm:inline">GAME DESIGN</span></button>
               <button type="button" data-tour="atelier-api" onClick={() => setNewApiConnections(blankApiConnections())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · explorar, incorporar e criar APIs"><Plug size={14}/><span className="hidden sm:inline">APIs</span></button>
+              <button type="button" data-tour="atelier-data-story" onClick={() => setNewDataStory(blankDataStory(projectDesignSystem, projectVisualIdentity))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · storytelling de dados, gráficos, mapas e infográficos livres"><PanelsTopLeft size={14}/><span className="hidden sm:inline">INFODESIGN</span></button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -2197,6 +2220,13 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       }} onClose={()=>setNewApiConnections(null)}/>} 
 
       {apiEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===apiEditorNodeId&&item.type==='api-connections'); if(!node)return null; return <ApiConnectionsStudio key={node.id} document={node.apiConnections||blankApiConnections()} title={node.apiConnectionsName||'APIs & Conexões'} canEdit={canEditCanvas} onSave={(apiConnections)=>onUpdateNode({...node,apiConnections,apiConnectionsName:apiConnections.title||node.apiConnectionsName,title:apiConnections.title||node.title,content:apiConnections.connections.map((c)=>`${c.name} [${c.status}]${c.envVars.length?` env:${c.envVars.join(',')}`:''}`).join(' · ')||node.content})} onClose={()=>setApiEditorNodeId(null)}/>})()}
+
+      {newDataStory && <DataStoryStudio document={newDataStory} designSystem={projectDesignSystem} visualIdentity={projectVisualIdentity} title="Novo Infodesign & Dados" canEdit={canEditCanvas} onSave={(dataStory)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:430; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:320; const position=getCenteredPosition(startWidth,startHeight);
+        onAddNode({type:'data-story',title:dataStory.title||'Infodesign & Dados',dataStoryName:dataStory.title||`Infodesign ${nodes.filter((item)=>item.type==='data-story').length+1}`,content:`${dataStory.chartType} · ${dataStory.insight||dataStory.goal}`,phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,dataStory,connections:[]}); setNewDataStory(null);
+      }} onClose={()=>setNewDataStory(null)}/>}
+
+      {dataStoryEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===dataStoryEditorNodeId&&item.type==='data-story'); if(!node)return null; return <DataStoryStudio key={node.id} document={node.dataStory||blankDataStory(projectDesignSystem,projectVisualIdentity)} designSystem={projectDesignSystem} visualIdentity={projectVisualIdentity} title={node.dataStoryName||'Infodesign & Dados'} canEdit={canEditCanvas} onSave={(dataStory)=>onUpdateNode({...node,dataStory,dataStoryName:dataStory.title||node.dataStoryName,title:dataStory.title||node.title,content:`${dataStory.chartType} · ${dataStory.insight||dataStory.goal}`})} onClose={()=>setDataStoryEditorNodeId(null)}/>})()}
 
     </div>
   );
