@@ -1,29 +1,136 @@
 import type { CharacterAppearance } from '../types';
 
-export const CHARACTER_STYLES = [
-  { id: 'illustrated', label: 'Realismo ilustrado', description: 'Volumes suaves, íris detalhadas e contorno delicado.', eyes: 1, head: 1, line: .7, shading: 'soft' },
-  { id: 'cartoon', label: 'Cartoon', description: 'Silhueta expressiva, olhos amplos e cores limpas.', eyes: 1.15, head: 1.08, line: 1.35, shading: 'flat' },
-  { id: 'anime', label: 'Anime', description: 'Olhos alongados, reflexos marcados e sombra em células.', eyes: 1.2, head: 1, line: .8, shading: 'cel' },
-  { id: 'manga', label: 'Mangá', description: 'Tinta monocromática e retícula gráfica.', eyes: 1.18, head: 1, line: 1, shading: 'dots' },
-  { id: 'comic', label: 'Quadrinhos', description: 'Contornos firmes e volumes de alto contraste.', eyes: .95, head: 1, line: 1.5, shading: 'cel' },
-  { id: 'storybook', label: 'Livro ilustrado', description: 'Paleta suave e textura de papel.', eyes: 1.05, head: 1.05, line: .85, shading: 'paper' },
-  { id: 'watercolor', label: 'Aquarela', description: 'Pigmento translúcido, bordas delicadas e granulação.', eyes: 1, head: 1, line: .45, shading: 'paper' },
-  { id: 'pencil', label: 'Lápis', description: 'Grafite, hachuras e irregularidade sutil do traço.', eyes: 1, head: 1, line: .65, shading: 'hatch' },
-  { id: 'ink', label: 'Nanquin', description: 'Desenho manual em tinta e preenchimentos claros.', eyes: 1, head: 1, line: 1.1, shading: 'ink' },
-  { id: 'chibi', label: 'Chibi', description: 'Cabeça ampliada e proporções compactas.', eyes: 1.3, head: 1.3, line: 1.1, shading: 'flat' },
-] as const;
+type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'realism' | 'psychedelic' | 'metal';
 
-export function characterStyle(a: CharacterAppearance) {
-  return CHARACTER_STYLES.find(s => s.id === a.artStyle) || CHARACTER_STYLES[0];
+export type CharacterStyleFamily = {
+  id: NonNullable<CharacterAppearance['artStyle']>;
+  label: string;
+  description: string;
+  market: string;
+  defaultVariant: string;
+};
+
+export type CharacterStyleVariant = {
+  id: string;
+  family: CharacterStyleFamily['id'];
+  label: string;
+  description: string;
+  tags: string[];
+  eyes: number;
+  head: number;
+  line: number;
+  shading: ShadingMode;
+  monochrome?: boolean;
+  patch: Partial<CharacterAppearance>;
+  recommendedOutfits?: CharacterAppearance['outfitStyle'][];
+};
+
+export const CHARACTER_STYLE_FAMILIES: CharacterStyleFamily[] = [
+  { id: 'manga', label: 'Mangá', description: 'Linguagem japonesa de linha, expressão, ritmo visual e síntese anatômica.', market: 'quadrinhos, editorial, animação, games', defaultVariant: 'manga-shounen' },
+  { id: 'engraving', label: 'Hachura & gravura', description: 'Volume construído por linhas, cruzamentos, densidade e textura de impressão.', market: 'rótulos, editorial, embalagem, pôster', defaultVariant: 'engraving-copper' },
+  { id: 'lineart', label: 'Linha detalhada', description: 'Contorno com variação de peso, padrões internos e ornamentação minuciosa.', market: 'capas, tatuagem, pôster, identidade', defaultVariant: 'lineart-ornamental' },
+  { id: 'realism', label: 'Realismo', description: 'Anatomia, materiais, iluminação e volume com maior fidelidade física.', market: 'concept art, científico, publicidade', defaultVariant: 'realism-editorial' },
+  { id: 'psychedelic', label: 'Psicodélico', description: 'Maximalismo, distorção, cor intensa, formas fluidas e composição densa.', market: 'festivais, estamparia, música, pôster', defaultVariant: 'psychedelic-70s' },
+  { id: 'steampunk', label: 'Steampunk / dieselpunk', description: 'Retrofuturismo com metal, couro, mecanismos, rebites e acessórios técnicos.', market: 'worldbuilding, games, cinema, fantasia', defaultVariant: 'steampunk-victorian' },
+  { id: 'comic', label: 'Quadrinhos', description: 'Contorno forte, contraste, narrativa sequencial e acabamento editorial.', market: 'HQ, editorial, pôster', defaultVariant: 'comic-western' },
+  { id: 'storybook', label: 'Livro ilustrado', description: 'Textura, materialidade e acabamento narrativo voltado à ilustração editorial.', market: 'infantil, editorial, educação', defaultVariant: 'storybook-gouache' },
+  { id: 'anime', label: 'Anime', description: 'Cel shading, desenho limpo e expressividade voltada à animação.', market: 'animação, games, mascotes', defaultVariant: 'anime-modern' },
+  { id: 'cartoon', label: 'Cartoon', description: 'Silhueta forte, exagero controlado e leitura rápida.', market: 'animação, publicidade, mascotes', defaultVariant: 'cartoon-editorial' },
+  { id: 'illustrated', label: 'Ilustração editorial', description: 'Base versátil com volume suave e leitura clara.', market: 'editorial, institucional, publicidade', defaultVariant: 'illustrated-soft' },
+  { id: 'watercolor', label: 'Aquarela', description: 'Pigmento translúcido, bordas delicadas e aparência artesanal.', market: 'editorial, moda, papelaria', defaultVariant: 'watercolor-soft' },
+  { id: 'pencil', label: 'Lápis', description: 'Grafite, hachura, textura e variação manual de linha.', market: 'concept, editorial, estudos', defaultVariant: 'pencil-graphite' },
+  { id: 'ink', label: 'Nanquim', description: 'Linha de tinta, massas de preto e gesto gráfico.', market: 'editorial, tattoo, quadrinhos', defaultVariant: 'ink-brush' },
+  { id: 'chibi', label: 'Chibi', description: 'Cabeça ampliada, corpo compacto e expressões de alta legibilidade.', market: 'stickers, mascotes, games', defaultVariant: 'chibi-kawaii' },
+];
+
+export const CHARACTER_STYLE_VARIANTS: CharacterStyleVariant[] = [
+  { id:'manga-shounen', family:'manga', label:'Shounen clássico', description:'Linhas limpas, cabelo marcado, ação e expressões de impacto.', tags:['ação','dinâmico','linha limpa'], eyes:1.18, head:1.02, line:.9, shading:'cel', monochrome:true, patch:{ eyeStyle:'almond', browStyle:'bold', hairStyle:'spiky', faceShape:'angular', bodyShape:'athletic', torsoShape:'trapezoid', headToBodyRatio:5.2, lineColor:'#161616', outfitStyle:'street' }, recommendedOutfits:['street','sport','school','adventure'] },
+  { id:'manga-shoujo', family:'manga', label:'Shoujo expressivo', description:'Olhos amplos, linhas fluidas, delicadeza ornamental e forte expressão emocional.', tags:['expressivo','olhos grandes','decorativo'], eyes:1.38, head:1.06, line:.72, shading:'dots', monochrome:true, patch:{ eyeStyle:'large', browStyle:'soft', hairStyle:'long', faceShape:'soft', bodyShape:'slim', torsoShape:'rectangle', headToBodyRatio:4.5, lineColor:'#202020', outfitStyle:'elegant' }, recommendedOutfits:['school','elegant','kawaii','formal'] },
+  { id:'manga-seinen', family:'manga', label:'Seinen realista', description:'Anatomia mais precisa, hachura, expressão contida e sombras densas.', tags:['realista','hachura','adulto'], eyes:.92, head:.96, line:.78, shading:'hatch', monochrome:true, patch:{ eyeStyle:'narrow', browStyle:'straight', hairStyle:'short', faceShape:'angular', bodyShape:'average', headToBodyRatio:6.1, lineColor:'#171717', outfitStyle:'casual' }, recommendedOutfits:['casual','formal','workwear','historical'] },
+  { id:'manga-chibi', family:'manga', label:'Mangá chibi', description:'Cabeça muito ampliada, membros curtos e expressão simplificada.', tags:['fofo','compacto','sticker'], eyes:1.45, head:1.34, line:1.08, shading:'flat', monochrome:false, patch:{ eyeStyle:'large', browStyle:'soft', bodyShape:'chibi', headToBodyRatio:2.9, limbLength:.78, hairStyle:'bob', outfitStyle:'kawaii' }, recommendedOutfits:['kawaii','school','fantasy','basic'] },
+  { id:'manga-fashion', family:'manga', label:'Mangá fashion/editorial', description:'Figura alongada, cabelo e vestuário como elementos centrais da composição.', tags:['moda','editorial','elegante'], eyes:1.08, head:.96, line:.7, shading:'cel', monochrome:false, patch:{ eyeStyle:'almond', faceShape:'long', bodyShape:'slim', legStyle:'long', limbLength:1.18, headToBodyRatio:6.6, outfitStyle:'elegant' }, recommendedOutfits:['elegant','street','formal','historical'] },
+
+  { id:'engraving-copper', family:'engraving', label:'Gravura em metal', description:'Linhas finas, hachura cruzada e densidade controlada.', tags:['clássico','linhas finas','premium'], eyes:1, head:1, line:.62, shading:'engrave', monochrome:true, patch:{ lineColor:'#211d1a', outfitStyle:'historical' }, recommendedOutfits:['historical','formal','steampunk'] },
+  { id:'engraving-woodcut', family:'engraving', label:'Xilogravura', description:'Cortes mais grossos, contraste forte e textura artesanal.', tags:['xilogravura','alto contraste','artesanal'], eyes:.96, head:1, line:1.35, shading:'ink', monochrome:true, patch:{ lineColor:'#161412', outfitStyle:'historical' }, recommendedOutfits:['historical','workwear','adventure'] },
+  { id:'engraving-lino', family:'engraving', label:'Linóleo', description:'Massas gráficas, cortes fluidos e áreas de preto mais largas.', tags:['linóleo','gestual','massas'], eyes:1, head:1.02, line:1.18, shading:'hatch', monochrome:true, patch:{ lineColor:'#1c1a18', outfitStyle:'casual' }, recommendedOutfits:['casual','workwear','adventure'] },
+
+  { id:'lineart-ornamental', family:'lineart', label:'Ornamental', description:'Linha precisa, arabescos e padrões internos decorativos.', tags:['ornamento','detalhado','decorativo'], eyes:1.05, head:1, line:.72, shading:'ornament', patch:{ lineColor:'#342d2d', outfitStyle:'elegant' }, recommendedOutfits:['elegant','fantasy','historical'] },
+  { id:'lineart-botanical', family:'lineart', label:'Botânico', description:'Ritmo orgânico e detalhes inspirados em folhas, flores e anatomias naturais.', tags:['orgânico','botânico','editorial'], eyes:1, head:1, line:.66, shading:'hatch', patch:{ lineColor:'#334039', outfitStyle:'casual' }, recommendedOutfits:['casual','elegant','fantasy'] },
+  { id:'lineart-tattoo', family:'lineart', label:'Tattoo / flash', description:'Peso de linha alto, leitura instantânea e contraste pensado para reprodução.', tags:['tattoo','bold line','flash'], eyes:1.02, head:1, line:1.4, shading:'ink', patch:{ lineColor:'#111111', outfitStyle:'punk' }, recommendedOutfits:['punk','street','fantasy'] },
+
+  { id:'realism-editorial', family:'realism', label:'Realismo editorial', description:'Volume suave, proporções menos caricatas e acabamento limpo.', tags:['editorial','volume','preciso'], eyes:.92, head:.95, line:.52, shading:'realism', patch:{ eyeStyle:'almond', faceShape:'soft', bodyShape:'average', headToBodyRatio:6.3, handStyle:'defined', lineColor:'#4c403b', outfitStyle:'casual' }, recommendedOutfits:['casual','formal','workwear','elegant'] },
+  { id:'realism-concept', family:'realism', label:'Concept art', description:'Volume dramático, silhueta funcional, materiais e equipamento bem definidos.', tags:['games','cinema','materiais'], eyes:.9, head:.94, line:.45, shading:'realism', patch:{ eyeStyle:'narrow', faceShape:'angular', bodyShape:'athletic', torsoShape:'trapezoid', headToBodyRatio:6.5, outfitStyle:'adventure' }, recommendedOutfits:['adventure','scifi','fantasy','steampunk'] },
+  { id:'realism-scientific', family:'realism', label:'Científico/anatômico', description:'Proporção neutra, leitura anatômica e mínima estilização decorativa.', tags:['científico','anatômico','didático'], eyes:.88, head:.93, line:.48, shading:'soft', patch:{ eyeStyle:'almond', browStyle:'soft', bodyShape:'average', headToBodyRatio:6.8, outfitStyle:'none' }, recommendedOutfits:['none','workwear'] },
+
+  { id:'psychedelic-70s', family:'psychedelic', label:'Psicodélico 60/70', description:'Curvas fluidas, cor vibrante e sensação gráfica expansiva.', tags:['70s','fluido','vibrante'], eyes:1.16, head:1.08, line:1.16, shading:'psychedelic', patch:{ eyeStyle:'large', hairStyle:'curly', faceShape:'soft', lineColor:'#35104f', outfitStyle:'street', outfitPrimary:'#f15a8a', outfitSecondary:'#f5c542' }, recommendedOutfits:['street','kawaii','fantasy'] },
+  { id:'psychedelic-neon', family:'psychedelic', label:'Neon maximalista', description:'Contrastes elétricos, contornos fortes e paleta sintética.', tags:['neon','maximalista','festival'], eyes:1.2, head:1.06, line:1.25, shading:'psychedelic', patch:{ eyeStyle:'large', hairStyle:'spiky', lineColor:'#24102e', outfitStyle:'tech', outfitPrimary:'#15d5d0', outfitSecondary:'#ff4fa3' }, recommendedOutfits:['tech','street','scifi'] },
+  { id:'psychedelic-surreal', family:'psychedelic', label:'Surreal gráfico', description:'Distorção controlada, assimetria e detalhe ornamental.', tags:['surreal','experimental','autor'], eyes:1.25, head:1.12, line:.9, shading:'ornament', patch:{ eyeStyle:'upturned', headShape:'heart', hairStyle:'curly', outfitStyle:'fantasy' }, recommendedOutfits:['fantasy','elegant','street'] },
+
+  { id:'steampunk-victorian', family:'steampunk', label:'Steampunk vitoriano', description:'Couro, bronze, relógios, goggles e alfaiataria retrofuturista.', tags:['cobre','couro','vitoriano'], eyes:.98, head:1, line:.9, shading:'metal', patch:{ lineColor:'#4b3528', outfitStyle:'steampunk', outfitPrimary:'#6f4b32', outfitSecondary:'#b98a4a' }, recommendedOutfits:['steampunk','historical','formal'] },
+  { id:'steampunk-diesel', family:'steampunk', label:'Dieselpunk industrial', description:'Geometria robusta, metal escuro, utilitarismo e tecnologia pesada.', tags:['industrial','metal','utilitário'], eyes:.92, head:.98, line:1.05, shading:'metal', patch:{ faceShape:'angular', bodyShape:'athletic', outfitStyle:'workwear', outfitPrimary:'#4a4c47', outfitSecondary:'#9c754b' }, recommendedOutfits:['workwear','steampunk','adventure'] },
+  { id:'steampunk-clockwork', family:'steampunk', label:'Clockwork fantástico', description:'Engrenagens aparentes, detalhes ornamentais e acabamento de coleção.', tags:['engrenagens','ornamental','fantasia'], eyes:1.08, head:1.02, line:.86, shading:'metal', patch:{ eyeStyle:'round', outfitStyle:'steampunk', outfitPrimary:'#704d32', outfitSecondary:'#d0a15b' }, recommendedOutfits:['steampunk','fantasy','elegant'] },
+
+  { id:'comic-western', family:'comic', label:'HQ ocidental', description:'Contorno firme, sombra gráfica e proporções de narrativa sequencial.', tags:['hq','ação','contraste'], eyes:.98, head:1, line:1.42, shading:'cel', patch:{ faceShape:'angular', browStyle:'bold', bodyShape:'athletic', outfitStyle:'street' }, recommendedOutfits:['street','adventure','scifi'] },
+  { id:'comic-noir', family:'comic', label:'Noir', description:'Preto dominante, recortes de luz e atmosfera dramática.', tags:['noir','alto contraste','dramático'], eyes:.92, head:1, line:1.55, shading:'ink', monochrome:true, patch:{ eyeStyle:'narrow', lineColor:'#101010', outfitStyle:'formal' }, recommendedOutfits:['formal','historical','workwear'] },
+  { id:'comic-indie', family:'comic', label:'Indie/autoral', description:'Linha mais irregular, simplificação consciente e personalidade gráfica.', tags:['indie','autoral','gestual'], eyes:1.06, head:1.06, line:1.05, shading:'paper', patch:{ eyeStyle:'round', hairStyle:'bob', outfitStyle:'casual' }, recommendedOutfits:['casual','street','punk'] },
+
+  { id:'storybook-gouache', family:'storybook', label:'Guache', description:'Massas opacas, textura de papel e paleta editorial.', tags:['guache','papel','editorial'], eyes:1.08, head:1.06, line:.65, shading:'paper', patch:{ faceShape:'soft', outfitStyle:'casual' }, recommendedOutfits:['casual','kawaii','historical'] },
+  { id:'storybook-pencil', family:'storybook', label:'Lápis de cor', description:'Textura de pigmento, linha suave e acabamento artesanal.', tags:['lápis de cor','infantil','textura'], eyes:1.1, head:1.08, line:.58, shading:'hatch', patch:{ eyeStyle:'round', bodyShape:'average', outfitStyle:'basic' }, recommendedOutfits:['basic','school','kawaii'] },
+  { id:'storybook-paper', family:'storybook', label:'Recorte de papel', description:'Planos de cor, bordas recortadas e composição lúdica.', tags:['paper cut','camadas','lúdico'], eyes:1.12, head:1.1, line:.82, shading:'flat', patch:{ eyeStyle:'dot', bodyShape:'chibi', outfitStyle:'kawaii' }, recommendedOutfits:['kawaii','basic','fantasy'] },
+
+  { id:'anime-modern', family:'anime', label:'Anime moderno', description:'Cel shading limpo, olhos expressivos e acabamento de animação.', tags:['anime','cel shading','limpo'], eyes:1.24, head:1.03, line:.78, shading:'cel', patch:{ eyeStyle:'large', hairStyle:'spiky', headToBodyRatio:5.1, outfitStyle:'school' }, recommendedOutfits:['school','street','fantasy','scifi'] },
+  { id:'anime-soft', family:'anime', label:'Anime soft', description:'Paleta suave, contorno leve e expressão delicada.', tags:['soft','pastel','emocional'], eyes:1.3, head:1.06, line:.62, shading:'soft', patch:{ eyeStyle:'large', faceShape:'soft', hairStyle:'long', outfitStyle:'elegant' }, recommendedOutfits:['elegant','school','kawaii'] },
+
+  { id:'cartoon-editorial', family:'cartoon', label:'Cartoon editorial', description:'Exagero moderado, volumes simples e leitura imediata.', tags:['cartoon','editorial','expressivo'], eyes:1.18, head:1.12, line:1.32, shading:'flat', patch:{ eyeStyle:'round', bodyShape:'average', headToBodyRatio:4.2, outfitStyle:'casual' }, recommendedOutfits:['casual','street','sport'] },
+  { id:'cartoon-rubber', family:'cartoon', label:'Rubber hose', description:'Membros flexíveis, desenho vintage e formas arredondadas.', tags:['vintage','rubber hose','animação'], eyes:1.08, head:1.18, line:1.45, shading:'ink', monochrome:true, patch:{ eyeStyle:'dot', bodyShape:'chibi', armStyle:'thin', legStyle:'long', outfitStyle:'basic' }, recommendedOutfits:['basic','historical'] },
+
+  { id:'illustrated-soft', family:'illustrated', label:'Editorial suave', description:'Volume leve, íris detalhadas e acabamento contemporâneo.', tags:['editorial','versátil','suave'], eyes:1, head:1, line:.7, shading:'soft', patch:{ outfitStyle:'casual' }, recommendedOutfits:['casual','formal','street'] },
+  { id:'watercolor-soft', family:'watercolor', label:'Aquarela suave', description:'Pigmento claro, bordas delicadas e granulação simulada.', tags:['aquarela','leve','papel'], eyes:1.02, head:1.02, line:.45, shading:'paper', patch:{ lineColor:'#675951', outfitStyle:'elegant' }, recommendedOutfits:['elegant','casual','historical'] },
+  { id:'pencil-graphite', family:'pencil', label:'Grafite detalhado', description:'Hachura de grafite e variação sutil de pressão.', tags:['grafite','estudo','hachura'], eyes:1, head:1, line:.62, shading:'hatch', monochrome:true, patch:{ lineColor:'#49443f', outfitStyle:'casual' }, recommendedOutfits:['casual','workwear','historical'] },
+  { id:'ink-brush', family:'ink', label:'Pincel e nanquim', description:'Linha gestual e massas de preto com variação de espessura.', tags:['nanquim','gestual','alto contraste'], eyes:1.02, head:1, line:1.12, shading:'ink', monochrome:true, patch:{ lineColor:'#171717', outfitStyle:'casual' }, recommendedOutfits:['casual','historical','punk'] },
+  { id:'chibi-kawaii', family:'chibi', label:'Chibi kawaii', description:'Proporção superdeformada e acabamento de mascote/sticker.', tags:['kawaii','sticker','mascote'], eyes:1.45, head:1.36, line:1.08, shading:'flat', patch:{ eyeStyle:'large', bodyShape:'chibi', headToBodyRatio:2.8, limbLength:.74, outfitStyle:'kawaii' }, recommendedOutfits:['kawaii','school','fantasy'] },
+];
+
+export const CHARACTER_STYLES = CHARACTER_STYLE_FAMILIES;
+
+export function styleVariantsForFamily(family: CharacterAppearance['artStyle']) {
+  return CHARACTER_STYLE_VARIANTS.filter((variant) => variant.family === family);
 }
 
-// Style multipliers operate on a copy: changing style preserves every saved slider.
+export function defaultStyleVariant(family: CharacterAppearance['artStyle']) {
+  const familyDef = CHARACTER_STYLE_FAMILIES.find((item) => item.id === family) || CHARACTER_STYLE_FAMILIES[0];
+  return CHARACTER_STYLE_VARIANTS.find((variant) => variant.id === familyDef.defaultVariant) || CHARACTER_STYLE_VARIANTS[0];
+}
+
+export function selectedStyleVariant(a: CharacterAppearance): CharacterStyleVariant {
+  return CHARACTER_STYLE_VARIANTS.find((variant) => variant.id === a.styleVariant && variant.family === a.artStyle)
+    || defaultStyleVariant(a.artStyle || 'illustrated');
+}
+
+export function characterStyle(a: CharacterAppearance) {
+  const variant = selectedStyleVariant(a);
+  return { ...variant, id: variant.family, variantId: variant.id };
+}
+
+export function applyStyleVariant(a: CharacterAppearance, variantId: string): CharacterAppearance {
+  const variant = CHARACTER_STYLE_VARIANTS.find((item) => item.id === variantId) || CHARACTER_STYLE_VARIANTS[0];
+  const canDress = (a.bodyPlan || 'biped') === 'biped' || (a.species || 'human') === 'human' || (a.species || '') === 'anthropomorphic';
+  const patch = { ...variant.patch };
+  if (!canDress) delete patch.outfitStyle;
+  return { ...a, ...patch, artStyle: variant.family, styleVariant: variant.id };
+}
+
+// Multiplicadores visuais operam sobre cópia; sliders continuam editáveis.
 export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
-  const s = characterStyle(a);
-  return { ...a, eyeSize: (a.eyeSize ?? 1) * s.eyes,
-    headWidth: (a.headWidth ?? 1) * s.head, headHeight: (a.headHeight ?? 1) * s.head,
+  const s = selectedStyleVariant(a);
+  return {
+    ...a,
+    eyeSize: (a.eyeSize ?? 1) * s.eyes,
+    headWidth: (a.headWidth ?? 1) * s.head,
+    headHeight: (a.headHeight ?? 1) * s.head,
     strokeWidth: (a.strokeWidth ?? 1.8) * s.line,
-    ...(s.id === 'chibi' ? { legLength: (a.legLength ?? 1) * .72, armLength: (a.armLength ?? 1) * .8 } : {}) };
+    ...((s.family === 'chibi' || s.id === 'manga-chibi') ? { legLength: (a.legLength ?? 1) * .72, armLength: (a.armLength ?? 1) * .8 } : {}),
+  };
 }
 
 function shift(hex: string, n: number) {
@@ -31,26 +138,42 @@ function shift(hex: string, n: number) {
 }
 
 export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
-  const s = characterStyle(a);
-  const monochrome = ['manga','pencil','ink'].includes(s.id);
+  const s = selectedStyleVariant(a);
+  const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving'].includes(s.family));
   const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m=>m[1]))];
   let defs = '';
   colors.forEach((c,i) => {
     const id = `cs-${i}`;
-    if (s.shading === 'soft' || s.shading === 'paper') {
-      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2=".7"><stop stop-color="${shift(c,22)}"/><stop offset=".45" stop-color="${c}"/><stop offset="1" stop-color="${shift(c,-28)}"/></linearGradient>`;
+    if (s.shading === 'soft' || s.shading === 'paper' || s.shading === 'realism') {
+      const dark = s.shading === 'realism' ? -52 : -28;
+      const light = s.shading === 'realism' ? 35 : 22;
+      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2=".8"><stop stop-color="${shift(c,light)}"/><stop offset=".42" stop-color="${c}"/><stop offset="1" stop-color="${shift(c,dark)}"/></linearGradient>`;
     } else if (s.shading === 'cel') {
-      defs += `<linearGradient id="${id}" x1="0" x2="1"><stop offset=".65" stop-color="${c}"/><stop offset=".65" stop-color="${shift(c,-42)}"/></linearGradient>`;
-    } else if (monochrome) {
+      defs += `<linearGradient id="${id}" x1="0" x2="1"><stop offset=".64" stop-color="${c}"/><stop offset=".64" stop-color="${shift(c,-44)}"/></linearGradient>`;
+    } else if (s.shading === 'metal') {
+      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${shift(c,35)}"/><stop offset=".28" stop-color="${c}"/><stop offset=".56" stop-color="${shift(c,-38)}"/><stop offset=".72" stop-color="${shift(c,12)}"/><stop offset="1" stop-color="${shift(c,-48)}"/></linearGradient>`;
+    } else if (s.shading === 'psychedelic') {
+      const a1 = shift(c,48), a2 = shift(c,-28);
+      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${a1}"/><stop offset=".35" stop-color="${c}"/><stop offset=".7" stop-color="${a2}"/><stop offset="1" stop-color="${a1}"/></linearGradient>`;
+    } else if (monochrome || ['hatch','ink','engrave','ornament'].includes(s.shading)) {
       const lum = .2126*parseInt(c.slice(1,3),16)+.7152*parseInt(c.slice(3,5),16)+.0722*parseInt(c.slice(5,7),16);
-      const bg = lum < 65 ? '#3d3935' : '#faf7ef';
-      defs += `<pattern id="${id}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="${bg}"/>${s.shading==='dots' ? '<circle cx="2" cy="2" r=".65" fill="#71675c"/>' : s.shading==='hatch' ? '<path d="M0 5L5 0" stroke="#8a8175" stroke-width=".45"/>' : ''}</pattern>`;
+      const bg = lum < 65 ? '#2b2927' : '#fbf8ef';
+      const motif = s.shading === 'dots'
+        ? '<circle cx="2" cy="2" r=".62" fill="#665f58"/>'
+        : s.shading === 'engrave'
+          ? '<path d="M-2 7L7-2M1 8L8 1" stroke="#6a625b" stroke-width=".42"/>'
+          : s.shading === 'ornament'
+            ? '<path d="M0 5Q2.5 0 5 5M0 0Q2.5 5 5 0" stroke="#82776d" stroke-width=".35" fill="none"/>'
+            : s.shading === 'hatch'
+              ? '<path d="M0 5L5 0" stroke="#81786e" stroke-width=".45"/>'
+              : '';
+      defs += `<pattern id="${id}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="${bg}"/>${motif}</pattern>`;
     } else return;
     markup = markup.split(`fill="${c}"`).join(`fill="url(#${id})"`);
   });
-  if (monochrome) markup = markup.replace(/stroke="#[a-f\d]{6}"/gi,'stroke="#403a34"');
-  if (['paper','hatch','ink'].includes(s.shading)) {
-    defs += '<filter id="cs-paper" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".07" numOctaves="2" seed="17" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".75" xChannelSelector="R" yChannelSelector="G"/></filter>';
+  if (monochrome) markup = markup.replace(/stroke="#[a-f\d]{6}"/gi,'stroke="#302c29"');
+  if (['paper','hatch','ink','engrave'].includes(s.shading)) {
+    defs += '<filter id="cs-paper" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".065" numOctaves="2" seed="17" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".72" xChannelSelector="R" yChannelSelector="G"/></filter>';
     markup = `<g filter="url(#cs-paper)">${markup}</g>`;
   }
   return { defs: `<defs>${defs}</defs>`, markup };
