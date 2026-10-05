@@ -191,6 +191,13 @@ select {
 .studio-tools > div > aside { padding:8px 0; border-left:0; border-right:0; }
 .studio-tools .space-y-5 > * + * { margin-top:16px; }
 .studio-preview { flex:1; min-width:0; min-height:0; overflow:auto; display:flex; flex-direction:column; overscroll-behavior:contain; }
+
+@media(min-width:1024px){
+ .studio-workspace--equal.is-open .studio-sidebar{width:50%;max-width:none;flex:0 0 50%;}
+ .studio-workspace--equal.is-open .studio-preview{width:50%;flex:0 0 50%;}
+ .studio-workspace--equal:not(.is-open) .studio-sidebar{width:48px;flex:0 0 48px;}
+ .studio-workspace--equal:not(.is-open) .studio-preview{width:auto;flex:1 1 auto;}
+}
 .studio-preview > :is(main,section) { flex:1; min-height:0; }
 .studio-editor > header { min-width:0; flex-shrink:0; }
 .studio-editor > header :is(button,span,div,b) { font-size:14px; line-height:1.5; }
@@ -294,7 +301,7 @@ select {
 .video-editor-title { flex:1; min-width:0; }.video-editor-title b { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }.video-editor-title span { font-size:12px; color:#737373; }
 .video-primary-action { background:#1b6c64 !important; color:white !important; padding:8px 12px; border-radius:10px; }
 .video-workspace { min-height:0; flex:1; display:grid; grid-template-columns:minmax(0,1fr); overflow:hidden; }
-.video-workspace.has-panel { grid-template-columns:320px minmax(0,1fr); }.video-main { min-width:0; min-height:0; display:flex; flex-direction:column; grid-column:2; }.video-workspace:not(.has-panel) .video-main { grid-column:1; }
+.video-workspace.has-panel { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }.video-main { min-width:0; min-height:0; display:flex; flex-direction:column; grid-column:2; }.video-workspace:not(.has-panel) .video-main { grid-column:1; }
 .video-tool-panel { grid-column:1; grid-row:1; min-height:0; display:flex; flex-direction:column; background:white; color:#1f2529; border-right:1px solid #d8dadb; }
 .video-panel-heading { padding:8px 12px; border-bottom:1px solid #e5e5e5; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }.video-panel-heading b { display:flex; gap:8px; align-items:center; }
 .video-panel-content { min-height:0; overflow:auto; padding:12px; }.video-panel-content fieldset { display:flex; flex-direction:column; gap:12px; border:0; padding:0; min-width:0; }.video-panel-content p { font-size:14px; line-height:1.5; color:#606a6c; }
