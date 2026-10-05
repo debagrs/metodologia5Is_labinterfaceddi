@@ -1931,10 +1931,19 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         )}
 
         {/* Collapsible Ateliê dock: same control on mobile and desktop. */}
-        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="pointer-events-auto self-center h-9 w-16 rounded-t-2xl rounded-b-xl border border-[#D8D8D4] bg-white/95 shadow-lg flex items-center justify-center hover:bg-black hover:text-white transition-colors" aria-label={mobileToolsOpen ? 'Recolher barra de ferramentas' : 'Abrir barra de ferramentas'} title={mobileToolsOpen ? 'Recolher ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}</button>
+        <button
+          type="button"
+          onClick={() => setMobileToolsOpen((open) => !open)}
+          className={`pointer-events-auto self-center min-h-10 rounded-2xl border px-4 shadow-lg flex items-center justify-center gap-2 transition-all ${mobileToolsOpen ? 'bg-black text-white border-black hover:bg-neutral-800' : 'bg-[#27877D] text-white border-[#27877D] hover:bg-[#1F7169]'}`}
+          aria-label={mobileToolsOpen ? 'Recolher barra de ferramentas' : 'Abrir barra de ferramentas'}
+          title={mobileToolsOpen ? 'Recolher ferramentas' : 'Abrir ferramentas'}
+        >
+          {mobileToolsOpen ? <ChevronDown size={18}/> : <ChevronUp size={18}/>}
+          <span className="text-[10px] font-mono font-bold uppercase tracking-[0.12em]">{mobileToolsOpen ? 'Fechar ferramentas' : 'Ferramentas'}</span>
+        </button>
 
         {/* Action button bar */}
-        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} canvas-bottom-tools pointer-events-auto w-full flex-nowrap items-center justify-start sm:justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl px-2 py-1.5 shadow-lg overflow-x-auto overflow-y-hidden overscroll-x-contain`}>
+        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} canvas-bottom-tools pointer-events-auto w-full flex-wrap items-center justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl px-2.5 py-2 shadow-lg overflow-visible`}>
           <button 
             onClick={() => handleZoom(0.1)} 
             className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
