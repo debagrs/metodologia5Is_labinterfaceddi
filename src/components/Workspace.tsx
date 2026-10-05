@@ -1768,6 +1768,8 @@ export default function Workspace({
             drawingName: clipForPublication(node.drawingName || '', 220),
             apiConnectionsName: clipForPublication(node.apiConnectionsName || '', 220),
             apiConnections: node.apiConnections ? clipForPublication(JSON.stringify(node.apiConnections), 3200) : '',
+            visualIdentityName: clipForPublication(node.visualIdentityName || '', 220),
+            visualIdentity: node.visualIdentity ? clipForPublication(JSON.stringify(node.visualIdentity), 3200) : '',
             attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
               name: clipForPublication(attachment.name, 220),
               type: clipForPublication(attachment.type, 120)
@@ -1874,6 +1876,8 @@ export default function Workspace({
           wireframe: node.wireframe ? clip(JSON.stringify(node.wireframe), 6500) : undefined,
           designSystemName: node.designSystemName || '',
           designSystem: node.designSystem ? clip(JSON.stringify(node.designSystem), 5000) : undefined,
+          visualIdentityName: node.visualIdentityName || '',
+          visualIdentity: node.visualIdentity ? clip(JSON.stringify(node.visualIdentity), 5000) : undefined,
           videoName: node.videoName || '',
           video: node.video ? clip(JSON.stringify(node.video), 3500) : undefined,
           uxWritingName: node.uxWritingName || '',
