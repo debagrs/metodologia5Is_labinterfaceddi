@@ -464,7 +464,7 @@ export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'goggles' | 'mon
 export interface CharacterAccessory { id:string; kind:CharacterAccessoryKind; color:string; scale:number; x:number; y:number; }
 export interface CharacterPoseAdjustment { al?:number; ar?:number; el?:number; er?:number; ll?:number; lr?:number; kl?:number; kr?:number; lean?:number; headTilt?:number; }
 export interface CharacterAppearance {
-  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'minimal-lineart' | 'realism' | 'psychedelic' | 'steampunk';
+  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'minimal-lineart' | 'realism' | 'psychedelic' | 'steampunk' | 'pixel-art' | 'voxel';
   /** Variação dentro da família visual. Ex.: manga-shoujo, engraving-woodcut. */
   styleVariant?: string;
   accessories?: CharacterAccessory[];
@@ -497,6 +497,13 @@ export interface CharacterAppearance {
   surfaceStyle?: CharacterSurfaceStyle;
   footStyle?: CharacterFootStyle;
   whiskers?: boolean;
+  pixelResolution?: 16 | 24 | 32 | 48 | 64 | 96 | 128;
+  pixelPaletteSize?: 4 | 8 | 16 | 24 | 32;
+  pixelOutline?: boolean;
+  voxelYaw?: number;
+  voxelPitch?: number;
+  voxelDepth?: number;
+  voxelBevel?: number;
   bodyShape: 'slim' | 'very-slim' | 'average' | 'athletic' | 'stocky' | 'plus-size' | 'chibi';
   torsoShape: 'rectangle' | 'trapezoid' | 'round' | 'triangle';
   armStyle: 'thin' | 'regular' | 'strong';
@@ -754,27 +761,6 @@ export interface DataStoryDocument {
   mapGeoJson?: string;
   mapValueProperty?: string;
   geoApiPath?: string;
-  mapSource?: 'natural-earth' | 'custom';
-  mapScope?: 'world' | 'continent' | 'country';
-  mapContinent?: string;
-  mapCountry?: string;
-  mapJoinGeoProperty?: 'name' | 'iso_a3';
-  mapJoinDataField?: string;
-  mapDataValueField?: string;
-  mapVisualEncoding?: 'fill' | 'bubble' | 'fill-bubble' | 'outline';
-  mapColorMode?: 'sequential' | 'diverging' | 'categorical';
-  mapColorCount?: number;
-  mapHuePath?: 'short' | 'long';
-  mapColorStart?: string;
-  mapColorMid?: string;
-  mapColorEnd?: string;
-  mapBackground?: 'light' | 'dark' | 'transparent';
-  mapShowTooltips?: boolean;
-  mapShowLabels?: boolean;
-  mapLabelProperty?: 'name' | 'iso_a3';
-  mapBubbleScale?: number;
-  mapStrokeColor?: string;
-  mapStrokeWidth?: number;
   metabaseUrl?: string;
   infographicFormat: DataInfographicFormat;
   infographicElements: DataStoryElement[];
