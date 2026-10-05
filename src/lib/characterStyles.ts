@@ -123,7 +123,7 @@ export function applyStyleVariant(a: CharacterAppearance, variantId: string): Ch
 // Multiplicadores visuais operam sobre cópia; sliders continuam editáveis.
 export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
   const s = selectedStyleVariant(a);
-  return {
+  const base = {
     ...a,
     eyeSize: (a.eyeSize ?? 1) * s.eyes,
     headWidth: (a.headWidth ?? 1) * s.head,
@@ -131,6 +131,28 @@ export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
     strokeWidth: (a.strokeWidth ?? 1.8) * s.line,
     ...((s.family === 'chibi' || s.id === 'manga-chibi') ? { legLength: (a.legLength ?? 1) * .72, armLength: (a.armLength ?? 1) * .8 } : {}),
   };
+  if (s.family === 'realism') {
+    return {
+      ...base,
+      headWidth: (base.headWidth ?? 1) * .94,
+      headHeight: (base.headHeight ?? 1) * .96,
+      eyeSize: (base.eyeSize ?? 1) * .9,
+      mouthSize: (a.mouthSize ?? 1) * .95,
+      noseSize: (a.noseSize ?? 1) * 1.05,
+      strokeWidth: Math.max(.75, (base.strokeWidth ?? 1.2) * .9),
+      bodyWidth: Math.max(.94, a.bodyWidth ?? 1),
+    };
+  }
+  if (s.family === 'psychedelic') {
+    return {
+      ...base,
+      headWidth: (base.headWidth ?? 1) * 1.05,
+      eyeSize: (base.eyeSize ?? 1) * 1.08,
+      hairVolume: (a.hairVolume ?? 1) * 1.12,
+      strokeWidth: (base.strokeWidth ?? 1.8) * 1.08,
+    };
+  }
+  return base;
 }
 
 function shift(hex: string, n: number) {
@@ -140,9 +162,10 @@ function shift(hex: string, n: number) {
 export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   const s = selectedStyleVariant(a);
   const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving'].includes(s.family));
-  const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m=>m[1]))];
+  const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m => m[1]))];
   let defs = '';
-  colors.forEach((c,i) => {
+
+  colors.forEach((c, i) => {
     const id = `cs-${i}`;
     if (s.shading === 'soft' || s.shading === 'paper' || s.shading === 'realism') {
       const dark = s.shading === 'realism' ? -52 : -28;
@@ -153,28 +176,42 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
     } else if (s.shading === 'metal') {
       defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${shift(c,35)}"/><stop offset=".28" stop-color="${c}"/><stop offset=".56" stop-color="${shift(c,-38)}"/><stop offset=".72" stop-color="${shift(c,12)}"/><stop offset="1" stop-color="${shift(c,-48)}"/></linearGradient>`;
     } else if (s.shading === 'psychedelic') {
-      const a1 = shift(c,48), a2 = shift(c,-28);
-      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${a1}"/><stop offset=".35" stop-color="${c}"/><stop offset=".7" stop-color="${a2}"/><stop offset="1" stop-color="${a1}"/></linearGradient>`;
+      const a1 = shift(c,48), a2 = shift(c,-28), a3 = shift(c,82);
+      defs += `<radialGradient id="${id}" cx=".35" cy=".3" r=".9"><stop stop-color="${a3}"/><stop offset=".32" stop-color="${a1}"/><stop offset=".68" stop-color="${c}"/><stop offset="1" stop-color="${a2}"/></radialGradient>`;
+    } else if (s.shading === 'dots') {
+      defs += `<pattern id="${id}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${shift(c,28)}"/><circle cx="1.3" cy="1.3" r=".8" fill="${shift(c,-18)}"/><circle cx="4.3" cy="4.3" r=".8" fill="${shift(c,-22)}"/></pattern>`;
     } else if (monochrome || ['hatch','ink','engrave','ornament'].includes(s.shading)) {
       const lum = .2126*parseInt(c.slice(1,3),16)+.7152*parseInt(c.slice(3,5),16)+.0722*parseInt(c.slice(5,7),16);
       const bg = lum < 65 ? '#2b2927' : '#fbf8ef';
-      const motif = s.shading === 'dots'
-        ? '<circle cx="2" cy="2" r=".62" fill="#665f58"/>'
-        : s.shading === 'engrave'
-          ? '<path d="M-2 7L7-2M1 8L8 1" stroke="#6a625b" stroke-width=".42"/>'
-          : s.shading === 'ornament'
-            ? '<path d="M0 5Q2.5 0 5 5M0 0Q2.5 5 5 0" stroke="#82776d" stroke-width=".35" fill="none"/>'
-            : s.shading === 'hatch'
-              ? '<path d="M0 5L5 0" stroke="#81786e" stroke-width=".45"/>'
-              : '';
+      const motif = s.shading === 'engrave'
+        ? '<path d="M-2 7L7-2M1 8L8 1" stroke="#6a625b" stroke-width=".42"/>'
+        : s.shading === 'ornament'
+          ? '<path d="M0 5Q2.5 0 5 5M0 0Q2.5 5 5 0" stroke="#82776d" stroke-width=".35" fill="none"/>'
+          : s.shading === 'hatch'
+            ? '<path d="M0 5L5 0" stroke="#81786e" stroke-width=".45"/>'
+            : '<path d="M0 0L5 5" stroke="#514c48" stroke-width=".7"/>';
       defs += `<pattern id="${id}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="${bg}"/>${motif}</pattern>`;
-    } else return;
+    } else {
+      return;
+    }
     markup = markup.split(`fill="${c}"`).join(`fill="url(#${id})"`);
   });
-  if (monochrome) markup = markup.replace(/stroke="#[a-f\d]{6}"/gi,'stroke="#302c29"');
+
+  defs += '<filter id="cs-paper" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".065" numOctaves="2" seed="17" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".72" xChannelSelector="R" yChannelSelector="G"/></filter>';
+  defs += '<filter id="cs-realism" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".16"/><feGaussianBlur stdDeviation=".25"/></filter>';
+  defs += '<filter id="cs-psy" x="-12%" y="-12%" width="140%" height="140%"><feTurbulence type="turbulence" baseFrequency=".012 .03" numOctaves="2" seed="9" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="7"/><feDropShadow dx="0" dy="0" stdDeviation="1.1" flood-color="#ff3db8" flood-opacity=".45"/></filter>';
+
+  if (monochrome) markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, 'stroke="#302c29"');
   if (['paper','hatch','ink','engrave'].includes(s.shading)) {
-    defs += '<filter id="cs-paper" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".065" numOctaves="2" seed="17" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".72" xChannelSelector="R" yChannelSelector="G"/></filter>';
     markup = `<g filter="url(#cs-paper)">${markup}</g>`;
   }
+  if (s.family === 'realism') {
+    markup = `<g filter="url(#cs-realism)">${markup}</g>`;
+  }
+  if (s.family === 'psychedelic') {
+    defs += '<pattern id="cs-psy-stripe" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M0 18Q9 0 18 18" fill="none" stroke="#ffef6b" stroke-width="2" opacity=".55"/></pattern>';
+    markup = `<g filter="url(#cs-psy)">${markup}</g><path d="M108 78Q181 34 252 78" fill="none" stroke="#ff48b0" stroke-width="5" opacity=".35"/><path d="M118 102Q180 65 242 102" fill="none" stroke="#19d6ff" stroke-width="4" opacity=".32"/><ellipse cx="180" cy="255" rx="94" ry="155" fill="url(#cs-psy-stripe)" opacity=".14"/>`;
+  }
+
   return { defs: `<defs>${defs}</defs>`, markup };
 }
