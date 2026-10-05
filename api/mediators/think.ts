@@ -739,9 +739,27 @@ function cleanGeneratedImageJson(text) {
   };
 }
 function buildGeneralImageSvgMessages(body) {
-  const system = `Você é ilustrador(a), designer gráfico e diretor(a) de arte. Gere uma IMAGEM VETORIAL SVG EDITÁVEL para uso em projeto de design. O resultado deve ser autocontido, sem scripts, sem foreignObject, sem imagens externas e sem URLs. Use formas vetoriais reais: path, circle, ellipse, rect, line, polygon ou polyline. Não produza HTML. Não use marcas registradas ou personagens protegidos como imitação exata. Quando o pedido citar um estilo, traduza-o em atributos gráficos gerais sem copiar a assinatura de um artista vivo. Para line art, trabalhe contorno, ritmo e espaço negativo; para infográfico, preserve legibilidade; para ilustração, use composição, profundidade, textura vetorial e hierarquia. Se o usuário pedir fundo transparente, não crie retângulo de fundo. Use viewBox 0 0 1200 800, salvo quando o pedido exigir claramente outro formato. Retorne SOMENTE JSON válido no formato {"name":"nome-curto","svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
-  const user = `PEDIDO: ${String(body?.prompt || '')}
-Crie uma peça visual útil como material de design, com acabamento suficiente para continuar sendo editada em SVG ou Photopea.`;
+  const action = String(body?.imageAction || 'create');
+  const preserve = body?.preserve || {};
+  const referenceNames = Array.isArray(body?.referenceNames) ? body.referenceNames.slice(0, 4).map(String) : [];
+  const system = `Você é ilustrador(a), designer gráfico e diretor(a) de arte atuando como ASSISTENTE DE PRODUÇÃO VISUAL. Não trate todo pedido como simples geração do zero. Quando houver referência visual, primeiro leia sua construção (composição, formas, silhueta, ritmo, hierarquia, paleta) e só depois execute a transformação solicitada. Trabalhe como um profissional dentro de um arquivo editável: preserve o que o usuário marcou para preservar e altere somente o necessário.
+
+O resultado final deve ser uma IMAGEM VETORIAL SVG EDITÁVEL, autocontida, sem scripts, sem foreignObject, sem imagens externas e sem URLs. Use formas vetoriais reais: path, circle, ellipse, rect, line, polygon ou polyline. Não produza HTML. Organize elementos em grupos <g id="..."> semanticamente nomeados sempre que possível para facilitar edição posterior. Evite achatar tudo num único path se houver partes visualmente separáveis. Não use marcas registradas ou personagens protegidos como imitação exata. Quando o pedido citar um estilo, traduza-o em atributos gráficos gerais sem copiar a assinatura de um artista vivo. Para line art, trabalhe contorno, ritmo e espaço negativo; para infográfico, preserve legibilidade; para ilustração, use composição, profundidade, textura vetorial e hierarquia. Se o usuário pedir fundo transparente, não crie retângulo de fundo. Use viewBox 0 0 1200 800, salvo quando o pedido exigir claramente outro formato.
+
+MODOS:
+- create: criar uma peça nova a partir da instrução.
+- recreate: reconstruir a referência como vetor editável, preservando sua lógica visual e evitando acrescentar elementos inexistentes.
+- adapt: manter a identidade visual principal e adequar composição, formato, estilo, número de cores ou finalidade.
+- refine: corrigir e melhorar a referência com intervenção mínima, preservando o que já funciona.
+
+Retorne SOMENTE JSON válido no formato {"name":"nome-curto","svg":"<svg ...>...</svg>","notes":["o que foi preservado ou alterado"]}.`;
+  const user = `MODO: ${action}
+PEDIDO: ${String(body?.prompt || '')}
+REFERÊNCIAS VISUAIS: ${referenceNames.length ? referenceNames.join(', ') : 'nenhuma'}
+PRESERVAR COMPOSIÇÃO: ${preserve.composition !== false ? 'sim' : 'não'}
+PRESERVAR PALETA: ${preserve.palette !== false ? 'sim' : 'não'}
+PRESERVAR SILHUETA/ESTRUTURA: ${preserve.silhouette !== false ? 'sim' : 'não'}
+Crie uma peça visual útil como material de design, com acabamento suficiente para continuar sendo editada em SVG. Se houver referência visual anexada, baseie a análise nela antes de desenhar.`;
   return { system, user };
 }
 function buildCharacterSvgMessages(body) {
@@ -1334,17 +1352,21 @@ function offlineInsight(body) {
 
 async function generateMediatorInsight(body) {
   if (body?.mode === 'image-svg') {
-    if (!String(body?.prompt || '').trim()) throw new Error('Descreva a imagem que deseja gerar.');
+    if (!String(body?.prompt || '').trim()) throw new Error('Descreva o trabalho visual que deseja executar.');
+    const refs = Array.isArray(body?.visualReferences) ? body.visualReferences.slice(0, 2) : [];
+    if (String(body?.imageAction || 'create') !== 'create' && !refs.length) throw new Error('Este modo precisa de uma imagem de referência.');
+    sketchVisualParts(refs);
     const { system, user } = buildGeneralImageSvgMessages(body);
     const startedAt = Date.now();
     const timeout = Math.min(45000, Math.max(5000, Number(process.env.AI_IMAGE_TIMEOUT_MS || 42000)));
-    let result = await callGeminiStructured(system, user, 10000, timeout, 0.24);
+    let result = await callGeminiStructured(system, user, 10000, timeout, 0.24, refs);
     let generatedImage;
     try { generatedImage = cleanGeneratedImageJson(result.text); }
     catch (error) {
       const remaining = 52000 - (Date.now() - startedAt);
       if (remaining < 3000) throw error;
-      result = await callGeminiStructured(system, user + `\nCORREÇÃO OBRIGATÓRIA: devolva JSON puro e um SVG completo, autocontido, sem scripts, sem imagens externas e não vazio.`, 10000, Math.min(timeout, remaining), 0.14);
+      result = await callGeminiStructured(system, user + `
+CORREÇÃO OBRIGATÓRIA: devolva JSON puro e um SVG completo, autocontido, sem scripts, sem imagens externas e não vazio. Preserve as partes marcadas e descreva nas notes o que foi alterado.`, 10000, Math.min(timeout, remaining), 0.14, refs);
       generatedImage = cleanGeneratedImageJson(result.text);
     }
     return { generatedImage, provider: result.provider, model: result.model };
