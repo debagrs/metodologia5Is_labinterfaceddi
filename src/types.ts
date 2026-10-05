@@ -464,7 +464,7 @@ export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'goggles' | 'mon
 export interface CharacterAccessory { id:string; kind:CharacterAccessoryKind; color:string; scale:number; x:number; y:number; }
 export interface CharacterPoseAdjustment { al?:number; ar?:number; el?:number; er?:number; ll?:number; lr?:number; kl?:number; kr?:number; lean?:number; headTilt?:number; }
 export interface CharacterAppearance {
-  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'realism' | 'psychedelic' | 'steampunk';
+  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'minimal-lineart' | 'realism' | 'psychedelic' | 'steampunk';
   /** Variação dentro da família visual. Ex.: manga-shoujo, engraving-woodcut. */
   styleVariant?: string;
   accessories?: CharacterAccessory[];
