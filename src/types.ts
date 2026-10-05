@@ -524,6 +524,10 @@ export interface CharacterAppearance {
   lineColor: string;
   stature?: 'very-short' | 'short' | 'average' | 'tall' | 'giant';
   representationProfile?: 'none' | 'down-syndrome';
+  /** Intenção de representação escolhida pela pessoa usuária. Não impõe corpo, roupa, cabelo ou traços. */
+  identityRepresentation?: 'man' | 'woman' | 'lgbtqia' | 'open';
+  /** Faixa etária visual do personagem. Ajusta proporções-base, mas mantém todos os controles editáveis. */
+  ageGroup?: 'baby' | 'child' | 'teen' | 'adult' | 'older-adult';
   mobilityAid?: 'none' | 'wheelchair' | 'crutch' | 'prosthesis-leg';
   wheelchairStyle?: 'manual' | 'active' | 'sport';
   wheelchairColor?: string;
