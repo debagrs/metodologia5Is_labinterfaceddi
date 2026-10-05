@@ -515,6 +515,32 @@ function tail(a: CharacterAppearance, x: number, y: number) {
     ? `<path d="M${x} ${y}Q${x + 38} ${y - 65} ${x + 84} ${y - 42}Q${x + 88} ${y + 12} ${x + 14} ${y + 12}Z" fill="${f}"/>`
     : `<path d="M${x} ${y}Q${x + 75} ${y + 15} ${x + 64} ${y - 65}" stroke="${f}" stroke-width="${a.tailStyle === "reptile" ? 18 : 10}" fill="none"/>`,x,y,metric(a,"tailSize"));
 }
+
+function inclusiveSupports(a: CharacterAppearance, feet: P[]) {
+  const line = color(a.lineColor, '#382a29');
+  const steel = tint(line, 120);
+  const fill = color(a.outfitSecondary, '#7C8798');
+  const skin = color(a.surfaceColor || a.skinColor, '#EAC3A9');
+  const [leftFoot, rightFoot] = feet;
+  let art = '';
+  if (a.mobilityAid === 'wheelchair') {
+    art += `<g opacity=".98"><circle cx="128" cy="365" r="40" fill="none" stroke="${steel}" stroke-width="8"/><circle cx="225" cy="375" r="17" fill="none" stroke="${steel}" stroke-width="6"/><path d="M145 356h58l18-84h15M166 281h46l13 57M164 281l-18 29" fill="none" stroke="${line}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="150" y="276" width="58" height="10" rx="4" fill="${fill}"/><path d="M223 263v-41" stroke="${line}" stroke-width="6" stroke-linecap="round"/><path d="M146 353l18 18h36" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/></g>`;
+  }
+  if (a.mobilityAid === 'crutch') {
+    art += `<g transform="translate(236 208)"><path d="M0 0v140" stroke="${steel}" stroke-width="5" stroke-linecap="round"/><path d="M-12 11Q0 -7 12 11" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/><path d="M-8 34h16" stroke="${line}" stroke-width="4"/><path d="M-8 140h16" stroke="${line}" stroke-width="4"/></g>`;
+  }
+  if (a.mobilityAid === 'prosthesis-leg' && rightFoot) {
+    art += `<g><path d="M198 314Q205 345 206 382" fill="none" stroke="${steel}" stroke-width="8" stroke-linecap="round"/><path d="M203 382h22" fill="none" stroke="${line}" stroke-width="6" stroke-linecap="round"/></g>`;
+  }
+  if (a.visionAid === 'cane') {
+    art += `<g transform="translate(235 238)"><path d="M0 0v137" stroke="${line}" stroke-width="5" stroke-linecap="round"/><path d="M0 137q11 7 20 0" fill="none" stroke="${steel}" stroke-width="4" stroke-linecap="round"/></g>`;
+  }
+  if (a.visionAid === 'dark-glasses') {
+    art += `<g stroke="${line}" stroke-width="2.5" fill="${tint(line,-20)}"><rect x="141" y="99" width="33" height="24" rx="8"/><rect x="186" y="99" width="33" height="24" rx="8"/><path d="M174 108Q180 104 186 108" fill="none" stroke="${line}"/></g>`;
+  }
+  return art;
+}
+
 function biped(
   a: CharacterAppearance,
   view: CharacterView,
@@ -529,15 +555,16 @@ function biped(
     pants = color(a.outfitSecondary, "#465D75");
   const r = characterRig(pose, phase);
   for(const key of Object.keys(r) as Array<keyof typeof r>)r[key]+=(adjustments[key] || 0);
+  const stature = a.stature === 'very-short' ? 0.72 : a.stature === 'short' ? 0.86 : a.stature === 'tall' ? 1.16 : a.stature === 'giant' ? 1.34 : 1;
   const stock =
-    a.bodyShape === "stocky" ? 1.25 : a.bodyShape === "slim" ? 0.85 : 1;
+    a.bodyShape === "plus-size" ? 1.42 : a.bodyShape === "stocky" ? 1.25 : a.bodyShape === "very-slim" ? 0.72 : a.bodyShape === "slim" ? 0.85 : 1;
   const width = stock * (a.bodyWidth || 1);
   const shoulder = 38 * width * (a.shoulderWidth || 1);
-  const limb = (a.limbLength || 1)*metric(a,"armLength");
+  const limb = (a.limbLength || 1)*metric(a,"armLength")*stature;
   const legLength =
-    (a.limbLength || 1) * metric(a,"legLength") *
+    (a.limbLength || 1) * metric(a,"legLength") * stature *
     (a.legStyle === "long" ? 1.13 : a.legStyle === "short" ? 0.78 : 1);
-  const hipY = 310,
+  const hipY = 310 - (stature - 1) * 24,
     sl = pt(180 - shoulder, 207),
     sr = pt(180 + shoulder, 207),
     hl = pt(162, hipY),
@@ -585,7 +612,7 @@ function biped(
   else if (a.outfitStyle === "workwear") details = '<path d="M151 206H209V274H151Z" fill="'+tint(shirt,-18)+'" opacity=".75"/><rect x="158" y="218" width="19" height="18" rx="2" fill="'+pants+'"/><rect x="184" y="218" width="19" height="18" rx="2" fill="'+pants+'"/><path d="M165 188v26m30-26v26" stroke="'+pants+'" stroke-width="5"/>';
   else if (a.outfitStyle === "adventure") details = '<path d="M153 205L207 205L202 271H158Z" fill="'+tint(shirt,-12)+'"/><path d="M158 217h44M180 205v66" stroke="'+pants+'" stroke-width="4"/><path d="M151 274h58" stroke="#77583F" stroke-width="7"/>';
   else if (a.outfitStyle === "casual") details = '<path d="M159 204Q180 214 201 204" fill="none" stroke="'+tint(shirt,-28)+'" stroke-width="3"/><path d="M166 248h28" stroke="'+tint(shirt,-20)+'" stroke-width="2" opacity=".55"/>';
-  const body = `${wings(a, 180, 220)}${tail(a, 210, 275)}${link(sl, el, wl, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(sr, er, wr, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(hl, kl, fl, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${link(hr, kr, fr, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${shoe(fl, -1)}${shoe(fr, 1)}${lower}${sleeves}${torso}${neck}${details}<path d="M${180 - shoulder + 9} 215Q${180 - shoulder + 3} 252 ${180 - 24 * width} 279Q180 294 ${180 + 27 * width} 279" fill="none" stroke="${tint(shirt, -25)}" stroke-width="4" opacity=".35"/><path d="M166 181Q180 192 194 181" stroke="${tint(shirt, -45)}" fill="none"/>${hand(wl, -1)}${hand(wr, 1)}`;
+  const body = `${wings(a, 180, 220)}${tail(a, 210, 275)}${inclusiveSupports(a, [fl, fr])}${link(sl, el, wl, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(sr, er, wr, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(hl, kl, fl, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${link(hr, kr, fr, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${shoe(fl, -1)}${shoe(fr, 1)}${lower}${sleeves}${torso}${neck}${details}<path d="M${180 - shoulder + 9} 215Q${180 - shoulder + 3} 252 ${180 - 24 * width} 279Q180 294 ${180 + 27 * width} 279" fill="none" stroke="${tint(shirt, -25)}" stroke-width="4" opacity=".35"/><path d="M166 181Q180 192 194 181" stroke="${tint(shirt, -45)}" fill="none"/>${hand(wl, -1)}${hand(wr, 1)}`;
   const headScale = clamp(
     (a.bodyShape === "chibi" ? 5.5 : 4.8) / (a.headToBodyRatio || 4.8),
     0.72,
