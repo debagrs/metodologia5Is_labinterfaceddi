@@ -219,15 +219,20 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     return [];
   });
 
-  const projectGameAssets = nodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type)).map((item) => {
+  const projectGameAssets = nodes.flatMap((item) => {
+    const hasSpritePayload = Boolean(item.sprite);
+    const supportedType = ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type);
+    if (!supportedType && !hasSpritePayload) return [];
     const spriteAnimation = item.sprite?.animations?.find((animation) => animation.id === item.sprite?.activeAnimationId) || item.sprite?.animations?.[0];
     const spriteUrl = spriteAnimation?.frames?.[0]?.url || (item.sprite ? svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')) : undefined);
-    return {
+    return [{
       id: item.id,
-      name: item.imageName || item.drawingName || item.interactiveName || item.wireframeName || item.soundName || item.videoName || item.designSystemName || item.spriteName || item.title,
-      type: item.type,
-      url: item.imageUrl || item.video?.generatedUrl || item.video?.sourceUrl || spriteUrl || undefined,
-    };
+      name: item.spriteName || item.imageName || item.drawingName || item.interactiveName || item.wireframeName || item.soundName || item.videoName || item.designSystemName || item.title || 'Asset do projeto',
+      // Normaliza personagens antigos/migrados que já tenham payload sprite,
+      // mesmo quando o tipo salvo em versões anteriores não era exatamente sprite-character.
+      type: hasSpritePayload ? 'sprite-character' : item.type,
+      url: spriteUrl || item.imageUrl || item.video?.generatedUrl || item.video?.sourceUrl || undefined,
+    }];
   });
 
   const getNodeDimensions = (node: ThoughtNode) => {
