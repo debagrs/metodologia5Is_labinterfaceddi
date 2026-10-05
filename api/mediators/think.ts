@@ -821,6 +821,74 @@ function buildApiBuilderMessages(body) {
   return {system,user};
 }
 
+function cleanDataStoryJson(text) {
+  const data=extractJsonObject(text);
+  const allowed=new Set(['bar','horizontal-bar','line','area','pie','donut','scatter','bubble','stacked','timeline','radar','pictogram','gauge','lollipop','funnel','heatmap','treemap']);
+  return {
+    headline:String(data.headline||'').slice(0,180),
+    insight:String(data.insight||'').slice(0,700),
+    recommendedChart:allowed.has(String(data.recommendedChart))?String(data.recommendedChart):'bar',
+    why:String(data.why||'').slice(0,900),
+    questions:Array.isArray(data.questions)?data.questions.slice(0,8).map((x)=>String(x).slice(0,320)):[],
+    annotations:Array.isArray(data.annotations)?data.annotations.slice(0,8).map((x)=>String(x).slice(0,320)):[],
+    infographicSequence:Array.isArray(data.infographicSequence)?data.infographicSequence.slice(0,8).map((x)=>String(x).slice(0,420)):[],
+  };
+}
+function buildDataStoryMessages(body) {
+  const rows=Array.isArray(body?.rows)?body.rows.slice(0,80):[];
+  const questions=Array.isArray(body?.questions)?body.questions.slice(0,10):[];
+  const system=`Você é especialista em information design, visualização e storytelling de dados. Sua função é ajudar uma pessoa designer a formular perguntas, escolher uma codificação visual adequada e construir uma narrativa verificável — não decorar números nem forçar conclusões.
+PRINCÍPIOS: compare antes de ornamentar; explicite unidade, período, fonte e denominador; não sugira causalidade a partir de correlação; destaque incerteza e ausência; mapas coropléticos devem preferir taxas/percentuais, enquanto valores absolutos podem pedir símbolos proporcionais; pizza/rosca somente com poucas categorias de um todo; linha para mudança temporal; barras para comparação; dispersão para relação entre variáveis; pictogramas para proporções simples. Preserve autoria humana e critique vieses.
+Retorne SOMENTE JSON válido: {"headline":"...","insight":"...","recommendedChart":"bar|horizontal-bar|line|area|pie|donut|scatter|bubble|stacked|timeline|radar|pictogram|gauge|lollipop|funnel|heatmap|treemap","why":"...","questions":["..."],"annotations":["..."],"infographicSequence":["..."]}.`;
+  const user=`OBJETIVO: ${String(body?.goal||'')}
+PEDIDO: ${String(body?.prompt||'')}
+GRÁFICO ATUAL: ${String(body?.chartType||'bar')}
+COLUNAS: ${JSON.stringify(body?.columns||[])}
+AMOSTRA DOS DADOS: ${JSON.stringify(rows)}
+PERGUNTAS/RESPOSTAS DO AUTOR: ${JSON.stringify(questions)}`;
+  return {system,user};
+}
+
+
+function cleanBrandRefinementJson(text) {
+  const data = extractJsonObject(text);
+  const allowedKinds = new Set(['wordmark','monogram','symbol','combination']);
+  const allowedSymbols = new Set(['geometric','organic','seal','abstract']);
+  const allowedLockups = new Set(['horizontal','stacked','symbol-only']);
+  return {
+    alternatives: Array.isArray(data.alternatives) ? data.alternatives.slice(0,4).map((item:any, index:number) => ({
+      id: String(item?.id || `alt-${index+1}`),
+      label: String(item?.label || `Alternativa ${index+1}`).slice(0,120),
+      rationale: String(item?.rationale || '').slice(0,600),
+      logo: {
+        kind: allowedKinds.has(String(item?.logo?.kind)) ? String(item.logo.kind) as any : 'combination',
+        symbolStyle: allowedSymbols.has(String(item?.logo?.symbolStyle)) ? String(item.logo.symbolStyle) as any : 'geometric',
+        monogram: String(item?.logo?.monogram || '').slice(0,3).toUpperCase(),
+        lockup: allowedLockups.has(String(item?.logo?.lockup)) ? String(item.logo.lockup) as any : 'horizontal',
+      }
+    })) : [],
+    notes: Array.isArray(data.notes) ? data.notes.slice(0,8).map(String) : [],
+  };
+}
+function buildBrandRefinementMessages(body) {
+  const b = body?.brand || {};
+  const system = `Você é designer de identidade visual. Sua tarefa é refinar uma ideia de marca sem apagar a autoria do esboço. Considere síntese formal, escalabilidade, contraste, memorabilidade, sistema visual e coerência com essência, público e posicionamento. Não produza discurso vazio. Retorne SOMENTE JSON válido no formato {"alternatives":[{"id":"alt-1","label":"...","rationale":"...","logo":{"kind":"wordmark|monogram|symbol|combination","symbolStyle":"geometric|organic|seal|abstract","monogram":"..","lockup":"horizontal|stacked|symbol-only"}}],"notes":["..."]}. Gere de 2 a 4 alternativas.`;
+  const user = `MARCA: ${String(b.name || '')}
+TAGLINE: ${String(b.tagline || '')}
+ESSÊNCIA: ${String(b.essence || '')}
+PÚBLICO/CONTEXTO: ${String(b.audience || '')}
+POSICIONAMENTO: ${String(b.positioning || '')}
+PERSONALIDADE: ${JSON.stringify(b.personality || [])}
+PALETA: ${JSON.stringify(b.palette || [])}
+LOGO ATUAL: ${JSON.stringify(b.logo || {})}
+LINGUAGEM GRÁFICA: ${String(b.graphicLanguage || '')}
+PHOTOBRIEF: ${String(b.photoBrief || '')}
+NOTAS DO ESBOÇO: ${String(b.sketchNote || '')}
+ESBOÇO PRESENTE: ${b.sketchDataUrl ? 'sim' : 'não'}
+PEDIDO DE REFINO: ${String(body?.prompt || '')}`;
+  return { system, user };
+}
+
 function cleanPublicationJson(text) {
   const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   const start = stripped.indexOf('{');
@@ -1309,6 +1377,19 @@ CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma 
     const result = await callGeminiStructured(system, user, 4200, Number(process.env.AI_CHARACTER_TIMEOUT_MS || 40000), 0.2);
     return { characterSheet: cleanCharacterSheetJson(result.text), provider: result.provider, model: result.model };
   }
+  if (body?.mode === 'data-story') {
+    if (!String(body?.prompt || '').trim()) throw new Error('Diga o que você quer descobrir ou comunicar com os dados.');
+    const { system, user } = buildDataStoryMessages(body);
+    const result = await callGeminiStructured(system, user, 3200, Number(process.env.AI_DATA_STORY_TIMEOUT_MS || 35000), 0.18);
+    return { dataStory: cleanDataStoryJson(result.text), provider: result.provider, model: result.model };
+  }
+
+  if (body?.mode === 'brand-refine') {
+    const { system, user } = buildBrandRefinementMessages(body);
+    const result = await callGeminiStructured(system, user, 2400, Number(process.env.AI_BRAND_TIMEOUT_MS || 35000), 0.18);
+    return { brandRefinement: cleanBrandRefinementJson(result.text), provider: result.provider, model: result.model };
+  }
+
   if (body?.mode === 'api-builder') {
     if (!String(body?.prompt || '').trim()) throw new Error('Descreva a API que deseja criar.');
     const { system, user } = buildApiBuilderMessages(body);
