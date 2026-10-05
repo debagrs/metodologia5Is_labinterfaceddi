@@ -5,6 +5,7 @@ import {
   ensureGraphicFonts,
 } from "../lib/graphicFonts";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import StudioAreaGuide from "./StudioAreaGuide";
 import {
   ArrowLeft,
   ArrowRight,
@@ -865,6 +866,7 @@ export default function VideoStudio({
             {draft.width} × {draft.height} · {clock(duration)}
           </span>
         </div>
+        <StudioAreaGuide area="video" />
         <button
           type="button"
           disabled={!canEdit || busy}
