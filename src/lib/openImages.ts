@@ -35,13 +35,12 @@ export function permittedLicense(value: string) {
     /public domain|cc0|\bcc[- ]?by(?:[- ]sa)?\b|\bpdm\b/.test(normalized)
   );
 }
-export async function searchOpenImages(
+async function fetchProviderImages(
   provider: ImageProvider,
   query: string,
   page = 1,
   signal?: AbortSignal,
 ): Promise<{ images: OpenImage[]; more: boolean }> {
-  if (!query.trim()) return { images: [], more: false };
   let url: string;
   if (provider === "commons")
     url =
@@ -69,12 +68,16 @@ export async function searchOpenImages(
         license: "cc0,pdm,by,by-sa",
         license_type: "commercial,modification",
       });
-  const response = await fetch(url, { signal });
+
+  const response = await fetch(url, {
+    signal,
+    headers: provider === 'openverse' ? { Accept: 'application/json' } : undefined,
+  });
   if (!response.ok)
     throw new Error(
       response.status === 429
-        ? "A biblioteca atingiu o limite temporário de buscas. Aguarde ou escolha outra fonte."
-        : "Não foi possível consultar a biblioteca. Tente outra fonte.",
+        ? "A biblioteca atingiu o limite temporário de buscas."
+        : `A biblioteca respondeu com erro ${response.status}.`,
     );
   const data = await response.json();
   if (data.error)
@@ -130,6 +133,32 @@ export async function searchOpenImages(
     more:
       provider === "commons" ? !!data.continue : page < (data.page_count || 1),
   };
+}
+
+export async function searchOpenImages(
+  provider: ImageProvider,
+  query: string,
+  page = 1,
+  signal?: AbortSignal,
+): Promise<{ images: OpenImage[]; more: boolean }> {
+  if (!query.trim()) return { images: [], more: false };
+  try {
+    return await fetchProviderImages(provider, query, page, signal);
+  } catch (error: any) {
+    if (error?.name === 'AbortError') throw error;
+    if (provider === 'openverse') {
+      try {
+        return await fetchProviderImages('commons', query, page, signal);
+      } catch (fallbackError: any) {
+        if (fallbackError?.name === 'AbortError') throw fallbackError;
+      }
+    }
+    throw new Error(
+      provider === 'openverse'
+        ? 'Openverse e Wikimedia Commons não responderam agora. Tente novamente em alguns instantes.'
+        : 'Não foi possível consultar a biblioteca. Tente novamente ou use outra fonte.',
+    );
+  }
 }
 export function imageCredit(image: OpenImage) {
   return {
