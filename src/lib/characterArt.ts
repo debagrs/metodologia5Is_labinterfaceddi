@@ -164,6 +164,53 @@ export function characterRig(pose: CharacterPoseKind, phase: number) {
     ar += wave * 35;
     er += wave * 35;
   }
+  if (pose === "crawl") {
+    ll = wave * 18;
+    lr = -wave * 18;
+    kl = 42 + Math.max(0, -wave) * 18;
+    kr = 42 + Math.max(0, wave) * 18;
+    al = -wave * 20;
+    ar = wave * 20;
+    el = 45 + al * .3;
+    er = -45 + ar * .3;
+    lift = 16;
+  }
+  if (pose === "swim") {
+    al = -25 + wave * 22;
+    ar = 25 - wave * 22;
+    el = -50 + wave * 28;
+    er = 50 - wave * 28;
+    ll = -12 + wave * 10;
+    lr = 12 - wave * 10;
+    kl = 18;
+    kr = -18;
+    lean = wave * 3;
+    lift = -6 + Math.sin(phase * Math.PI * 4) * 3;
+  }
+  if (pose === "glide") {
+    al = -110;
+    ar = 110;
+    el = -120;
+    er = 120;
+    ll = -10;
+    lr = 10;
+    kl = 10;
+    kr = -10;
+    lean = -4;
+    lift = -12 + wave * 2;
+  }
+  if (pose === "slither") {
+    al = -8;
+    ar = 8;
+    el = -8;
+    er = 8;
+    ll = wave * 12;
+    lr = -wave * 12;
+    kl = Math.sin(phase * Math.PI * 4) * 10;
+    kr = -kl;
+    lean = wave * 8;
+    lift = Math.sin(phase * Math.PI * 2) * 4;
+  }
   if (pose === "neutral") {
     lift = wave * 1.5;
   }
@@ -515,7 +562,13 @@ function animalHead(a: CharacterAppearance, expression: string) {
     return `<g><path d="M128 105Q134 53 180 51Q226 53 232 105L218 159Q180 180 142 159Z" fill="${fill}"/><path d="M142 85l14-8 14 8m20 0 14-8 14 8" fill="none" stroke="${tint(fill,-35)}" stroke-width="2"/>${eyePair(180,106,10,8)}${nose(180,134+muzzleY,snout*.45)}${mouth(180,145+muzzleY,snout*.7)}${preset==='snake'?'<path d="M180 150v12m0 0-7 6m7-6 7 6" fill="none" stroke="'+line+'"/>':''}${accessories(a,'head')}</g>`;
   }
   if(isFish){
-    return `<g><path d="M126 111Q126 61 180 55Q234 61 234 111Q228 168 180 178Q132 168 126 111Z" fill="${fill}"/><path d="M128 103L105 80L110 124Z" fill="${tint(fill,-18)}"/><path d="M232 103L255 80L250 124Z" fill="${tint(fill,-18)}"/>${eyePair(180,108,11,12)}${mouth(180,146+muzzleY,24)}${accessories(a,'head')}</g>`;
+    const fishEyeY = 108;
+    const fishEyeX = 180;
+    const fishEyes = `<g>${eyePair(fishEyeX,fishEyeY,9,10).replace(/rotate\([^)]*\)/g,'')}<circle cx="152" cy="${fishEyeY-2}" r="2.5" fill="#fff" opacity=".7"/><circle cx="208" cy="${fishEyeY-2}" r="2.5" fill="#fff" opacity=".7"/></g>`;
+    const gills = `<path d="M198 122q14 10 0 26m10-22q12 10 0 22" fill="none" stroke="${tint(line,12)}" stroke-width="2" opacity=".72"/>`;
+    const finMouth = `<path d="M132 ${138+muzzleY}Q118 ${145+muzzleY} 132 ${154+muzzleY}" fill="none" stroke="${line}" stroke-width="2.5"/><path d="M132 ${146+muzzleY}q5 -3 10 0" fill="none" stroke="${line}" stroke-width="1.5" opacity=".65"/>`;
+    const cheekFin = `<path d="M147 125L121 105L126 144Z" fill="${tint(fill,-16)}" stroke="${line}" stroke-width="1.4" opacity=".95"/>`;
+    return `<g><path d="M122 111Q126 65 174 55Q236 62 236 111Q236 159 174 175Q128 167 122 111Z" fill="${fill}"/><path d="M236 112L266 86L259 112L266 138L236 112Z" fill="${tint(fill,-14)}" stroke="${line}" stroke-width="1.5"/><path d="M170 74Q205 73 226 95Q208 87 176 87Q144 87 128 96Q143 76 170 74Z" fill="${tint(fill,12)}" opacity=".55"/>${cheekFin}${fishEyes}${gills}${finMouth}${accessories(a,'head')}</g>`;
   }
   if(isArthropod){
     const compound=(expression==='surprised'?15:13)*eyeScale;
@@ -553,28 +606,30 @@ function tail(a: CharacterAppearance, x: number, y: number) {
 function wheelchairArt(a: CharacterAppearance) {
   const line = color(a.lineColor, '#382a29');
   const frame = color(a.wheelchairColor, '#4C5968');
-  const tire = tint(line, -10);
-  const rim = tint(frame, 75);
-  const seat = tint(frame, -18);
+  const tire = tint(line, -8);
+  const rim = tint(frame, 78);
+  const seat = tint(frame, -15);
   const style = a.wheelchairStyle || 'active';
   const sport = style === 'sport';
   const manual = style === 'manual';
-  const rearR = sport ? 58 : manual ? 54 : 56;
-  const rearY = sport ? 362 : 360;
-  const leftX = sport ? 104 : 112;
-  const rightX = sport ? 256 : 248;
-  const casterY = sport ? 421 : 414;
-  const seatY = manual ? 302 : 306;
-  const backTop = manual ? 226 : sport ? 254 : 244;
-  const backBottom = 306;
+  const rearR = sport ? 53 : manual ? 50 : 52;
+  const rearY = sport ? 350 : 348;
+  const leftX = sport ? 116 : 120;
+  const rightX = sport ? 244 : 240;
+  const casterY = sport ? 401 : 396;
+  const seatY = manual ? 288 : 290;
+  const backTop = manual ? 224 : sport ? 246 : 234;
+  const backBottom = seatY + 5;
   const spokeSet = (cx: number, cy: number, radius: number) => Array.from({length:12},(_,i)=>{
     const t=(Math.PI*2*i)/12;
     return `<path d="M${cx} ${cy}L${cx+Math.cos(t)*radius} ${cy+Math.sin(t)*radius}"/>`;
   }).join('');
-  const handles = manual ? `<path d="M157 ${backTop+8}L149 ${backTop-16}h-13M203 ${backTop+8}L211 ${backTop-16}h13" fill="none" stroke="${frame}" stroke-width="6" stroke-linecap="round"/>` : '';
-  const sportBrace = sport ? `<path d="M132 337L180 386L228 337M136 326L224 326" fill="none" stroke="${tint(frame,25)}" stroke-width="5"/>` : `<path d="M139 335L180 385L221 335" fill="none" stroke="${frame}" stroke-width="5"/>`;
-  const wheel = (cx:number) => `<g><circle cx="${cx}" cy="${rearY}" r="${rearR}" fill="white" stroke="${tire}" stroke-width="9"/><circle cx="${cx}" cy="${rearY}" r="${rearR-10}" fill="none" stroke="${rim}" stroke-width="3"/><g stroke="${tint(frame,55)}" stroke-width="1.5" opacity=".8">${spokeSet(cx,rearY,rearR-12)}</g><circle cx="${cx}" cy="${rearY}" r="6" fill="${frame}"/></g>`;
-  return `<g class="wheelchair-layer" opacity=".995">${wheel(leftX)}${wheel(rightX)}<rect x="145" y="${seatY}" width="70" height="12" rx="5" fill="${seat}" stroke="${line}" stroke-width="2"/><path d="M153 ${backBottom}V${backTop}Q180 ${backTop-10} 207 ${backTop}V${backBottom}" fill="none" stroke="${frame}" stroke-width="8" stroke-linecap="round"/><path d="M151 ${backTop+12}Q180 ${backTop+2} 209 ${backTop+12}V${backBottom-7}H151Z" fill="${tint(frame,-8)}" opacity=".72"/>${handles}${sportBrace}<path d="M147 ${seatY+8}L132 ${casterY-8}M213 ${seatY+8}L228 ${casterY-8}" fill="none" stroke="${frame}" stroke-width="6" stroke-linecap="round"/><circle cx="132" cy="${casterY}" r="${sport?9:10}" fill="white" stroke="${tire}" stroke-width="5"/><circle cx="228" cy="${casterY}" r="${sport?9:10}" fill="white" stroke="${tire}" stroke-width="5"/><path d="M150 392h60M153 392l-12 18h27M207 392l12 18h-27" fill="none" stroke="${frame}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>${sport ? `<path d="M118 303Q180 277 242 303" fill="none" stroke="${tint(frame,55)}" stroke-width="3"/>` : ''}</g>`;
+  const wheel = (cx:number) => `<g><circle cx="${cx}" cy="${rearY}" r="${rearR}" fill="white" stroke="${tire}" stroke-width="7"/><circle cx="${cx}" cy="${rearY}" r="${rearR-9}" fill="none" stroke="${rim}" stroke-width="2.5"/><g stroke="${tint(frame,55)}" stroke-width="1.15" opacity=".75">${spokeSet(cx,rearY,rearR-11)}</g><circle cx="${cx}" cy="${rearY}" r="5.5" fill="${frame}"/></g>`;
+  const handles = manual ? `<path d="M157 ${backTop+8}L150 ${backTop-18}h-14M203 ${backTop+8}L210 ${backTop-18}h14" fill="none" stroke="${frame}" stroke-width="5" stroke-linecap="round"/>` : '';
+  const brace = sport
+    ? `<path d="M140 ${seatY+29}L180 382L220 ${seatY+29}M143 ${seatY+18}H217" fill="none" stroke="${tint(frame,28)}" stroke-width="4.5"/>`
+    : `<path d="M143 ${seatY+30}L180 382L217 ${seatY+30}" fill="none" stroke="${frame}" stroke-width="4.5"/>`;
+  return `<g class="wheelchair-layer" opacity=".995">${wheel(leftX)}${wheel(rightX)}<rect x="145" y="${seatY}" width="70" height="11" rx="5" fill="${seat}" stroke="${line}" stroke-width="1.8"/><path d="M153 ${backBottom}V${backTop}Q180 ${backTop-8} 207 ${backTop}V${backBottom}" fill="none" stroke="${frame}" stroke-width="7" stroke-linecap="round"/><path d="M153 ${backTop+10}Q180 ${backTop+2} 207 ${backTop+10}V${backBottom-7}H153Z" fill="${tint(frame,-7)}" opacity=".68"/>${handles}${brace}<path d="M149 ${seatY+8}L139 ${casterY-10}M211 ${seatY+8}L221 ${casterY-10}" fill="none" stroke="${frame}" stroke-width="5" stroke-linecap="round"/><circle cx="139" cy="${casterY}" r="8" fill="white" stroke="${tire}" stroke-width="4"/><circle cx="221" cy="${casterY}" r="8" fill="white" stroke="${tire}" stroke-width="4"/><path d="M151 360Q180 370 209 360M151 360L142 375h28M209 360l9 15h-28" fill="none" stroke="${frame}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>${sport ? `<path d="M130 300Q180 280 230 300" fill="none" stroke="${tint(frame,55)}" stroke-width="2.5"/>` : ''}</g>`;
 }
 
 function inclusiveSupports(a: CharacterAppearance, feet: P[]) {
@@ -608,7 +663,7 @@ function biped(
     shirt = color(a.outfitPrimary, "#3D8C8C"),
     pants = color(a.outfitSecondary, "#465D75");
   const inWheelchair = a.mobilityAid === "wheelchair";
-  const r = characterRig(inWheelchair ? "neutral" : pose, phase);
+  const r = characterRig(pose, phase);
   for(const key of Object.keys(r) as Array<keyof typeof r>)r[key]+=(adjustments[key] || 0);
   const stature = a.stature === 'very-short' ? 0.72 : a.stature === 'short' ? 0.86 : a.stature === 'tall' ? 1.16 : a.stature === 'giant' ? 1.34 : 1;
   const stock =
@@ -619,7 +674,7 @@ function biped(
   const legLength =
     (a.limbLength || 1) * metric(a,"legLength") * stature *
     (a.legStyle === "long" ? 1.13 : a.legStyle === "short" ? 0.78 : 1);
-  const hipY = inWheelchair ? 292 : 310 - (stature - 1) * 24;
+  const hipY = inWheelchair ? 282 : 310 - (stature - 1) * 24;
   let sl = pt(180 - shoulder, inWheelchair ? 205 : 207),
     sr = pt(180 + shoulder, inWheelchair ? 205 : 207),
     hl = pt(inWheelchair ? 164 : 162, hipY),
@@ -634,10 +689,19 @@ function biped(
     fr = joint(kr, 76 * legLength, r.lr + r.kr);
   if (inWheelchair) {
     const sport = a.wheelchairStyle === 'sport';
-    el = pt(149, 252); er = pt(211, 252);
-    wl = pt(sport ? 120 : 130, sport ? 326 : 321); wr = pt(sport ? 240 : 230, sport ? 326 : 321);
-    kl = pt(158, 333); kr = pt(202, 333);
-    fl = pt(158, 387); fr = pt(202, 387);
+    hl = pt(165, 282); hr = pt(195, 282);
+    kl = pt(156, 314); kr = pt(204, 314);
+    fl = pt(148, 358); fr = pt(212, 358);
+    if (pose === 'wave') {
+      el = pt(145, 252); wl = pt(sport ? 126 : 132, sport ? 327 : 318);
+      er = pt(226, 170); wr = pt(225, 126);
+    } else if (pose === 'action') {
+      el = pt(146, 252); er = pt(214, 252);
+      wl = pt(sport ? 122 : 130, sport ? 337 : 327); wr = pt(sport ? 238 : 230, sport ? 337 : 327);
+    } else {
+      el = pt(148, 248); er = pt(212, 248);
+      wl = pt(139, 303); wr = pt(221, 303);
+    }
   }
   const shoe = (p: P, k: number) =>
     `<g transform="translate(${p.x} ${p.y}) scale(${metric(a,"footSize")})"><path d="M-9-7H8L12 0Q${k * 23} 3 ${k * 22} 11H-10Q-14 5-9-7Z" fill="${line}"/><path d="M-9 8H${k * 19}" stroke="#8C939E" stroke-width="2"/><path d="M-3 1h9m-8 3h10" stroke="#CCD0D5" stroke-width="1"/></g>`;
@@ -728,12 +792,20 @@ function animal(
    return `<g transform="translate(0 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 180 310)">${legs.filter((_,i)=>i%2===0).join('')}${tail(a,torsoX+torsoW-8,torsoY)}${ellipse(torsoX,torsoY,torsoW,torsoH,fill)}${neck}${wings(a,torsoX,torsoY-12)}${legs.filter((_,i)=>i%2===1).join('')}<g transform="translate(-63 85) scale(${view==='side'?.84:1} 1)">${head}</g>${accessories(a,'body-front')}</g>`;
   }
   let body = "";
-  if (a.bodyPlan === "avian")
-    body = `<path d="M143 254Q111 353 141 382Q179 407 219 380Q248 348 216 256Z" fill="${fill}"/><path d="M145 287Q115 310 144 356Q169 337 162 298M215 287Q245 310 216 356Q191 337 198 298" fill="${tint(fill, -22)}"/><path d="M161 382V420m38-38v38m-38-2l-12 8m12-8l12 8m26-8l-12 8m12-8l12 8" stroke-width="4" fill="none"/>`;
-  else if (a.bodyPlan === "serpentine")
-    body = `<path d="M165 254C80 292 98 391 194 353C264 327 260 432 143 443" fill="none" stroke="${line}" stroke-width="48"/><path d="M165 254C80 292 98 391 194 353C264 327 260 432 143 443" fill="none" stroke="${fill}" stroke-width="44"/>`;
-  else if (a.bodyPlan === "aquatic")
-    body = `<path d="M79 279C100 219 202 218 239 268L311 225L300 283L311 339L239 299C194 356 104 347 79 279Z" fill="${fill}"/>`;
+  if (a.bodyPlan === "avian") {
+    const flap = (pose === 'glide' || pose === 'action' || pose === 'jump') ? Math.sin(phase * Math.PI * 2) * 16 : 0;
+    body = `<path d="M143 254Q111 353 141 382Q179 407 219 380Q248 348 216 256Z" fill="${fill}"/><path d="M145 287Q${115-flap} ${310-flap} 144 356Q169 337 162 298M215 287Q${245+flap} ${310-flap} 216 356Q191 337 198 298" fill="${tint(fill, -22)}"/><path d="M161 382V420m38-38v38m-38-2l-12 8m12-8l12 8m26-8l-12 8m12-8l12 8" stroke-width="4" fill="none"/>`;
+  }
+  else if (a.bodyPlan === "serpentine") {
+    const sway = (pose === 'slither' || pose === 'action' || pose === 'neutral') ? Math.sin(phase * Math.PI * 2) * 18 : 0;
+    body = `<path d="M165 254C${80+sway} 292 ${98-sway} 391 ${194+sway*.45} 353C${264-sway*.3} 327 ${260+sway*.2} 432 ${143-sway*.4} 443" fill="none" stroke="${line}" stroke-width="48"/><path d="M165 254C${80+sway} 292 ${98-sway} 391 ${194+sway*.45} 353C${264-sway*.3} 327 ${260+sway*.2} 432 ${143-sway*.4} 443" fill="none" stroke="${fill}" stroke-width="44"/>`;
+  }
+  else if (a.bodyPlan === "aquatic") {
+    const swimWave = Math.sin(phase * Math.PI * 2);
+    const tailSwing = (pose === 'swim' || pose === 'action' || pose === 'neutral') ? swimWave * 22 : 0;
+    const finLift = (pose === 'swim' || pose === 'action') ? Math.sin(phase * Math.PI * 4) * 10 : 0;
+    body = `<path d="M88 279C108 224 198 222 236 267L300 ${229+tailSwing*.35}L289 283L300 ${337-tailSwing*.35}L236 298C194 351 112 347 88 279Z" fill="${fill}"/><path d="M154 246Q134 ${219-finLift} 127 259Q144 278 165 271Z" fill="${tint(fill,-10)}"/><path d="M156 309Q134 ${337+finLift} 129 294Q146 283 166 289Z" fill="${tint(fill,-10)}"/><path d="M192 251Q205 ${236-finLift*.5} 219 253" fill="none" stroke="${tint(fill,20)}" stroke-width="2" opacity=".5"/>`;
+  }
   else {
     const long = a.footStyle === "hooves";
     const len = (long ? 96 : 62)*(a.limbLength || 1);
