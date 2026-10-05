@@ -8,9 +8,9 @@ import { motion } from 'motion/react';
 import { 
   ZoomIn, ZoomOut, Maximize, Plus, Trash2, CheckCircle2, 
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
-  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2, ChevronUp, ChevronDown, Plug
+  ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2, ChevronUp, ChevronDown, Plug, Fingerprint
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument, VisualIdentityDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
@@ -26,6 +26,7 @@ import SpriteStudio, { SpriteCharacterPreview, blankSpriteCharacter, buildCharac
 import type { SpriteAssetOption } from './SpriteStudio';
 import GameDesignStudio, { GameDesignPreview, blankGameDesign } from './GameDesignStudio';
 import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from './ApiConnectionsStudio';
+import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity } from './VisualIdentityStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -140,6 +141,8 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [newWireframeSource, setNewWireframeSource] = useState<WireframeImportSource | null>(null);
   const [designSystemEditorNodeId, setDesignSystemEditorNodeId] = useState<string | null>(null);
   const [newDesignSystem, setNewDesignSystem] = useState<DesignSystemDocument | null>(null);
+  const [visualIdentityEditorNodeId, setVisualIdentityEditorNodeId] = useState<string | null>(null);
+  const [newVisualIdentity, setNewVisualIdentity] = useState<VisualIdentityDocument | null>(null);
   const [videoEditorNodeId, setVideoEditorNodeId] = useState<string | null>(null);
   const [newVideo, setNewVideo] = useState<VideoDocument | null>(null);
   const [uxWritingEditorNodeId, setUXWritingEditorNodeId] = useState<string | null>(null);
@@ -161,7 +164,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
   const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
 
-  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId);
+  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('atelier-open', atelierOpen);
@@ -214,6 +217,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     }
     if (node.type === 'design-system') {
       return { width: node.width || (compactCanvas ? 320 : 400), height: node.height || (compactCanvas ? 250 : 300) };
+    }
+    if (node.type === 'visual-identity') {
+      return { width: node.width || (compactCanvas ? 320 : 410), height: node.height || (compactCanvas ? 260 : 310) };
     }
     if (node.type === 'video-board') {
       return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 360 : 430) };
@@ -387,7 +393,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     let finalWidth = startWidth;
     let finalHeight = startHeight;
 
-    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design' || node.type === 'api-connections';
+    const isVisualNode = node.type === 'canvas-image' || node.type === 'drawing-sheet' || node.type === 'interactive-lab' || node.type === 'wireframe-board' || node.type === 'design-system' || node.type === 'visual-identity' || node.type === 'video-board' || node.type === 'ux-writing' || node.type === 'sound-board' || node.type === 'hardware-board' || node.type === 'sprite-character' || node.type === 'game-design' || node.type === 'api-connections';
     const minWidth = isVisualNode ? 100 : 240;
     const minHeight = isVisualNode ? 80 : 150;
     const maxWidth = isVisualNode ? 1400 : 820;
@@ -1090,6 +1096,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isInteractiveLab = node.type === 'interactive-lab';
             const isWireframeBoard = node.type === 'wireframe-board';
             const isDesignSystem = node.type === 'design-system';
+            const isVisualIdentity = node.type === 'visual-identity';
             const isVideoBoard = node.type === 'video-board';
             const isUXWriting = node.type === 'ux-writing';
             const isSoundBoard = node.type === 'sound-board';
@@ -1447,9 +1454,10 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             }
 
 
-            if (isWireframeBoard || isDesignSystem || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign || isApiConnections) {
+            if (isWireframeBoard || isDesignSystem || isVisualIdentity || isVideoBoard || isUXWriting || isSoundBoard || isHardwareBoard || isSpriteCharacter || isGameDesign || isApiConnections) {
               const label = isWireframeBoard ? (node.wireframeName || 'Wireframes')
                 : isDesignSystem ? (node.designSystemName || 'Design System')
+                : isVisualIdentity ? (node.visualIdentityName || 'Identidade visual')
                 : isVideoBoard ? (node.videoName || 'Vídeo')
                 : isUXWriting ? (node.uxWritingName || 'UX Writing')
                 : isSoundBoard ? (node.soundName || 'Sonoridade')
@@ -1460,6 +1468,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               const edit = () => {
                 if (isWireframeBoard) setWireframeEditorNodeId(node.id);
                 else if (isDesignSystem) setDesignSystemEditorNodeId(node.id);
+                else if (isVisualIdentity) setVisualIdentityEditorNodeId(node.id);
                 else if (isVideoBoard) setVideoEditorNodeId(node.id);
                 else if (isUXWriting) setUXWritingEditorNodeId(node.id);
                 else if (isSoundBoard) setSoundEditorNodeId(node.id);
@@ -1489,6 +1498,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                   <div className="h-full w-full rounded-xl overflow-hidden bg-white pointer-events-none">
                     {isWireframeBoard && node.wireframe && <WireframePreview document={node.wireframe} designSystem={projectDesignSystem} className="h-full w-full" />}
                     {isDesignSystem && node.designSystem && <DesignSystemPreview document={node.designSystem} className="h-full w-full" />}
+                    {isVisualIdentity && node.visualIdentity && <VisualIdentityPreview document={node.visualIdentity} className="h-full w-full" />}
                     {isVideoBoard && node.video && <VideoPreview document={node.video} className="h-full w-full" />}
                     {isUXWriting && node.uxWriting && <UXWritingPreview document={node.uxWriting} className="h-full w-full" />}
                     {isSoundBoard && node.sound && <SoundPreview document={node.sound} className="h-full w-full" />}
@@ -1954,6 +1964,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               </button>
               <button type="button" onClick={() => { setNewWireframeSource(null); setNewWireframe(blankWireframe(projectDesignSystem)); }} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="hidden sm:inline">WIREFRAME</span></button>
               <button type="button" onClick={() => setNewDesignSystem(blankDesignSystem())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · tipografia, paleta, tokens e acessibilidade"><Palette size={14}/><span className="hidden sm:inline">DESIGN SYSTEM</span></button>
+              <button type="button" data-tour="atelier-identity" onClick={() => setNewVisualIdentity(blankVisualIdentity())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · estratégia de marca, logo, cor, tipografia, photobrief e aplicações"><Fingerprint size={14}/><span className="hidden sm:inline">IDENTIDADE</span></button>
               <button type="button" data-tour="atelier-video" onClick={() => setNewVideo(blankVideo(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · inserir e gerar motion para vídeo e redes"><Film size={14}/><span className="hidden sm:inline">VÍDEO</span></button>
               <button type="button" data-tour="atelier-uxwriting" onClick={() => setNewUXWriting(blankUXWriting())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · microcopy, linguagem simples, tradução e apoio para Libras"><Languages size={14}/><span className="hidden sm:inline">UX WRITING</span></button>
               <button type="button" data-tour="atelier-sound" onClick={() => setNewSound(blankSound())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · pequenos efeitos e identidade sonora"><Volume2 size={14}/><span className="hidden sm:inline">SOM</span></button>
@@ -2128,6 +2139,13 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       }} onClose={()=>setNewDesignSystem(null)}/>} 
 
       {designSystemEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===designSystemEditorNodeId&&item.type==='design-system'); if(!node)return null; return <DesignSystemStudio key={node.id} document={node.designSystem||blankDesignSystem()} title={node.designSystemName||'Design System'} canEdit={canEditCanvas} onSave={(designSystem)=>onUpdateNode({...node,designSystem,designSystemName:designSystem.name||node.designSystemName})} onClose={()=>setDesignSystemEditorNodeId(null)}/>})()}
+
+      {newVisualIdentity && <VisualIdentityStudio document={newVisualIdentity} title="Nova identidade visual" canEdit={canEditCanvas} onSave={(visualIdentity)=>{
+        const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:410; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:310; const position=getCenteredPosition(startWidth,startHeight);
+        onAddNode({type:'visual-identity',title:visualIdentity.brandName||'Identidade visual',visualIdentityName:visualIdentity.brandName||`Identidade visual ${nodes.filter((item)=>item.type==='visual-identity').length+1}`,content:`${visualIdentity.personality.join(', ')} · ${visualIdentity.palette.map((c)=>c.color).join(' ')}`,phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,visualIdentity,connections:[]}); setNewVisualIdentity(null);
+      }} onAddToNotes={(noteTitle,noteContent)=>{const position=getCenteredPosition(340,220);onAddNode({type:'user-thought',title:noteTitle,content:noteContent,phase:activePhase,x:position.x+36,y:position.y+36,width:340,height:220,connections:[]})}} onClose={()=>setNewVisualIdentity(null)}/>}
+
+      {visualIdentityEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===visualIdentityEditorNodeId&&item.type==='visual-identity'); if(!node)return null; return <VisualIdentityStudio key={node.id} document={node.visualIdentity||blankVisualIdentity()} title={node.visualIdentityName||'Identidade visual'} canEdit={canEditCanvas} onSave={(visualIdentity)=>onUpdateNode({...node,visualIdentity,visualIdentityName:visualIdentity.brandName||node.visualIdentityName,title:visualIdentity.brandName||node.title,content:`${visualIdentity.personality.join(', ')} · ${visualIdentity.palette.map((c)=>c.color).join(' ')}`})} onAddToNotes={(noteTitle,noteContent)=>{const position=getCenteredPosition(340,220);onAddNode({type:'user-thought',title:noteTitle,content:noteContent,phase:activePhase,x:position.x+36,y:position.y+36,width:340,height:220,connections:[]})}} onClose={()=>setVisualIdentityEditorNodeId(null)}/>})()}
 
       {newVideo && <VideoStudio document={newVideo} designSystem={projectDesignSystem} availableMedia={projectVideoMedia} title="Novo vídeo" canEdit={canEditCanvas} onSave={(video)=>{
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?300:380; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?360:430; const position=getCenteredPosition(startWidth,startHeight);
