@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
-  ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
+  ChevronRight, ChevronLeft, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
   Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
@@ -1571,6 +1571,16 @@ export default function Workspace({
   const desktopPanelsInitiallyOpen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
+  const toggleLeftSidebar = () => {
+    const next = !isLeftSidebarOpen;
+    setIsLeftSidebarOpen(next);
+    if (next && typeof window !== 'undefined' && window.innerWidth < 1024) setIsRightSidebarOpen(false);
+  };
+  const toggleRightSidebar = () => {
+    const next = !isRightSidebarOpen;
+    setIsRightSidebarOpen(next);
+    if (next && typeof window !== 'undefined' && window.innerWidth < 1024) setIsLeftSidebarOpen(false);
+  };
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState<boolean>(false);
@@ -2251,10 +2261,7 @@ export default function Workspace({
           </button>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => {
-                setIsLeftSidebarOpen(!isLeftSidebarOpen);
-                setIsRightSidebarOpen(false);
-              }}
+              onClick={toggleLeftSidebar}
               className={`p-2 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
                 isLeftSidebarOpen 
                   ? 'bg-black text-white border-black shadow-sm' 
@@ -2268,10 +2275,7 @@ export default function Workspace({
             </button>
             
             <button
-              onClick={() => {
-                setIsRightSidebarOpen(!isRightSidebarOpen);
-                setIsLeftSidebarOpen(false);
-              }}
+              onClick={toggleRightSidebar}
               className={`p-2 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
                 isRightSidebarOpen 
                   ? 'bg-black text-white border-black shadow-sm' 
@@ -2384,17 +2388,28 @@ export default function Workspace({
         {/* Left Sidebar: Metodologia 5I’s organism tracker */}
         <aside 
           id="left-sidebar-methodology" 
-          className={`absolute lg:relative top-0 left-0 h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
-            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'
+          className={`workspace-sidebar absolute lg:relative top-0 left-0 h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-[transform,width] duration-300 ${
+            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 workspace-sidebar--collapsed'
           }`}
         >
+          <button
+            type="button"
+            onClick={() => setIsLeftSidebarOpen(true)}
+            className="workspace-sidebar-rail"
+            title="Expandir Metodologia 5I’s"
+            aria-label="Expandir painel Metodologia 5I’s"
+          >
+            <ChevronRight size={17} />
+            <span>METODOLOGIA</span>
+          </button>
           {/* Mobile close button inside Left Sidebar header */}
           <button 
             onClick={() => setIsLeftSidebarOpen(false)}
             className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
-            title="Fechar menu"
+            title="Recolher painel"
           >
-            <X size={15} />
+            <X size={15} className="lg:hidden" />
+            <ChevronLeft size={16} className="hidden lg:block" />
           </button>
           
           {/* Header section */}
@@ -2598,17 +2613,28 @@ export default function Workspace({
         {/* Right Sidebar: Intelligent Mediators Panel */}
         <aside 
           id="right-sidebar-mediators" 
-          className={`absolute lg:relative top-0 right-0 h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
-            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'
+          className={`workspace-sidebar absolute lg:relative top-0 right-0 h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-[transform,width] duration-300 ${
+            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 workspace-sidebar--collapsed'
           }`}
         >
+          <button
+            type="button"
+            onClick={() => setIsRightSidebarOpen(true)}
+            className="workspace-sidebar-rail"
+            title="Expandir Agentes 5I’s"
+            aria-label="Expandir painel Agentes 5I’s"
+          >
+            <ChevronLeft size={17} />
+            <span>AGENTES</span>
+          </button>
           {/* Mobile close button inside Right Sidebar header */}
           <button 
             onClick={() => setIsRightSidebarOpen(false)}
             className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
-            title="Fechar menu"
+            title="Recolher painel"
           >
-            <X size={15} />
+            <X size={15} className="lg:hidden" />
+            <ChevronRight size={16} className="hidden lg:block" />
           </button>
           
           {/* Top section: selection of mediators */}
