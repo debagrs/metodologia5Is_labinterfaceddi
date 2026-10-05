@@ -46,6 +46,110 @@ const DEFAULT_APPLICATIONS: VisualIdentityApplication[] = [
 
 const dsRole = (ds: DesignSystemDocument | undefined, role: string, fallback: string) => ds?.colors.find((color) => color.role === role)?.value || fallback;
 
+const normalizeHex = (value: string, fallback = '#000000') => {
+  const clean = String(value || '').trim().replace(/^#/, '').toUpperCase();
+  if (/^[0-9A-F]{3}$/.test(clean)) return `#${clean.split('').map((x) => x + x).join('')}`;
+  if (/^[0-9A-F]{6}$/.test(clean)) return `#${clean}`;
+  return fallback;
+};
+const rgbToHex = (r: number, g: number, b: number) => `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+const hexToRgb = (hex: string) => {
+  const safe = normalizeHex(hex);
+  return {
+    r: parseInt(safe.slice(1, 3), 16),
+    g: parseInt(safe.slice(3, 5), 16),
+    b: parseInt(safe.slice(5, 7), 16),
+  };
+};
+const mixHex = (a: string, b: string, amount = 0.5) => {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  const t = Math.max(0, Math.min(1, amount));
+  return rgbToHex(x.r + (y.r - x.r) * t, x.g + (y.g - x.g) * t, x.b + (y.b - x.b) * t);
+};
+const colorDistance = (a: string, b: string) => {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  return Math.sqrt((x.r - y.r) ** 2 + (x.g - y.g) ** 2 + (x.b - y.b) ** 2);
+};
+const isNearGray = (hex: string) => {
+  const { r, g, b } = hexToRgb(hex);
+  return Math.abs(r - g) < 10 && Math.abs(g - b) < 10;
+};
+async function extractPaletteFromImageFile(file: File): Promise<string[]> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Falha ao ler arquivo da marca.'));
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Falha ao analisar a imagem enviada.'));
+    image.src = dataUrl;
+  });
+  const canvas = document.createElement('canvas');
+  const size = 72;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [];
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, size, size);
+  ctx.drawImage(img, 0, 0, size, size);
+  const data = ctx.getImageData(0, 0, size, size).data;
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < data.length; i += 16) {
+    const alpha = data[i + 3];
+    if (alpha < 120) continue;
+    const r = Math.round(data[i] / 16) * 16;
+    const g = Math.round(data[i + 1] / 16) * 16;
+    const b = Math.round(data[i + 2] / 16) * 16;
+    const hex = rgbToHex(r, g, b);
+    if (hex === '#FFFFFF' || hex === '#000000') continue;
+    buckets.set(hex, (buckets.get(hex) || 0) + 1);
+  }
+  const sorted = [...buckets.entries()].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
+  const chosen: string[] = [];
+  for (const hex of sorted) {
+    if (!chosen.some((existing) => colorDistance(existing, hex) < 42)) chosen.push(hex);
+    if (chosen.length >= 6) break;
+  }
+  const neutrals = sorted.filter((hex) => isNearGray(hex) || colorDistance(hex, '#FFFFFF') < 28 || colorDistance(hex, '#111111') < 28).slice(0, 2);
+  return [...chosen, ...neutrals].slice(0, 6);
+}
+function applyExtractedPalette(document: VisualIdentityDocument, colors: string[]): VisualIdentityDocument {
+  if (!colors.length) return document;
+  const roles = [
+    ['Principal', 'Reconhecimento'],
+    ['Apoio', 'Contraste'],
+    ['Claro', 'Fundo'],
+    ['Escuro', 'Texto'],
+    ['Acento', 'Destaque'],
+    ['Neutro', 'Apoio'],
+  ] as const;
+  const fallback = document.palette.map((item) => item.color);
+  const preferred = [
+    colors.find((hex) => !isNearGray(hex)) || colors[0] || fallback[0] || '#267F77',
+    colors.find((hex, index) => index > 0 && !isNearGray(hex) && colorDistance(hex, colors[0] || '#267F77') > 55) || colors[1] || fallback[1] || '#FF4F9A',
+    colors.find((hex) => colorDistance(hex, '#FFFFFF') < 90) || fallback[2] || '#F4F2ED',
+    colors.find((hex) => colorDistance(hex, '#000000') < 120 || isNearGray(hex)) || fallback[3] || '#161616',
+    colors[2] || fallback[4] || '#D7FF38',
+    colors[3] || fallback[5] || mixHex(fallback[0] || '#267F77', '#FFFFFF', 0.72),
+  ];
+  return {
+    ...document,
+    palette: preferred.map((hex, index) => ({
+      id: document.palette[index]?.id || `upload-${index}`,
+      name: document.palette[index]?.name || roles[index]?.[0] || `Cor ${index + 1}`,
+      role: document.palette[index]?.role || roles[index]?.[1] || 'Apoio',
+      color: normalizeHex(hex, document.palette[index]?.color || '#000000'),
+    })),
+  };
+}
+
+
 export function mergeIdentityWithDesignSystem(document: VisualIdentityDocument, ds?: DesignSystemDocument): VisualIdentityDocument {
   if (!ds) return document;
   const display = ds.fontFamilies?.display || ds.typography.find((item) => item.familyRole === 'display')?.family || ds.primaryFont || document.typography.display;
@@ -107,7 +211,7 @@ function Mark({ document, compact = false, inverse = false }: { document: Visual
   const monogram = (document.logo.monogram || document.brandName.slice(0, 2) || 'ID').slice(0, 3).toUpperCase();
   const shape = document.logo.symbolStyle;
   if (document.logo.assetUrl && document.logo.useUploadedAsset !== false) {
-    return <img src={document.logo.assetUrl} alt={document.logo.assetName || `Marca ${document.brandName}`} className={`${compact ? 'max-h-10 max-w-28' : 'max-h-24 max-w-64'} object-contain`} />;
+    return <img src={document.logo.assetUrl} alt={document.logo.assetName || `Marca ${document.brandName}`} className={`${compact ? 'max-h-12 max-w-36' : 'max-h-32 max-w-[24rem]'} object-contain drop-shadow-[0_6px_18px_rgba(0,0,0,0.14)]`} />;
   }
   const symbol = <div className={`${compact ? 'h-10 w-10' : 'h-16 w-16'} shrink-0 relative flex items-center justify-center overflow-hidden`} style={{ color: inverse ? '#FFFFFF' : primary }}>
     {shape === 'geometric' && <div className="absolute inset-1 rotate-12 border-[5px] rounded-[28%]" style={{ borderColor: primary }} />}
@@ -123,63 +227,175 @@ function Mark({ document, compact = false, inverse = false }: { document: Visual
 
 function BrandBadge({ document, inverse = false }: { document: VisualIdentityDocument; inverse?: boolean }) {
   const uploaded = Boolean(document.logo.assetUrl && document.logo.useUploadedAsset !== false);
-  return <div className={`scale-[.72] origin-center ${uploaded && inverse ? 'rounded-lg bg-white/90 p-1.5 shadow-sm' : ''}`}><Mark document={document} compact inverse={inverse && !uploaded} /></div>;
+  return <div className={`origin-center ${uploaded ? 'scale-[.86]' : 'scale-[.78]'} ${uploaded && inverse ? 'rounded-xl bg-white/92 p-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)]' : ''}`}><Mark document={document} compact inverse={inverse && !uploaded} /></div>;
 }
 
 function ApplicationPreview({ document, app }: { document: VisualIdentityDocument; app: VisualIdentityApplication }) {
-  const p = document.palette;
-  const primary = p[0]?.color || '#267F77';
-  const support = p[1]?.color || '#FF4F9A';
-  const paper = p[2]?.color || '#F4F2ED';
-  const ink = p[3]?.color || '#161616';
-  const label = <div className="absolute left-3 bottom-3 z-20"><div className="text-[7px] font-mono opacity-45">{applicationLabels[app.type]}</div><b className="block text-[10px] leading-tight" style={{ fontFamily: document.typography.display }}>{app.title}</b></div>;
+  const primary = document.palette[0]?.color || '#267F77';
+  const support = document.palette[1]?.color || '#FF4F9A';
+  const paper = document.palette[2]?.color || '#F4F2ED';
+  const ink = document.palette[3]?.color || '#151515';
+  const accent = document.palette[4]?.color || '#D7FF38';
+  const shadow = '0 16px 40px rgba(12, 12, 12, 0.14)';
+  const label = (
+    <div className="absolute inset-x-3 bottom-3 z-20 rounded-xl bg-white/92 backdrop-blur px-2.5 py-2 shadow-sm ring-1 ring-black/5">
+      <div className="text-[8px] font-mono tracking-[0.16em] text-neutral-400">{applicationLabels[app.type]}</div>
+      <b className="block text-[11px] leading-tight" style={{ fontFamily: document.typography.display }}>{app.title}</b>
+    </div>
+  );
+  const brandPlate = (inverse = false, size: 'sm' | 'md' | 'lg' = 'md') => (
+    <div
+      className={`rounded-2xl ${inverse ? 'bg-[#111]/85' : 'bg-white/92'} border border-black/5 backdrop-blur`}
+      style={{
+        boxShadow: '0 10px 28px rgba(15, 15, 15, 0.14)',
+        padding: size === 'lg' ? '14px 18px' : size === 'sm' ? '8px 10px' : '10px 14px',
+      }}
+    >
+      <Mark document={document} compact={size === 'sm'} inverse={inverse} />
+    </div>
+  );
+  const cardBase = 'aspect-[4/3] rounded-[22px] overflow-hidden border border-black/10 relative';
 
-  if (app.type === 'tshirt') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#E9E7E1] text-[#111]">
-    <div className="absolute inset-0 flex items-center justify-center pb-5"><svg viewBox="0 0 220 170" className="w-[76%] h-[76%]"><path d="M72 24 93 13h34l21 11 37 15-19 38-24-10v83H78V67L54 77 35 39Z" fill={paper} stroke={ink} strokeWidth="3"/><path d="M93 13q17 22 34 0" fill="none" stroke={ink} strokeWidth="3"/></svg></div>
-    <div className="absolute left-1/2 top-[43%] -translate-x-1/2 -translate-y-1/2"><BrandBadge document={document}/></div>{label}
+  if (app.type === 'social') return <div className={cardBase} style={{ background: `linear-gradient(145deg, ${mixHex(primary, '#FFFFFF', 0.86)}, ${mixHex(support, '#FFFFFF', 0.8)})` }}>
+    <div className="absolute inset-0 opacity-70" style={{ background: `radial-gradient(circle at 18% 18%, ${mixHex(accent, '#FFFFFF', 0.38)} 0, transparent 22%), radial-gradient(circle at 82% 20%, ${mixHex(support, '#FFFFFF', 0.4)} 0, transparent 18%), linear-gradient(120deg, transparent 0, rgba(255,255,255,0.5) 46%, transparent 75%)` }} />
+    <div className="absolute left-4 top-4">{brandPlate(false, 'sm')}</div>
+    <div className="absolute left-4 right-4 bottom-16 rounded-2xl p-4 text-white" style={{ background: `linear-gradient(135deg, ${mixHex(primary, '#000000', 0.12)}, ${mixHex(support, '#000000', 0.1)})`, boxShadow: shadow }}>
+      <div className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/75">Campanha / social</div>
+      <div className="mt-2 text-xl leading-tight" style={{ fontFamily: document.typography.display }}>{document.brandName}</div>
+      <p className="mt-2 text-[11px] text-white/80 line-clamp-2" style={{ fontFamily: document.typography.text }}>{document.tagline}</p>
+      <div className="mt-3 h-2 w-20 rounded-full" style={{ background: accent }} />
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'mug') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#ECE9E3] text-[#111]">
-    <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[58%] h-[48%]"><div className="absolute inset-y-0 left-0 right-[18%] rounded-b-[28px] rounded-t-md border-2 shadow-sm" style={{background:paper,borderColor:ink}}/><div className="absolute right-0 top-[18%] h-[56%] w-[31%] rounded-r-full border-[10px] bg-transparent" style={{borderColor:paper, outline:`2px solid ${ink}`}}/><div className="absolute left-[15%] top-[28%]"><BrandBadge document={document}/></div></div>{label}
+  if (app.type === 'poster') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #D9D5CC 0, #ECE9E1 100%)' }}>
+    <div className="absolute left-1/2 top-[50%] h-[78%] w-[56%] -translate-x-1/2 -translate-y-1/2 rounded-[18px] border bg-white p-4" style={{ boxShadow: shadow }}>
+      <div className="flex justify-between items-start gap-2"><div>{brandPlate(false, 'sm')}</div><div className="h-10 w-10 rounded-full" style={{ background: support }} /></div>
+      <div className="mt-4 text-[26px] leading-none" style={{ fontFamily: document.typography.display, color: ink }}>{document.brandName}</div>
+      <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-neutral-400">cartaz institucional</div>
+      <div className="mt-4 h-2 rounded-full" style={{ background: primary }} />
+      <div className="mt-3 space-y-2">{[92, 84, 72].map((w, i) => <div key={i} className="h-1.5 rounded-full bg-black/10" style={{ width: `${w}%` }} />)}</div>
+      <div className="absolute inset-x-4 bottom-4 flex gap-2">{document.palette.slice(0, 4).map((c) => <span key={c.id} className="h-6 flex-1 rounded-full" style={{ background: c.color }} />)}</div>
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'pencil') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#EFEDE8] text-[#111]">
-    <div className="absolute left-[13%] right-[8%] top-[40%] rotate-[-8deg] h-8 rounded-sm shadow-sm flex items-center" style={{background:primary}}><div className="h-full w-8 bg-[#E7C49B]" style={{clipPath:'polygon(0 50%,100% 0,100% 100%)'}}/><div className="ml-3 text-[8px] font-bold text-white truncate" style={{fontFamily:document.typography.display}}>{document.brandName}</div><div className="ml-auto h-full w-8 bg-[#D9B7B7] border-l border-black/20"/></div>{label}
+  if (app.type === 'card') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E8E3DA 0, #F2EFE9 100%)' }}>
+    <div className="absolute left-[8%] right-[8%] top-[18%] bottom-[22%] rounded-[20px] border overflow-hidden" style={{ boxShadow: shadow, background: `linear-gradient(135deg, ${mixHex(primary, '#FFFFFF', 0.9)}, #FFFFFF 65%)` }}>
+      <div className="absolute inset-x-0 top-0 h-2" style={{ background: primary }} />
+      <div className="absolute left-4 top-4">{brandPlate(false, 'sm')}</div>
+      <div className="absolute right-4 top-4 h-12 w-12 rounded-full" style={{ background: support }} />
+      <div className="absolute left-4 right-4 bottom-5">
+        <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-neutral-400">assinatura</div>
+        <div className="mt-2 text-lg" style={{ fontFamily: document.typography.display }}>{document.brandName}</div>
+        <div className="mt-1 text-[10px] text-neutral-500" style={{ fontFamily: document.typography.text }}>{document.tagline}</div>
+      </div>
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'stationery') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#DAD8D1] text-[#111]">
-    <div className="absolute left-[9%] top-[10%] h-[72%] w-[52%] rotate-[-3deg] bg-white shadow-md border p-3"><div className="scale-[.58] origin-top-left"><Mark document={document} compact/></div><div className="mt-2 h-1 w-3/4" style={{background:primary}}/><div className="mt-2 space-y-1">{[1,2,3,4].map(i=><div key={i} className="h-1 bg-black/10" style={{width:`${82-i*7}%`}}/>)}</div></div>
-    <div className="absolute right-[7%] bottom-[14%] h-[38%] w-[46%] rotate-[5deg] shadow-md border p-2" style={{background:paper}}><div className="scale-[.62] origin-top-left"><Mark document={document} compact/></div><div className="absolute inset-x-0 bottom-0 h-2" style={{background:support}}/></div>{label}
+  if (app.type === 'tshirt') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E6E1D7 0, #F3F0E8 100%)' }}>
+    <div className="absolute inset-x-[14%] top-[8%] bottom-[12%] flex items-center justify-center">
+      <svg viewBox="0 0 260 220" className="h-full w-full drop-shadow-[0_22px_32px_rgba(0,0,0,0.16)]"><defs><linearGradient id={`shirt-${app.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={mixHex(paper, '#FFFFFF', 0.35)} /><stop offset="100%" stopColor={mixHex(paper, primary, 0.1)} /></linearGradient></defs><path d="M86 22l18-10h52l18 10 42 16-18 44-30-11v114H92V71L62 82 44 38Z" fill={`url(#shirt-${app.id})`} stroke={mixHex(ink, '#FFFFFF', 0.35)} strokeWidth="3"/><path d="M104 13c7 18 45 18 52 0" fill="none" stroke={mixHex(ink, '#FFFFFF', 0.35)} strokeWidth="3"/></svg>
+      <div className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 scale-[0.95]">{brandPlate(false, 'sm')}</div>
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'letterhead') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#DDDAD3] text-[#111]">
-    <div className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 h-[78%] w-[55%] bg-white shadow-md p-3"><div className="scale-[.58] origin-top-left"><Mark document={document} compact/></div><div className="mt-2 border-t" style={{borderColor:primary}}/><div className="mt-4 space-y-1.5">{[90,76,84,65,72].map((w,i)=><div key={i} className="h-1 bg-black/10" style={{width:`${w}%`}}/>)}</div><div className="absolute inset-x-3 bottom-3 h-1" style={{background:primary}}/></div>{label}
+  if (app.type === 'mug') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E4DED4 0, #F0EDE6 100%)' }}>
+    <div className="absolute left-1/2 top-[49%] h-[44%] w-[54%] -translate-x-1/2 -translate-y-1/2">
+      <div className="absolute inset-y-0 left-0 right-[16%] rounded-[18px] border" style={{ background: `linear-gradient(180deg, #FFFFFF 0, ${mixHex(paper, '#FFFFFF', 0.3)} 100%)`, boxShadow: shadow }} />
+      <div className="absolute right-0 top-[16%] h-[56%] w-[28%] rounded-r-full border-[10px]" style={{ borderColor: mixHex(paper, '#FFFFFF', 0.2), boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.08)' }} />
+      <div className="absolute left-[16%] top-[30%] scale-[0.82]">{brandPlate(false, 'sm')}</div>
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'notebook') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#E6E3DC] text-[#111]">
-    <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 h-[67%] w-[48%] rounded-r-lg border shadow-md" style={{background:primary,borderColor:ink}}><div className="absolute -left-1 top-2 bottom-2 w-2 flex flex-col justify-around">{Array.from({length:7},(_,i)=><span key={i} className="h-1.5 w-3 rounded-full bg-black/40"/>)}</div><div className="absolute inset-0 flex items-center justify-center"><BrandBadge document={document} inverse/></div></div>{label}
+  if (app.type === 'pencil') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #EAE6DF 0, #F3F0E9 100%)' }}>
+    <div className="absolute left-[10%] right-[8%] top-[41%] h-9 rotate-[-7deg] rounded-sm flex items-center overflow-hidden" style={{ background: primary, boxShadow: shadow }}>
+      <div className="h-full w-8" style={{ background: '#E4C091', clipPath: 'polygon(0 50%,100% 0,100% 100%)' }} />
+      <div className="ml-3 text-[10px] font-bold text-white truncate" style={{ fontFamily: document.typography.display }}>{document.brandName}</div>
+      <div className="ml-auto h-full w-8 border-l border-black/10" style={{ background: '#E6C7D2' }} />
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'tote') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#E4E1DA] text-[#111]">
-    <div className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2 h-[58%] w-[52%] border-2 shadow-sm" style={{background:paper,borderColor:ink}}><div className="absolute left-[22%] right-[22%] -top-[26%] h-[34%] rounded-t-full border-[7px] border-b-0" style={{borderColor:ink}}/><div className="absolute inset-0 flex items-center justify-center"><BrandBadge document={document}/></div></div>{label}
+  if (app.type === 'stationery') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #DCD8D0 0, #ECE8E1 100%)' }}>
+    <div className="absolute left-[8%] top-[10%] h-[72%] w-[48%] rotate-[-4deg] rounded-[18px] border bg-white p-3" style={{ boxShadow: shadow }}>
+      {brandPlate(false, 'sm')}
+      <div className="mt-3 h-1.5 rounded-full" style={{ background: primary }} />
+      <div className="mt-3 space-y-1.5">{[88, 82, 76, 65].map((w, i) => <div key={i} className="h-1.5 rounded-full bg-black/10" style={{ width: `${w}%` }} />)}</div>
+    </div>
+    <div className="absolute right-[8%] bottom-[15%] h-[40%] w-[44%] rotate-[5deg] rounded-[18px] border p-3" style={{ background: paper, boxShadow: shadow }}>
+      {brandPlate(false, 'sm')}
+      <div className="absolute inset-x-0 bottom-0 h-3 rounded-b-[18px]" style={{ background: support }} />
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'packaging') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#E8E5DE] text-[#111]">
-    <div className="absolute left-[23%] top-[17%] h-[62%] w-[53%] rotate-[-2deg] shadow-md border rounded-sm" style={{background:paper,borderColor:ink}}><div className="absolute inset-x-0 top-0 h-[17%]" style={{background:primary}}/><div className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2"><BrandBadge document={document}/></div><div className="absolute inset-x-3 bottom-4 h-7 rounded-full" style={{background:support}}/></div>{label}
+  if (app.type === 'letterhead') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #DCD7CF 0, #ECE8E1 100%)' }}>
+    <div className="absolute left-1/2 top-[50%] h-[78%] w-[56%] -translate-x-1/2 -translate-y-1/2 rounded-[18px] border bg-white p-4" style={{ boxShadow: shadow }}>
+      {brandPlate(false, 'sm')}
+      <div className="mt-3 h-1" style={{ background: primary }} />
+      <div className="mt-5 space-y-1.5">{[94, 88, 84, 70, 78, 62].map((w, i) => <div key={i} className="h-1.5 rounded-full bg-black/10" style={{ width: `${w}%` }} />)}</div>
+      <div className="absolute inset-x-4 bottom-4 h-1.5 rounded-full" style={{ background: primary }} />
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'signage') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#D7D6D0] text-[#111]">
-    <div className="absolute left-[12%] right-[12%] top-[18%] h-[48%] rounded-md shadow-lg flex items-center px-4" style={{background:primary}}><Mark document={document} compact inverse/><div className="ml-auto text-white text-lg">→</div></div><div className="absolute left-[22%] top-[66%] h-[22%] w-2 bg-neutral-700"/>{label}
+  if (app.type === 'notebook') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E1DDD5 0, #F0EDE5 100%)' }}>
+    <div className="absolute left-1/2 top-[48%] h-[66%] w-[48%] -translate-x-1/2 -translate-y-1/2 rounded-r-[22px] border" style={{ background: `linear-gradient(180deg, ${mixHex(primary, '#FFFFFF', 0.1)}, ${mixHex(primary, '#000000', 0.12)})`, boxShadow: shadow }}>
+      <div className="absolute -left-2 top-3 bottom-3 w-3 flex flex-col justify-around">{Array.from({ length: 8 }, (_, i) => <span key={i} className="h-2 w-4 rounded-full bg-black/25" />)}</div>
+      <div className="absolute inset-0 flex items-center justify-center">{brandPlate(true, 'sm')}</div>
+    </div>
+    {label}
   </div>;
 
-  if (app.type === 'interface') return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative bg-[#DFDDD7] text-[#111]">
-    <div className="absolute left-[9%] right-[9%] top-[12%] bottom-[18%] rounded-lg bg-white border shadow-md overflow-hidden"><div className="h-[18%] flex items-center px-2 border-b"><Mark document={document} compact/><div className="ml-auto flex gap-1"><span className="h-2 w-7 rounded-full bg-black/10"/><span className="h-2 w-5 rounded-full bg-black/10"/></div></div><div className="p-3"><div className="h-5 w-2/3 rounded" style={{background:primary}}/><div className="mt-2 h-2 w-5/6 bg-black/10"/><div className="mt-1 h-2 w-3/5 bg-black/10"/><div className="mt-3 h-7 w-20 rounded" style={{background:support}}/></div></div>{label}
+  if (app.type === 'tote') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E0DBD1 0, #F1EEE6 100%)' }}>
+    <div className="absolute left-1/2 top-[52%] h-[56%] w-[52%] -translate-x-1/2 -translate-y-1/2 rounded-[8px] border-2" style={{ background: mixHex(paper, '#FFFFFF', 0.2), boxShadow: shadow, borderColor: mixHex(ink, '#FFFFFF', 0.45) }}>
+      <div className="absolute left-[20%] right-[20%] -top-[26%] h-[35%] rounded-t-full border-[7px] border-b-0" style={{ borderColor: mixHex(ink, '#FFFFFF', 0.38) }} />
+      <div className="absolute inset-0 flex items-center justify-center">{brandPlate(false, 'sm')}</div>
+    </div>
+    {label}
   </div>;
 
-  return <div className="aspect-[4/3] rounded-xl overflow-hidden border relative" style={{ background: paper, color: ink }}>
-    <div className="absolute inset-x-0 top-0 h-2" style={{ background: primary }} />
-    <div className="absolute right-3 top-4 h-12 w-12 rounded-full opacity-90" style={{ background: support }} />
-    <div className="absolute left-3 top-5 scale-[.72] origin-top-left"><Mark document={document} compact /></div>
+  if (app.type === 'packaging') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #E1DDD5 0, #F0ECE4 100%)' }}>
+    <div className="absolute left-[24%] top-[16%] h-[62%] w-[52%] rotate-[-3deg] rounded-[12px] border" style={{ background: `linear-gradient(180deg, #FFFFFF 0, ${mixHex(paper, '#FFFFFF', 0.25)} 100%)`, boxShadow: shadow }}>
+      <div className="absolute inset-x-0 top-0 h-[18%] rounded-t-[12px]" style={{ background: primary }} />
+      <div className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2">{brandPlate(false, 'sm')}</div>
+      <div className="absolute inset-x-4 bottom-4 h-8 rounded-full" style={{ background: accent }} />
+    </div>
+    {label}
+  </div>;
+
+  if (app.type === 'signage') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #D5D2CC 0, #ECE8E1 100%)' }}>
+    <div className="absolute left-[10%] right-[10%] top-[16%] h-[46%] rounded-[18px] px-4 flex items-center" style={{ background: `linear-gradient(135deg, ${primary}, ${mixHex(primary, support, 0.3)})`, boxShadow: shadow }}>
+      {brandPlate(true, 'sm')}
+      <div className="ml-auto text-2xl text-white">→</div>
+    </div>
+    <div className="absolute left-1/2 top-[62%] h-[22%] w-2 -translate-x-1/2 bg-neutral-700/80" />
+    {label}
+  </div>;
+
+  if (app.type === 'interface') return <div className={cardBase} style={{ background: 'linear-gradient(180deg, #DDD9D1 0, #EEEAE3 100%)' }}>
+    <div className="absolute left-[8%] right-[8%] top-[12%] bottom-[18%] rounded-[18px] border bg-white overflow-hidden" style={{ boxShadow: shadow }}>
+      <div className="h-[18%] border-b px-3 flex items-center gap-3" style={{ background: mixHex(primary, '#FFFFFF', 0.88) }}>
+        {brandPlate(false, 'sm')}
+        <div className="ml-auto flex gap-1">{[0,1,2].map((i) => <span key={i} className="h-2 w-2 rounded-full bg-black/15" />)}</div>
+      </div>
+      <div className="p-4">
+        <div className="h-6 w-2/3 rounded-lg" style={{ background: primary }} />
+        <div className="mt-3 space-y-2">{[94, 82, 76].map((w, i) => <div key={i} className="h-2 rounded-full bg-black/10" style={{ width: `${w}%` }} />)}</div>
+        <div className="mt-4 grid grid-cols-2 gap-2">{[primary, support, paper, accent].map((c, i) => <div key={i} className="h-12 rounded-xl" style={{ background: i === 2 ? mixHex(c, '#000000', 0.08) : c }} />)}</div>
+      </div>
+    </div>
+    {label}
+  </div>;
+
+  return <div className={cardBase} style={{ background: paper, color: ink }}>
+    <div className="absolute inset-x-0 top-0 h-3" style={{ background: primary }} />
+    <div className="absolute right-4 top-4 h-14 w-14 rounded-full opacity-90" style={{ background: support }} />
+    <div className="absolute left-4 top-5">{brandPlate(false, 'sm')}</div>
     {label}
   </div>;
 }
@@ -309,11 +525,19 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
     if (file.size > 4 * 1024 * 1024) return setLogoError('A marca precisa ter até 4 MB.');
     setUploadingLogo(true); setLogoError('');
     try {
+      const extracted = await extractPaletteFromImageFile(file).catch(() => [] as string[]);
       const session = await ensureTursoSession();
       const response = await fetch('/api/upload', { method:'POST', headers:{ 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), ...(session?.token ? { Authorization:`Bearer ${session.token}` } : {}) }, body:file });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.url) throw new Error(data.error || 'Falha no upload da marca.');
-      setDraft((current) => ({ ...current, logo:{ ...current.logo, assetUrl:data.url, assetName:file.name, useUploadedAsset:true }, updatedAt:new Date().toISOString() }));
+      setDraft((current) => {
+        const next = applyExtractedPalette({
+          ...current,
+          logo:{ ...current.logo, assetUrl:data.url, assetName:file.name, useUploadedAsset:true },
+          updatedAt:new Date().toISOString(),
+        }, extracted);
+        return { ...next, updatedAt: new Date().toISOString() };
+      });
     } catch (error:any) { setLogoError(error?.message || 'Falha no upload da marca.'); }
     finally { setUploadingLogo(false); if (logoFileRef.current) logoFileRef.current.value=''; }
   };
