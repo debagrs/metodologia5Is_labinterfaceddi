@@ -516,16 +516,39 @@ function tail(a: CharacterAppearance, x: number, y: number) {
     : `<path d="M${x} ${y}Q${x + 75} ${y + 15} ${x + 64} ${y - 65}" stroke="${f}" stroke-width="${a.tailStyle === "reptile" ? 18 : 10}" fill="none"/>`,x,y,metric(a,"tailSize"));
 }
 
+function wheelchairArt(a: CharacterAppearance) {
+  const line = color(a.lineColor, '#382a29');
+  const frame = color(a.wheelchairColor, '#4C5968');
+  const tire = tint(line, -10);
+  const rim = tint(frame, 75);
+  const seat = tint(frame, -18);
+  const style = a.wheelchairStyle || 'active';
+  const sport = style === 'sport';
+  const manual = style === 'manual';
+  const rearR = sport ? 58 : manual ? 54 : 56;
+  const rearY = sport ? 362 : 360;
+  const leftX = sport ? 104 : 112;
+  const rightX = sport ? 256 : 248;
+  const casterY = sport ? 421 : 414;
+  const seatY = manual ? 302 : 306;
+  const backTop = manual ? 226 : sport ? 254 : 244;
+  const backBottom = 306;
+  const spokeSet = (cx: number, cy: number, radius: number) => Array.from({length:12},(_,i)=>{
+    const t=(Math.PI*2*i)/12;
+    return `<path d="M${cx} ${cy}L${cx+Math.cos(t)*radius} ${cy+Math.sin(t)*radius}"/>`;
+  }).join('');
+  const handles = manual ? `<path d="M157 ${backTop+8}L149 ${backTop-16}h-13M203 ${backTop+8}L211 ${backTop-16}h13" fill="none" stroke="${frame}" stroke-width="6" stroke-linecap="round"/>` : '';
+  const sportBrace = sport ? `<path d="M132 337L180 386L228 337M136 326L224 326" fill="none" stroke="${tint(frame,25)}" stroke-width="5"/>` : `<path d="M139 335L180 385L221 335" fill="none" stroke="${frame}" stroke-width="5"/>`;
+  const wheel = (cx:number) => `<g><circle cx="${cx}" cy="${rearY}" r="${rearR}" fill="white" stroke="${tire}" stroke-width="9"/><circle cx="${cx}" cy="${rearY}" r="${rearR-10}" fill="none" stroke="${rim}" stroke-width="3"/><g stroke="${tint(frame,55)}" stroke-width="1.5" opacity=".8">${spokeSet(cx,rearY,rearR-12)}</g><circle cx="${cx}" cy="${rearY}" r="6" fill="${frame}"/></g>`;
+  return `<g class="wheelchair-layer" opacity=".995">${wheel(leftX)}${wheel(rightX)}<rect x="145" y="${seatY}" width="70" height="12" rx="5" fill="${seat}" stroke="${line}" stroke-width="2"/><path d="M153 ${backBottom}V${backTop}Q180 ${backTop-10} 207 ${backTop}V${backBottom}" fill="none" stroke="${frame}" stroke-width="8" stroke-linecap="round"/><path d="M151 ${backTop+12}Q180 ${backTop+2} 209 ${backTop+12}V${backBottom-7}H151Z" fill="${tint(frame,-8)}" opacity=".72"/>${handles}${sportBrace}<path d="M147 ${seatY+8}L132 ${casterY-8}M213 ${seatY+8}L228 ${casterY-8}" fill="none" stroke="${frame}" stroke-width="6" stroke-linecap="round"/><circle cx="132" cy="${casterY}" r="${sport?9:10}" fill="white" stroke="${tire}" stroke-width="5"/><circle cx="228" cy="${casterY}" r="${sport?9:10}" fill="white" stroke="${tire}" stroke-width="5"/><path d="M150 392h60M153 392l-12 18h27M207 392l12 18h-27" fill="none" stroke="${frame}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>${sport ? `<path d="M118 303Q180 277 242 303" fill="none" stroke="${tint(frame,55)}" stroke-width="3"/>` : ''}</g>`;
+}
+
 function inclusiveSupports(a: CharacterAppearance, feet: P[]) {
   const line = color(a.lineColor, '#382a29');
   const steel = tint(line, 120);
-  const fill = color(a.outfitSecondary, '#7C8798');
-  const skin = color(a.surfaceColor || a.skinColor, '#EAC3A9');
   const [leftFoot, rightFoot] = feet;
   let art = '';
-  if (a.mobilityAid === 'wheelchair') {
-    art += `<g opacity=".98"><circle cx="128" cy="365" r="40" fill="none" stroke="${steel}" stroke-width="8"/><circle cx="225" cy="375" r="17" fill="none" stroke="${steel}" stroke-width="6"/><path d="M145 356h58l18-84h15M166 281h46l13 57M164 281l-18 29" fill="none" stroke="${line}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="150" y="276" width="58" height="10" rx="4" fill="${fill}"/><path d="M223 263v-41" stroke="${line}" stroke-width="6" stroke-linecap="round"/><path d="M146 353l18 18h36" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/></g>`;
-  }
+  if (a.mobilityAid === 'wheelchair') art += wheelchairArt(a);
   if (a.mobilityAid === 'crutch') {
     art += `<g transform="translate(236 208)"><path d="M0 0v140" stroke="${steel}" stroke-width="5" stroke-linecap="round"/><path d="M-12 11Q0 -7 12 11" fill="none" stroke="${line}" stroke-width="5" stroke-linecap="round"/><path d="M-8 34h16" stroke="${line}" stroke-width="4"/><path d="M-8 140h16" stroke="${line}" stroke-width="4"/></g>`;
   }
@@ -534,9 +557,6 @@ function inclusiveSupports(a: CharacterAppearance, feet: P[]) {
   }
   if (a.visionAid === 'cane') {
     art += `<g transform="translate(235 238)"><path d="M0 0v137" stroke="${line}" stroke-width="5" stroke-linecap="round"/><path d="M0 137q11 7 20 0" fill="none" stroke="${steel}" stroke-width="4" stroke-linecap="round"/></g>`;
-  }
-  if (a.visionAid === 'dark-glasses') {
-    art += `<g stroke="${line}" stroke-width="2.5" fill="${tint(line,-20)}"><rect x="141" y="99" width="33" height="24" rx="8"/><rect x="186" y="99" width="33" height="24" rx="8"/><path d="M174 108Q180 104 186 108" fill="none" stroke="${line}"/></g>`;
   }
   return art;
 }
@@ -564,12 +584,13 @@ function biped(
   const legLength =
     (a.limbLength || 1) * metric(a,"legLength") * stature *
     (a.legStyle === "long" ? 1.13 : a.legStyle === "short" ? 0.78 : 1);
-  const hipY = 310 - (stature - 1) * 24,
-    sl = pt(180 - shoulder, 207),
-    sr = pt(180 + shoulder, 207),
-    hl = pt(162, hipY),
-    hr = pt(198, hipY);
-  const el = joint(sl, 51 * limb, r.al),
+  const inWheelchair = a.mobilityAid === "wheelchair";
+  const hipY = inWheelchair ? 300 : 310 - (stature - 1) * 24;
+  let sl = pt(180 - shoulder, inWheelchair ? 205 : 207),
+    sr = pt(180 + shoulder, inWheelchair ? 205 : 207),
+    hl = pt(inWheelchair ? 164 : 162, hipY),
+    hr = pt(inWheelchair ? 196 : 198, hipY);
+  let el = joint(sl, 51 * limb, r.al),
     er = joint(sr, 51 * limb, r.ar),
     wl = joint(el, 48 * limb, r.el),
     wr = joint(er, 48 * limb, r.er),
@@ -577,6 +598,13 @@ function biped(
     kr = joint(hr, 78 * legLength, r.lr),
     fl = joint(kl, 76 * legLength, r.ll + r.kl),
     fr = joint(kr, 76 * legLength, r.lr + r.kr);
+  if (inWheelchair) {
+    const sport = a.wheelchairStyle === 'sport';
+    el = pt(150, 257); er = pt(210, 257);
+    wl = pt(sport ? 119 : 129, sport ? 333 : 325); wr = pt(sport ? 241 : 231, sport ? 333 : 325);
+    kl = pt(153, 340); kr = pt(207, 340);
+    fl = pt(146, 390); fr = pt(214, 390);
+  }
   const shoe = (p: P, k: number) =>
     `<g transform="translate(${p.x} ${p.y}) scale(${metric(a,"footSize")})"><path d="M-9-7H8L12 0Q${k * 23} 3 ${k * 22} 11H-10Q-14 5-9-7Z" fill="${line}"/><path d="M-9 8H${k * 19}" stroke="#8C939E" stroke-width="2"/><path d="M-3 1h9m-8 3h10" stroke="#CCD0D5" stroke-width="1"/></g>`;
   const hand = (p: P, k: number) =>
@@ -595,7 +623,9 @@ function biped(
           ? 1.18
           : 1);
   const torso = `<path d="M${180 - shoulder + 5} 195Q158 183 166 179L194 179Q205 185 ${180 + shoulder - 5} 195C${180 + shoulder + 3} 229 ${180 + 29 * width * waist} 259 ${180 + 28 * width * waist} 280Q208 306 180 306Q152 306 ${180 - 28 * width * waist} 280C${180 - 29 * width * waist} 259 ${180 - shoulder - 3} 229 ${180 - shoulder + 5} 195Z" fill="${a.outfitStyle === "none" ? skin : shirt}"/>`;
-  const lower = `<path d="M${180 - 28 * width * waist} 281Q180 292 ${180 + 28 * width * waist} 281L214 320Q198 330 180 318Q160 329 146 320Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`;
+  const lower = inWheelchair
+    ? `<path d="M${180 - 30 * width * waist} 278Q180 292 ${180 + 30 * width * waist} 278L211 316Q180 328 149 316Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`
+    : `<path d="M${180 - 28 * width * waist} 281Q180 292 ${180 + 28 * width * waist} 281L214 320Q198 330 180 318Q160 329 146 320Z" fill="${a.outfitStyle === "none" ? skin : pants}"/>`;
   const neck =
     '<path d="M166 164V184Q180 198 194 184V164Z" fill="' + skin + '"/>';
   let details = "";
@@ -625,7 +655,8 @@ function biped(
       : view === "back"
         ? `<path d="M135 100Q133 173 180 182Q227 173 225 100Z" fill="${skin}"/><path d="M133 112Q119 37 180 37Q241 37 227 112L218 143Q180 156 142 143Z" fill="${color(a.hairColor, "#604136")}"/>`
         : face(a, expression);
-  const head = `<g transform="rotate(${adjustments.headTilt||0} 180 177)"><g transform="translate(180 177) scale(${headScale*metric(a,'headWidth')} ${headScale*metric(a,'headHeight')}) translate(-180 -177)">${headRaw}${view==='front' || view==='three-quarter'?'':accessories(a,'head')}</g></g>`;
+  const visionGlasses = a.visionAid === 'dark-glasses' ? `<g stroke="${line}" stroke-width="2.5" fill="${tint(line,-20)}"><rect x="141" y="99" width="33" height="24" rx="8"/><rect x="186" y="99" width="33" height="24" rx="8"/><path d="M174 108Q180 104 186 108" fill="none" stroke="${line}"/></g>` : '';
+  const head = `<g transform="rotate(${adjustments.headTilt||0} 180 177)"><g transform="translate(180 177) scale(${headScale*metric(a,'headWidth')} ${headScale*metric(a,'headHeight')}) translate(-180 -177)">${headRaw}${visionGlasses}${view==='front' || view==='three-quarter'?'':accessories(a,'head')}</g></g>`;
   const viewX = view === "side" ? 0.62 : view === "three-quarter" ? 0.88 : 1;
   return `<g transform="translate(180 ${r.lift}) rotate(${r.lean} 0 275) scale(${viewX} 1) translate(-180 0)">${accessories(a,'body-back')}${body}${accessories(a,'body-front',[wl,wr])}${head}</g>`;
 }
