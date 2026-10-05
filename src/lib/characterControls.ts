@@ -107,10 +107,18 @@ export function characterAccessories(
 export function normalizeAppearance(
   a: CharacterAppearance,
 ): CharacterAppearance {
+  const legWidth = Number.isFinite(Number(a.legWidth)) ? Number(a.legWidth) : 1;
+  const armWidth = Number.isFinite(Number(a.armWidth)) ? Number(a.armWidth) : 1;
+  const bodyWidth = Number.isFinite(Number(a.bodyWidth)) ? Number(a.bodyWidth) : 1;
+  const waistWidth = Number.isFinite(Number(a.waistWidth)) ? Number(a.waistWidth) : 1;
+  const balancedBodyWidth = Math.max(bodyWidth, 0.84 + Math.max(0, legWidth - 1) * 0.46 + Math.max(0, armWidth - 1) * 0.18);
+  const balancedWaistWidth = Math.max(waistWidth, 0.8 + Math.max(0, legWidth - 1) * 0.24);
   return {
     ...a,
     accessories: characterAccessories(a),
     noseStyle: a.muzzleStyle?.startsWith("beak") ? "none" : a.noseStyle,
+    bodyWidth: Number(balancedBodyWidth.toFixed(2)),
+    waistWidth: Number(balancedWaistWidth.toFixed(2)),
   };
 }
 export const metric = (
