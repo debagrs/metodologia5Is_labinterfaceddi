@@ -661,9 +661,16 @@ export interface VisualIdentityColor {
 
 export interface VisualIdentityApplication {
   id: string;
-  type: 'social' | 'poster' | 'card' | 'packaging' | 'signage' | 'interface' | 'tshirt' | 'mug' | 'pencil' | 'stationery' | 'letterhead' | 'notebook' | 'tote';
+  type: 'social' | 'poster' | 'card' | 'packaging' | 'signage' | 'interface' | 'tshirt' | 'hoodie' | 'mug' | 'bottle' | 'can' | 'box' | 'phone' | 'book' | 'pencil' | 'stationery' | 'letterhead' | 'notebook' | 'tote';
   title: string;
   notes?: string;
+  productColor?: string;
+  scene?: 'studio' | 'warm' | 'dark' | 'paper';
+  material?: 'matte' | 'glossy' | 'fabric' | 'kraft';
+  artworkScale?: number;
+  artworkX?: number;
+  artworkY?: number;
+  angle?: number;
 }
 
 export interface VisualIdentityDocument {
