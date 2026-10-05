@@ -1,6 +1,6 @@
 import type { CharacterAppearance } from '../types';
 
-type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'realism' | 'psychedelic' | 'metal';
+type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'outline' | 'realism' | 'psychedelic' | 'metal';
 
 export type CharacterStyleFamily = {
   id: NonNullable<CharacterAppearance['artStyle']>;
@@ -29,6 +29,7 @@ export const CHARACTER_STYLE_FAMILIES: CharacterStyleFamily[] = [
   { id: 'manga', label: 'Mangá', description: 'Linguagem japonesa de linha, expressão, ritmo visual e síntese anatômica.', market: 'quadrinhos, editorial, animação, games', defaultVariant: 'manga-shounen' },
   { id: 'engraving', label: 'Hachura & gravura', description: 'Volume construído por linhas, cruzamentos, densidade e textura de impressão.', market: 'rótulos, editorial, embalagem, pôster', defaultVariant: 'engraving-copper' },
   { id: 'lineart', label: 'Linha detalhada', description: 'Contorno com variação de peso, padrões internos e ornamentação minuciosa.', market: 'capas, tatuagem, pôster, identidade', defaultVariant: 'lineart-ornamental' },
+  { id: 'minimal-lineart', label: 'Line Art Minimalista', description: 'Traço simples e contínuo, foco no gesto e na essência da forma, com pouquíssimos detalhes.', market: 'identidade, editorial, tattoo, pôster, boho', defaultVariant: 'minimal-lineart-continuous' },
   { id: 'realism', label: 'Realismo', description: 'Anatomia, materiais, iluminação e volume com maior fidelidade física.', market: 'concept art, científico, publicidade', defaultVariant: 'realism-editorial' },
   { id: 'psychedelic', label: 'Psicodélico', description: 'Maximalismo, distorção, cor intensa, formas fluidas e composição densa.', market: 'festivais, estamparia, música, pôster', defaultVariant: 'psychedelic-70s' },
   { id: 'steampunk', label: 'Steampunk / dieselpunk', description: 'Retrofuturismo com metal, couro, mecanismos, rebites e acessórios técnicos.', market: 'worldbuilding, games, cinema, fantasia', defaultVariant: 'steampunk-victorian' },
@@ -57,6 +58,10 @@ export const CHARACTER_STYLE_VARIANTS: CharacterStyleVariant[] = [
   { id:'lineart-ornamental', family:'lineart', label:'Ornamental', description:'Linha precisa, arabescos e padrões internos decorativos.', tags:['ornamento','detalhado','decorativo'], eyes:1.05, head:1, line:.72, shading:'ornament', patch:{ lineColor:'#342d2d', outfitStyle:'elegant' }, recommendedOutfits:['elegant','fantasy','historical'] },
   { id:'lineart-botanical', family:'lineart', label:'Botânico', description:'Ritmo orgânico e detalhes inspirados em folhas, flores e anatomias naturais.', tags:['orgânico','botânico','editorial'], eyes:1, head:1, line:.66, shading:'hatch', patch:{ lineColor:'#334039', outfitStyle:'casual' }, recommendedOutfits:['casual','elegant','fantasy'] },
   { id:'lineart-tattoo', family:'lineart', label:'Tattoo / flash', description:'Peso de linha alto, leitura instantânea e contraste pensado para reprodução.', tags:['tattoo','bold line','flash'], eyes:1.02, head:1, line:1.4, shading:'ink', patch:{ lineColor:'#111111', outfitStyle:'punk' }, recommendedOutfits:['punk','street','fantasy'] },
+
+  { id:'minimal-lineart-continuous', family:'minimal-lineart', label:'Traço contínuo', description:'One line art: linha fina, gesto dominante e redução radical de detalhes.', tags:['one line','contínuo','essencial'], eyes:.96, head:1, line:.56, shading:'outline', monochrome:true, patch:{ lineColor:'#171717', browStyle:'none', outfitStyle:'none', hairStyle:'none', headToBodyRatio:5.7 }, recommendedOutfits:['none','basic'] },
+  { id:'minimal-lineart-editorial', family:'minimal-lineart', label:'Editorial minimal', description:'Contorno limpo e elegante, poucos sinais internos e ótima reprodução em marca e editorial.', tags:['editorial','marca','limpo'], eyes:.98, head:1, line:.68, shading:'outline', monochrome:true, patch:{ lineColor:'#202020', browStyle:'soft', outfitStyle:'basic', headToBodyRatio:5.9 }, recommendedOutfits:['basic','casual','elegant'] },
+  { id:'minimal-lineart-boho', family:'minimal-lineart', label:'Boho / orgânico', description:'Linha delicada, curvas orgânicas e aparência leve para pôster, decoração e identidade.', tags:['boho','orgânico','delicado'], eyes:1, head:1.02, line:.52, shading:'outline', monochrome:true, patch:{ lineColor:'#3B352F', browStyle:'soft', outfitStyle:'none', hairStyle:'wavy' }, recommendedOutfits:['none','elegant'] },
 
   { id:'realism-editorial', family:'realism', label:'Realismo editorial', description:'Volume suave, proporções menos caricatas e acabamento limpo.', tags:['editorial','volume','preciso'], eyes:.92, head:.95, line:.52, shading:'realism', patch:{ eyeStyle:'almond', faceShape:'soft', bodyShape:'average', headToBodyRatio:6.3, handStyle:'defined', lineColor:'#4c403b', outfitStyle:'casual' }, recommendedOutfits:['casual','formal','workwear','elegant'] },
   { id:'realism-concept', family:'realism', label:'Concept art', description:'Volume dramático, silhueta funcional, materiais e equipamento bem definidos.', tags:['games','cinema','materiais'], eyes:.9, head:.94, line:.45, shading:'realism', patch:{ eyeStyle:'narrow', faceShape:'angular', bodyShape:'athletic', torsoShape:'trapezoid', headToBodyRatio:6.5, outfitStyle:'adventure' }, recommendedOutfits:['adventure','scifi','fantasy','steampunk'] },
@@ -152,6 +157,15 @@ export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
       strokeWidth: (base.strokeWidth ?? 1.8) * 1.08,
     };
   }
+  if (s.family === 'minimal-lineart') {
+    return {
+      ...base,
+      strokeWidth: Math.max(.7, (base.strokeWidth ?? 1.1) * .78),
+      eyeSize: (base.eyeSize ?? 1) * .92,
+      irisScale: .72,
+      hairVolume: (a.hairVolume ?? 1) * .9,
+    };
+  }
   return base;
 }
 
@@ -161,7 +175,18 @@ function shift(hex: string, n: number) {
 
 export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   const s = selectedStyleVariant(a);
-  const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving'].includes(s.family));
+  const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving','minimal-lineart'].includes(s.family));
+  if (s.family === 'minimal-lineart') {
+    const ink = a.lineColor || '#1F1F1F';
+    const simplified = markup
+      .replace(/fill="url\(#[^"]+\)"/gi, 'fill="none"')
+      .replace(/fill="#[a-f\d]{6}"/gi, 'fill="none"')
+      .replace(/fill="white"/gi, 'fill="none"')
+      .replace(/fill="#fff"/gi, 'fill="none"')
+      .replace(/stroke="#[a-f\d]{6}"/gi, `stroke="${ink}"`)
+      .replace(/opacity="\.?\d+"/gi, 'opacity="1"');
+    return { defs: '', markup: `<g fill="none" stroke="${ink}" stroke-width="${Math.max(.7,(a.strokeWidth || 1.2)*.8)}">${simplified}</g>` };
+  }
   const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m => m[1]))];
   let defs = '';
 
