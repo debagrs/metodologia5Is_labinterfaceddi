@@ -655,7 +655,7 @@ export interface VisualIdentityColor {
 
 export interface VisualIdentityApplication {
   id: string;
-  type: 'social' | 'poster' | 'card' | 'packaging' | 'signage' | 'interface';
+  type: 'social' | 'poster' | 'card' | 'packaging' | 'signage' | 'interface' | 'tshirt' | 'mug' | 'pencil' | 'stationery' | 'letterhead' | 'notebook' | 'tote';
   title: string;
   notes?: string;
 }
@@ -673,6 +673,9 @@ export interface VisualIdentityDocument {
     symbolStyle: 'geometric' | 'organic' | 'seal' | 'abstract';
     monogram: string;
     lockup: 'horizontal' | 'stacked' | 'symbol-only';
+    assetUrl?: string;
+    assetName?: string;
+    useUploadedAsset?: boolean;
   };
   palette: VisualIdentityColor[];
   typography: { display: string; text: string; accent: string };
@@ -681,6 +684,7 @@ export interface VisualIdentityDocument {
   logoRules: string;
   applications: VisualIdentityApplication[];
   manualNotes: string;
+  sourceDesignSystemUpdatedAt?: string;
   updatedAt?: string;
 }
 
