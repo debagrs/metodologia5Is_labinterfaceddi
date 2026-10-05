@@ -1,6 +1,5 @@
 import {useGraphicFonts} from '../lib/graphicFonts';
-import {Search as ImageSearch} from 'lucide-react';
-import ImageLibrary from './ImageLibrary';
+import ImageStudio from './ImageStudio';
 import PhotopeaEditor from './PhotopeaEditor';
 import { imageCredit, type OpenImage } from '../lib/openImages';
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -131,7 +130,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     currentY: number;
   } | null>(null);
   const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
-  const [imageLibraryOpen,setImageLibraryOpen]=useState(false);
+  const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [photoEditor,setPhotoEditor]=useState<{url?:string;name:string;nodeId?:string}|null>(null);
   const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
   const [interactiveEditorNodeId, setInteractiveEditorNodeId] = useState<string | null>(null);
@@ -175,7 +174,6 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   }, [mobileToolsOpen]);
   const [uploadingCanvasImage, setUploadingCanvasImage] = useState(false);
   const [canvasImageError, setCanvasImageError] = useState('');
-  const canvasImageInputRef = useRef<HTMLInputElement>(null);
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
   const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
   const projectVisualIdentity = [...nodes].reverse().find((item) => item.type === 'visual-identity' && item.visualIdentity)?.visualIdentity;
@@ -327,7 +325,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     image.src = url;
   });
 
-  const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageLibraryOpen(false);};
+  const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageStudioOpen(false);};
   const uploadCanvasImage = async (file: File,replaceNodeId?:string) => {
     if (!canEditCanvas) return;
     if (!file.type.startsWith('image/')) {
@@ -399,7 +397,6 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       return false;
     } finally {
       setUploadingCanvasImage(false);
-      if (canvasImageInputRef.current) canvasImageInputRef.current.value = '';
     }
   };
 
@@ -1969,24 +1966,12 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           {canEditCanvas && (
             <>
               <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
-              <button type="button" onClick={()=>setImageLibraryOpen(true)} title="Pesquisar imagens livres" aria-label="Pesquisar imagens livres" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><ImageSearch size={14}/><span className="hidden sm:inline">BUSCAR IMAGEM</span></button>
-              <button type="button" onClick={()=>setPhotoEditor({name:'Novo projeto'})} title="Criar e editar imagem com camadas" aria-label="Editor de imagem com camadas" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><Pencil size={14}/><span className="hidden sm:inline">EDITAR IMAGEM</span></button>
-              <input
-                ref={canvasImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadCanvasImage(file);
-                }}
-              />
               <button
                 type="button"
-                onClick={() => canvasImageInputRef.current?.click()}
+                onClick={() => setImageStudioOpen(true)}
                 disabled={uploadingCanvasImage}
                 className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
-                title="Adicionar imagem solta ao canvas"
+                title="Imagem · upar, buscar Creative Commons, editar com Photopea ou gerar com IA"
               >
                 {uploadingCanvasImage ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
                 <span className="hidden sm:inline">IMAGEM</span>
@@ -2043,7 +2028,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
 
-      {imageLibraryOpen && <ImageLibrary onChoose={addOpenImage} onClose={()=>setImageLibraryOpen(false)}/>}
+      {imageStudioOpen && <ImageStudio onUpload={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível adicionar a imagem ao canvas.');}} onChooseOpenImage={addOpenImage} onOpenEditor={()=>{setImageStudioOpen(false);setPhotoEditor({name:'Novo projeto'});}} onGeneratedFile={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível salvar a imagem gerada.');}} onClose={()=>setImageStudioOpen(false)}/>}
       {photoEditor && <PhotopeaEditor key={photoEditor.nodeId || photoEditor.name} url={photoEditor.url} name={photoEditor.name} onSave={async file=>{const result=await uploadCanvasImage(file,photoEditor.nodeId);if(!result)throw new Error('Não foi possível salvar a imagem. Verifique sua sessão e envie uma versão PNG de até 4 MB.');}} onClose={()=>setPhotoEditor(null)}/>}
       {newDrawing && (
         <DrawingStudio
