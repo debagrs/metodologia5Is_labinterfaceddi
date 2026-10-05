@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { History, Loader2, RotateCcw, X, Download } from "lucide-react";
 import { ensureTursoSession } from "../lib/turso";
 import {
@@ -15,7 +16,8 @@ export default function WorkspaceHistory() {
     [versions, setVersions] = useState<WorkspaceVersion[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [launchTarget, setLaunchTarget] = useState<HTMLElement | null>(null);
   useEffect(() => {
     const receive = (e: Event) => setCurrent((e as CustomEvent).detail);
     window.addEventListener("5is-history-state", receive);
@@ -23,6 +25,35 @@ export default function WorkspaceHistory() {
     return () => window.removeEventListener("5is-history-state", receive);
   }, []);
   const owner = current?.activeProfile?.id;
+
+  useEffect(() => {
+    let frame = 0;
+    let observer: MutationObserver | null = null;
+    const findTarget = () => {
+      const target = document.getElementById('workspace-history-slot');
+      if (target) {
+        setLaunchTarget(target);
+        observer?.disconnect();
+        observer = null;
+        return;
+      }
+      frame = requestAnimationFrame(findTarget);
+    };
+    frame = requestAnimationFrame(findTarget);
+    observer = new MutationObserver(() => {
+      const target = document.getElementById('workspace-history-slot');
+      if (target) {
+        setLaunchTarget(target);
+        observer?.disconnect();
+        observer = null;
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [owner]);
   const ownerRef = useRef(owner);
   ownerRef.current = owner;
   useEffect(() => {
@@ -102,19 +133,22 @@ export default function WorkspaceHistory() {
   if (!owner) return null;
   return (
     <>
-      <button
-        type="button"
-        className="workspace-history-launch"
-        title="Histórico e versões"
-        aria-label="Histórico e versões"
-        onClick={() => {
-          setOpen(true);
-          void load();
-        }}
-      >
-        <History size={18} />
-        <span>Versões</span>
-      </button>
+      {launchTarget ? createPortal(
+        <button
+          type="button"
+          className="workspace-history-launch"
+          title="Histórico e versões"
+          aria-label="Histórico e versões"
+          onClick={() => {
+            setOpen(true);
+            void load();
+          }}
+        >
+          <History size={15} />
+          <span>Versões</span>
+        </button>,
+        launchTarget,
+      ) : null}
       {open && (
         <div
           className="workspace-history-modal"
