@@ -335,3 +335,75 @@ select {
 .workspace-history-modal{position:fixed;inset:0;z-index:280;background:#fafaf8;display:flex;flex-direction:column;padding:16px;max-width:850px;margin:auto;box-shadow:0 0 0 100vmax #0008;font-size:14px}.workspace-history-modal header{display:flex;gap:16px;justify-content:space-between;border-bottom:1px solid #ddd;padding-bottom:12px}.workspace-history-modal header p{margin:6px 0;color:#666}.workspace-history-body{overflow:auto;min-height:0;padding:12px 0}.workspace-history-modal button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:8px 12px;border:1px solid #ccc;background:white;border-radius:10px;margin:3px;cursor:pointer}.workspace-history-modal button:disabled{opacity:.5}.workspace-history-modal article{padding:14px;border:1px solid #ddd;border-radius:14px;background:white;margin:12px 0}.workspace-history-modal small{display:block;color:#666;font-size:12px}.workspace-history-project{display:flex;align-items:center;gap:12px;justify-content:space-between;padding-top:10px}.workspace-history-project span{min-width:0;overflow-wrap:anywhere}.workspace-history-body>p{font-size:13px;color:#666;margin:12px 0}.workspace-history-body>p svg{display:inline-block}
 @media(max-width:480px){.workspace-history-launch span{display:none}.workspace-history-launch{top:68px;right:8px;padding:9px}.workspace-history-modal{padding:12px}}
 .note-font-picker{max-width:180px;min-width:110px;flex:1}.note-font-picker input{width:100%;height:36px;padding:4px 8px;border:1px solid #0002;border-radius:8px;background:#fff9;font-size:12px}
+
+/* Workspace chrome: desktop tool dock and collapsible side rails. */
+.canvas-bottom-tools {
+  scrollbar-width: thin;
+  scrollbar-color: #b9b9b4 transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.canvas-bottom-tools > * { flex: 0 0 auto; }
+.canvas-bottom-tools::-webkit-scrollbar { height: 5px; }
+.canvas-bottom-tools::-webkit-scrollbar-track { background: transparent; }
+.canvas-bottom-tools::-webkit-scrollbar-thumb { background: #c7c7c2; border-radius: 999px; }
+
+.workspace-sidebar-rail { display: none; }
+@media (min-width: 1024px) {
+  .workspace-sidebar {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .workspace-sidebar--collapsed {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    transform: translateX(0) !important;
+  }
+  .workspace-sidebar--collapsed > :not(.workspace-sidebar-rail) {
+    display: none !important;
+  }
+  .workspace-sidebar--collapsed > .workspace-sidebar-rail {
+    display: flex !important;
+  }
+  .workspace-sidebar-rail {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 6px;
+    background: #fff;
+    color: #4f4f4b;
+    border: 0;
+    cursor: pointer;
+    z-index: 4;
+  }
+  .workspace-sidebar-rail:hover { background: #f7f7f4; color: #111; }
+  .workspace-sidebar-rail span {
+    margin-top: 6px;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    letter-spacing: .16em;
+  }
+}
+
+
+/* Character maker: modular, design-oriented interaction inspired by part/layer editors. */
+.character-maker-principles { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:-2px 0 8px; padding:10px 12px; border:1px solid #ddd9d2; border-radius:14px; background:#f7f5f0; color:#403b38; }
+.character-maker-principles > div:first-child { min-width:0; font-size:10px; line-height:1.35; }
+.character-maker-principles > div:first-child b { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.08em; font-size:9px; }
+.character-maker-principles > div:first-child span { color:#77706a; }
+.character-maker-principles__modes { display:flex; gap:6px; flex:none; }
+.character-maker-principles__modes span { display:inline-flex; align-items:center; gap:4px; padding:5px 7px; border-radius:999px; border:1px solid #d5d1ca; background:#fff; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+@media(min-width:1280px) {
+  .studio-tools .character-options, .studio-tools .character-hybrid-examples { grid-template-columns:repeat(4,minmax(0,1fr)) !important; }
+  .studio-tools .character-choice img { height:96px; }
+}
+@media(max-width:640px) {
+  .character-maker-principles { align-items:flex-start; flex-direction:column; }
+  .character-maker-principles__modes { width:100%; overflow-x:auto; }
+}
