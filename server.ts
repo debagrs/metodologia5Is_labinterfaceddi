@@ -32,8 +32,11 @@ async function startServer() {
   app.get("/api/google-fonts", fontsHandler);
   const uploadHandler = (await import("./api/upload.js")).default;
   app.post("/api/upload", uploadHandler);
-  const clientUploadHandler = (await import("./api/upload-client.js")).default;
-  app.post("/api/upload-client", clientUploadHandler);
+  // Alias local legado: nao cria uma funcao Serverless adicional na Vercel.
+  app.post("/api/upload-client", (req, res) => {
+    req.url = "/api/upload?client=1";
+    return uploadHandler(req, res);
+  });
 
   // Use the same character, video and chat handler in development and Vercel.
   const thinkHandler = (await import("./api/mediators/think.js")).default;
