@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen, Check, FileText, Image as ImageIcon, Info, LayoutGrid, Loader2, Palette,
   Plus, RefreshCw, Save, Sparkles, Trash2, Type, Upload, X
@@ -191,6 +191,88 @@ export function VisualIdentityPreview({ document, className = '' }: { document: 
   </div>;
 }
 
+
+
+function SketchCanvas({ value, onChange }: { value?: string; onChange: (dataUrl: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = 3;
+    if (value) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = value;
+    }
+  }, [value]);
+
+  const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * event.currentTarget.width,
+      y: ((event.clientY - rect.top) / rect.height) * event.currentTarget.height,
+    };
+  };
+
+  const start = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    drawingRef.current = true;
+    lastPointRef.current = point(event);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const move = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !drawingRef.current) return;
+    const current = point(event);
+    const last = lastPointRef.current || current;
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(current.x, current.y);
+    ctx.stroke();
+    lastPointRef.current = current;
+  };
+  const end = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    drawingRef.current = false;
+    lastPointRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    onChange(canvas.toDataURL('image/png'));
+  };
+  const save = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    onChange(canvas.toDataURL('image/png'));
+  };
+
+  return <div className="rounded-2xl border bg-[#FAFAF7] p-3">
+    <canvas ref={canvasRef} width={720} height={420} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerLeave={end} className="w-full rounded-xl border bg-white touch-none" style={{ aspectRatio: '12 / 7' }} />
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <button type="button" onClick={clear} className="h-10 rounded-xl border text-[10px] font-bold">LIMPAR</button>
+      <button type="button" onClick={save} className="h-10 rounded-xl bg-black text-white text-[10px] font-bold">SALVAR ESBOÇO</button>
+    </div>
+  </div>;
+}
+
 export default function VisualIdentityStudio({ document, title = 'Identidade visual', canEdit = true, onSave, onClose, onAddToNotes, designSystem }: Props) {
   const [draft, setDraft] = useState<VisualIdentityDocument>(() => { const initial = JSON.parse(JSON.stringify(document)) as VisualIdentityDocument; return designSystem && !initial.sourceDesignSystemUpdatedAt ? mergeIdentityWithDesignSystem(initial, designSystem) : initial; });
   const [tab, setTab] = useState<'strategy' | 'brand' | 'system' | 'applications' | 'manual'>('strategy');
@@ -198,6 +280,8 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
   const [noteDone, setNoteDone] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoError, setLogoError] = useState('');
+  const [refiningLogo, setRefiningLogo] = useState(false);
+  const [refineError, setRefineError] = useState('');
   const logoFileRef = useRef<HTMLInputElement>(null);
   useGraphicFonts([draft.typography.display, draft.typography.text, draft.typography.accent]);
 
@@ -233,6 +317,65 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
     } catch (error:any) { setLogoError(error?.message || 'Falha no upload da marca.'); }
     finally { setUploadingLogo(false); if (logoFileRef.current) logoFileRef.current.value=''; }
   };
+
+  const applyRefinementAlternative = (alternativeId: string) => {
+    setDraft((current) => {
+      const alternative = current.logo.refinementAlternatives?.find((item) => item.id === alternativeId);
+      if (!alternative) return current;
+      return {
+        ...current,
+        logo: { ...current.logo, ...alternative.logo, activeRefinementId: alternativeId, useUploadedAsset: false },
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const requestLogoRefinement = async () => {
+    if (refiningLogo) return;
+    setRefiningLogo(true);
+    setRefineError('');
+    try {
+      const session = await ensureTursoSession().catch(() => null);
+      const response = await fetch('/api/mediators/think', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}) },
+        body: JSON.stringify({
+          mode: 'brand-refine',
+          brand: {
+            name: draft.brandName,
+            tagline: draft.tagline,
+            essence: draft.essence,
+            audience: draft.audience,
+            positioning: draft.positioning,
+            personality: draft.personality,
+            palette: draft.palette,
+            logo: draft.logo,
+            graphicLanguage: draft.graphicLanguage,
+            photoBrief: draft.photoBrief,
+            sketchDataUrl: draft.logo.sketchSvg,
+            sketchNote: draft.logo.sketchNote,
+          },
+          prompt: draft.logo.refinementPrompt || 'Refine o esboço preservando clareza, síntese, contraste e escalabilidade.',
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const alternatives = Array.isArray(data.brandRefinement?.alternatives) ? data.brandRefinement.alternatives : [];
+      if (!response.ok || !alternatives.length) throw new Error(data.error || 'A IA não retornou alternativas válidas.');
+      setDraft((current) => ({
+        ...current,
+        logo: {
+          ...current.logo,
+          refinementAlternatives: alternatives,
+          activeRefinementId: current.logo.activeRefinementId || alternatives[0]?.id,
+        },
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch (error: any) {
+      setRefineError(error?.message || 'Falha ao refinar a marca.');
+    } finally {
+      setRefiningLogo(false);
+    }
+  };
   const tabs = [
     ['strategy', 'ESSÊNCIA'], ['brand', 'MARCA'], ['system', 'SISTEMA'], ['applications', 'APLICAÇÕES'], ['manual', 'MANUAL'],
   ] as const;
@@ -261,6 +404,8 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
         {tab === 'brand' && <>
           <div className="rounded-2xl border bg-white p-4"><b className="flex items-center gap-2"><LayoutGrid size={15} /> Marca e assinatura</b><p className="mt-1 text-[10px] text-neutral-500">Comece por um sistema simples e verificável. Se a marca já existir, faça upload e use o arquivo real em todas as aplicações e mockups.</p></div>
           <div className="rounded-2xl border bg-white p-4 space-y-3"><div className="flex items-start justify-between gap-3"><div><b className="flex items-center gap-2"><Upload size={15}/> Marca existente</b><p className="mt-1 text-[10px] text-neutral-500">PNG, JPG, WEBP ou SVG · até 4 MB. O arquivo enviado passa a ser usado na prévia e nos mockups.</p></div>{draft.logo.assetUrl && <span className="text-[9px] font-mono rounded-full bg-emerald-50 text-emerald-700 px-2 py-1">ARQUIVO ATIVO</span>}</div><input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={(e)=>{const file=e.target.files?.[0];if(file)void uploadLogo(file)}}/><button disabled={!canEdit || uploadingLogo} onClick={()=>logoFileRef.current?.click()} className="h-11 w-full rounded-xl border border-dashed flex items-center justify-center gap-2 text-xs font-bold">{uploadingLogo?<Loader2 size={15} className="animate-spin"/>:<Upload size={15}/>} {draft.logo.assetUrl?'SUBSTITUIR MARCA':'FAZER UPLOAD DA MARCA'}</button>{draft.logo.assetUrl && <div className="grid grid-cols-2 gap-2"><button onClick={()=>patch({logo:{...draft.logo,useUploadedAsset:true}})} className={`h-10 rounded-xl border text-[10px] font-bold ${draft.logo.useUploadedAsset!==false?'bg-black text-white':'bg-white'}`}>USAR ARQUIVO</button><button onClick={()=>patch({logo:{...draft.logo,useUploadedAsset:false}})} className={`h-10 rounded-xl border text-[10px] font-bold ${draft.logo.useUploadedAsset===false?'bg-black text-white':'bg-white'}`}>USAR ESTUDO PARAMÉTRICO</button></div>}{logoError&&<div className="text-[10px] text-red-600">{logoError}</div>}</div>
+          <div className="rounded-2xl border bg-white p-4 space-y-3"><div><b className="flex items-center gap-2"><LayoutGrid size={15} /> Esboço livre da marca</b><p className="mt-1 text-[10px] text-neutral-500">Rabisque a forma que você imagina. O esboço e o estudo refinado ficam salvos no mesmo documento.</p></div><SketchCanvas value={draft.logo.sketchSvg} onChange={(dataUrl) => patch({ logo: { ...draft.logo, sketchSvg: dataUrl } })} /><label className="block text-[9px] font-mono">NOTAS DO ESBOÇO<textarea value={draft.logo.sketchNote || ''} onChange={(e) => patch({ logo: { ...draft.logo, sketchNote: e.target.value } })} className="mt-1 min-h-20 w-full rounded-xl border p-3 text-sm" placeholder="O que esse rascunho quer resolver? Ex.: síntese, movimento, delicadeza, força, institucionalidade..." /></label></div>
+          <div className="rounded-2xl border-2 border-black bg-white p-4 space-y-3"><div className="flex items-start justify-between gap-3"><div><b className="flex items-center gap-2"><Sparkles size={15} /> IA de refino</b><p className="mt-1 text-[10px] text-neutral-500">A IA lê estratégia, paleta e esboço para sugerir caminhos de marca, sem apagar o seu estudo inicial.</p></div></div><label className="block text-[9px] font-mono">PEDIDO DE REFINO<textarea value={draft.logo.refinementPrompt || ''} onChange={(e) => patch({ logo: { ...draft.logo, refinementPrompt: e.target.value } })} className="mt-1 min-h-24 w-full rounded-xl border p-3 text-sm" placeholder="Ex.: preservar meu esboço, simplificar curvas, deixar mais editorial, reforçar contraste e funcionar bem em avatar e cartaz." /></label><button disabled={refiningLogo} onClick={() => void requestLogoRefinement()} className="h-11 w-full rounded-xl bg-black text-white text-[10px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">{refiningLogo ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14} />} {refiningLogo ? 'REFINANDO...' : 'GERAR CAMINHOS DE REFINO'}</button>{refineError ? <div className="text-[10px] text-red-600">{refineError}</div> : null}{draft.logo.refinementAlternatives?.length ? <div className="space-y-2">{draft.logo.refinementAlternatives.map((alternative) => <div key={alternative.id} className={`rounded-xl border p-3 ${draft.logo.activeRefinementId === alternative.id ? 'border-black bg-neutral-50' : ''}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><b className="text-sm">{alternative.label}</b><p className="mt-1 text-[10px] text-neutral-600">{alternative.rationale}</p><div className="mt-2 text-[9px] font-mono text-neutral-500 uppercase">{alternative.logo.kind} · {alternative.logo.symbolStyle} · {alternative.logo.lockup}</div></div><button type="button" onClick={() => applyRefinementAlternative(alternative.id)} className="h-9 shrink-0 rounded-xl border px-3 text-[10px] font-bold">APLICAR</button></div></div>)}</div> : null}</div>
           <label className="block text-[9px] font-mono">TIPO DE MARCA<select value={draft.logo.kind} onChange={(e) => patch({ logo: { ...draft.logo, kind: e.target.value as VisualIdentityDocument['logo']['kind'] } })} className="mt-1 h-11 w-full rounded-xl border px-3"><option value="wordmark">Logotipo / wordmark</option><option value="monogram">Monograma</option><option value="symbol">Símbolo</option><option value="combination">Símbolo + logotipo</option></select></label>
           <label className="block text-[9px] font-mono">LINGUAGEM DO SÍMBOLO<select value={draft.logo.symbolStyle} onChange={(e) => patch({ logo: { ...draft.logo, symbolStyle: e.target.value as VisualIdentityDocument['logo']['symbolStyle'] } })} className="mt-1 h-11 w-full rounded-xl border px-3"><option value="geometric">Geométrica</option><option value="organic">Orgânica</option><option value="seal">Selo / estrutura circular</option><option value="abstract">Abstrata</option></select></label>
           <label className="block text-[9px] font-mono">MONOGRAMA<input value={draft.logo.monogram} maxLength={3} onChange={(e) => patch({ logo: { ...draft.logo, monogram: e.target.value.toUpperCase() } })} className="mt-1 h-11 w-full rounded-xl border px-3 text-sm uppercase" /></label>
