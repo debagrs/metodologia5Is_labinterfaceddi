@@ -1,6 +1,6 @@
 import type { CharacterAppearance } from '../types';
 
-type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'outline' | 'realism' | 'psychedelic' | 'metal';
+type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'outline' | 'realism' | 'psychedelic' | 'metal' | 'pixel' | 'voxel';
 
 export type CharacterStyleFamily = {
   id: NonNullable<CharacterAppearance['artStyle']>;
@@ -30,6 +30,8 @@ export const CHARACTER_STYLE_FAMILIES: CharacterStyleFamily[] = [
   { id: 'engraving', label: 'Hachura & gravura', description: 'Volume construído por linhas, cruzamentos, densidade e textura de impressão.', market: 'rótulos, editorial, embalagem, pôster', defaultVariant: 'engraving-copper' },
   { id: 'lineart', label: 'Linha detalhada', description: 'Contorno com variação de peso, padrões internos e ornamentação minuciosa.', market: 'capas, tatuagem, pôster, identidade', defaultVariant: 'lineart-ornamental' },
   { id: 'minimal-lineart', label: 'Line Art Minimalista', description: 'Traço simples e contínuo, foco no gesto e na essência da forma, com pouquíssimos detalhes.', market: 'identidade, editorial, tattoo, pôster, boho', defaultVariant: 'minimal-lineart-continuous' },
+  { id: 'pixel-art', label: 'Pixel Art 2D', description: 'Personagem construído em grade de pixels, com leitura por silhueta, paleta limitada e sprites animáveis.', market: 'games 2D, sprites, interfaces lúdicas, ícones', defaultVariant: 'pixel-art-32' },
+  { id: 'voxel', label: 'Voxel / blocos 3D', description: 'Personagem tridimensional modular feito por volumes cúbicos e texturas simples, com rotação e leitura low-poly.', market: 'games 3D, protótipos, mundos em blocos, experiências web', defaultVariant: 'voxel-blocky' },
   { id: 'realism', label: 'Realismo', description: 'Anatomia, materiais, iluminação e volume com maior fidelidade física.', market: 'concept art, científico, publicidade', defaultVariant: 'realism-editorial' },
   { id: 'psychedelic', label: 'Psicodélico', description: 'Maximalismo, distorção, cor intensa, formas fluidas e composição densa.', market: 'festivais, estamparia, música, pôster', defaultVariant: 'psychedelic-70s' },
   { id: 'steampunk', label: 'Steampunk / dieselpunk', description: 'Retrofuturismo com metal, couro, mecanismos, rebites e acessórios técnicos.', market: 'worldbuilding, games, cinema, fantasia', defaultVariant: 'steampunk-victorian' },
@@ -160,11 +162,17 @@ export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
   if (s.family === 'minimal-lineart') {
     return {
       ...base,
-      strokeWidth: Math.max(.7, (base.strokeWidth ?? 1.1) * .78),
-      eyeSize: (base.eyeSize ?? 1) * .92,
-      irisScale: .72,
-      hairVolume: (a.hairVolume ?? 1) * .9,
+      strokeWidth: Math.max(.42, (base.strokeWidth ?? 1.1) * .52),
+      eyeSize: (base.eyeSize ?? 1) * .88,
+      irisScale: .62,
+      hairVolume: (a.hairVolume ?? 1) * .84,
     };
+  }
+  if (s.family === 'pixel-art') {
+    return { ...base, pixelResolution: a.pixelResolution || 32, pixelPaletteSize: a.pixelPaletteSize || 16, pixelOutline: a.pixelOutline ?? true };
+  }
+  if (s.family === 'voxel') {
+    return { ...base, voxelYaw: a.voxelYaw ?? 28, voxelPitch: a.voxelPitch ?? 18, voxelDepth: a.voxelDepth ?? 1, voxelBevel: a.voxelBevel ?? 0 };
   }
   return base;
 }
@@ -177,15 +185,16 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   const s = selectedStyleVariant(a);
   const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving','minimal-lineart'].includes(s.family));
   if (s.family === 'minimal-lineart') {
-    const ink = a.lineColor || '#1F1F1F';
+    const ink = a.lineColor || '#252525';
     const simplified = markup
       .replace(/fill="url\(#[^"]+\)"/gi, 'fill="none"')
       .replace(/fill="#[a-f\d]{6}"/gi, 'fill="none"')
       .replace(/fill="white"/gi, 'fill="none"')
       .replace(/fill="#fff"/gi, 'fill="none"')
       .replace(/stroke="#[a-f\d]{6}"/gi, `stroke="${ink}"`)
-      .replace(/opacity="\.?\d+"/gi, 'opacity="1"');
-    return { defs: '', markup: `<g fill="none" stroke="${ink}" stroke-width="${Math.max(.7,(a.strokeWidth || 1.2)*.8)}">${simplified}</g>` };
+      .replace(/stroke-width="([0-9.]+)"/gi, (_m, raw) => `stroke-width="${Math.max(.35, Math.min(1.65, Number(raw) * .36)).toFixed(2)}"`)
+      .replace(/opacity="\.?\d+"/gi, 'opacity=".88"');
+    return { defs: '', markup: `<g fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round" stroke-width="${Math.max(.42,(a.strokeWidth || 1.2)*.5)}" opacity=".92">${simplified}</g>` };
   }
   const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m => m[1]))];
   let defs = '';
