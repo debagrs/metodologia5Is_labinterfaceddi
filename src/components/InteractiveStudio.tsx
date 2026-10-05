@@ -5,6 +5,7 @@ import { EFFECT_CATALOG, LIBRARY_DOCS, buildLibraryEffect } from '../lib/interac
 import { normalizeSketchCode, character3DHelper, characterSceneCode } from '../lib/interactiveRuntime';
 import { buildCharacterSvg } from './SpriteStudio';
 import { StudioWorkspace } from './StudioWorkspace';
+import StudioAreaGuide from './StudioAreaGuide';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
@@ -656,6 +657,7 @@ export default function InteractiveStudio({
           <div className="text-sm sm:text-base font-bold text-[#1A1A1A] truncate">{title}</div>
           <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-500">camada interativa · imagem + SVG + motion + física + 3D</div>
         </div>
+        <StudioAreaGuide area="interactive" />
         <button
           type="button"
           disabled={!canEdit}
