@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections';
 
 export type DrawingElementType =
   | 'brush'
@@ -569,6 +569,18 @@ export interface CharacterSpriteDocument {
 export type GameSceneType = 'menu' | 'level' | 'boss' | 'cutscene' | 'result';
 export type GameSprintStatus = 'todo' | 'doing' | 'done';
 
+export type GameActionVerb = 'entrar' | 'andar' | 'falar' | 'coletar' | 'pular' | 'esperar' | 'sair';
+
+export interface GameCharacterAction {
+  id: string;
+  spriteId: string;
+  verb: GameActionVerb;
+  text?: string;
+  x?: number;
+  y?: number;
+  durationMs?: number;
+}
+
 export interface GameScene {
   id: string;
   name: string;
@@ -578,6 +590,8 @@ export interface GameScene {
   background: string;
   nextSceneId?: string;
   spriteIds?: string[];
+  script?: string;
+  actions?: GameCharacterAction[];
 }
 
 export interface GameSprintItem {
@@ -623,9 +637,49 @@ export interface GameDesignDocument {
   genre: string;
   coreLoop: string;
   playerGoal: string;
+  gddScript?: string;
+  previewEngine?: 'local' | 'phaser' | 'pixi';
   scenes: GameScene[];
   sprints: GameSprintItem[];
   jam?: GameJamState;
+  updatedAt?: string;
+}
+
+export interface VisualIdentityColor {
+  id: string;
+  name: string;
+  role: string;
+  color: string;
+}
+
+export interface VisualIdentityApplication {
+  id: string;
+  type: 'social' | 'poster' | 'card' | 'packaging' | 'signage' | 'interface';
+  title: string;
+  notes?: string;
+}
+
+export interface VisualIdentityDocument {
+  title: string;
+  brandName: string;
+  tagline: string;
+  essence: string;
+  audience: string;
+  positioning: string;
+  personality: string[];
+  logo: {
+    kind: 'wordmark' | 'monogram' | 'symbol' | 'combination';
+    symbolStyle: 'geometric' | 'organic' | 'seal' | 'abstract';
+    monogram: string;
+    lockup: 'horizontal' | 'stacked' | 'symbol-only';
+  };
+  palette: VisualIdentityColor[];
+  typography: { display: string; text: string; accent: string };
+  graphicLanguage: string;
+  photoBrief: string;
+  logoRules: string;
+  applications: VisualIdentityApplication[];
+  manualNotes: string;
   updatedAt?: string;
 }
 
@@ -702,6 +756,8 @@ export interface ThoughtNode {
   wireframeName?: string;
   designSystem?: DesignSystemDocument;
   designSystemName?: string;
+  visualIdentity?: VisualIdentityDocument;
+  visualIdentityName?: string;
   video?: VideoDocument;
   videoName?: string;
   uxWriting?: UXWritingDocument;
