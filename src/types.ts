@@ -460,11 +460,13 @@ export type CharacterHornStyle = 'none' | 'short' | 'long' | 'antlers' | 'antenn
 export type CharacterSurfaceStyle = 'skin' | 'fur-short' | 'fur-long' | 'feathers' | 'scales' | 'shell' | 'chitin';
 export type CharacterFootStyle = 'feet' | 'paws' | 'hooves' | 'claws' | 'talons' | 'fins';
 
-export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'hat' | 'cap' | 'beanie' | 'scarf' | 'backpack' | 'headphones' | 'earrings' | 'necklace' | 'bow' | 'crown' | 'bracelet' | 'belt';
+export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'goggles' | 'monocle' | 'hat' | 'cap' | 'beanie' | 'hood' | 'bandana' | 'headband' | 'hairclip' | 'flower' | 'tiara' | 'scarf' | 'cape' | 'backpack' | 'satchel' | 'headphones' | 'earrings' | 'necklace' | 'brooch' | 'bow' | 'crown' | 'bracelet' | 'watch' | 'belt' | 'pouch' | 'shoulderpad' | 'mask';
 export interface CharacterAccessory { id:string; kind:CharacterAccessoryKind; color:string; scale:number; x:number; y:number; }
 export interface CharacterPoseAdjustment { al?:number; ar?:number; el?:number; er?:number; ll?:number; lr?:number; kl?:number; kr?:number; lean?:number; headTilt?:number; }
 export interface CharacterAppearance {
-  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi';
+  artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'realism' | 'psychedelic' | 'steampunk';
+  /** Variação dentro da família visual. Ex.: manga-shoujo, engraving-woodcut. */
+  styleVariant?: string;
   accessories?: CharacterAccessory[];
   headWidth?:number; headHeight?:number; eyeSize?:number; eyeSpacing?:number; eyeHeight?:number; irisScale?:number;
   browSize?:number; browHeight?:number; noseSize?:number; noseHeight?:number; mouthSize?:number; mouthHeight?:number;
@@ -499,7 +501,7 @@ export interface CharacterAppearance {
   armStyle: 'thin' | 'regular' | 'strong';
   legStyle: 'short' | 'regular' | 'long';
   handStyle: 'mitten' | 'simple' | 'defined';
-  outfitStyle: 'none' | 'basic' | 'sport' | 'formal' | 'fantasy' | 'tech' | 'street';
+  outfitStyle: 'none' | 'basic' | 'casual' | 'sport' | 'formal' | 'fantasy' | 'tech' | 'street' | 'school' | 'kawaii' | 'punk' | 'steampunk' | 'historical' | 'scifi' | 'workwear' | 'elegant' | 'adventure';
   accessory: 'none' | 'glasses' | 'hat' | 'scarf' | 'backpack' | 'headphones';
   headToBodyRatio: number;
   shoulderWidth: number;
