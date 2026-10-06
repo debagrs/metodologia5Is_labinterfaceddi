@@ -163,7 +163,7 @@ export interface DrawingDocument {
 export type WireframeDevicePreset = 'mobile' | 'tablet' | 'desktop' | 'watch' | 'custom';
 export type WireframeDirection = 'column' | 'row';
 export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
-export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'nav-item' | 'list-item' | 'icon' | 'avatar' | 'checkbox' | 'toggle' | 'divider' | 'section' | 'spacer';
+export type WireframeBlockType = 'text' | 'heading' | 'button' | 'icon-button' | 'fab' | 'input' | 'textarea' | 'select' | 'search' | 'date-picker' | 'time-picker' | 'image' | 'video' | 'map' | 'webview' | 'card' | 'navbar' | 'appbar' | 'bottom-nav' | 'side-nav' | 'drawer' | 'tabs' | 'nav-item' | 'breadcrumb' | 'pagination' | 'list-item' | 'icon' | 'avatar' | 'badge' | 'checkbox' | 'radio' | 'toggle' | 'slider' | 'chip' | 'progress' | 'table' | 'accordion' | 'carousel' | 'divider' | 'section' | 'spacer' | 'container' | 'row' | 'column' | 'stack' | 'wrap' | 'form' | 'list-view' | 'grid-view' | 'page-view';
 
 export interface WireframeBlock {
   fontFamily?: string; fontSize?: number; fontWeight?: number;
@@ -186,6 +186,15 @@ export interface WireframeBlock {
   interactionTarget?: string;
   gridColumnSpan?: number;
   alignSelf?: 'auto' | 'start' | 'center' | 'end' | 'stretch';
+  children?: WireframeBlock[];
+  direction?: WireframeDirection;
+  align?: WireframeAlign;
+  justify?: 'start' | 'center' | 'end' | 'between';
+  layoutMode?: 'flex' | 'grid' | 'stack';
+  wrap?: boolean;
+  opacity?: number;
+  borderColor?: string;
+  borderWidth?: number;
 }
 
 
@@ -201,6 +210,7 @@ export interface WireframeFrame {
   align: WireframeAlign;
   justify?: 'start' | 'center' | 'end' | 'between';
   layoutMode?: 'flex' | 'grid';
+  wrap?: boolean;
   gridColumns?: number;
   columnGap?: number;
   rowGap?: number;
