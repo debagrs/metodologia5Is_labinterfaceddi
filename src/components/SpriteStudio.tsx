@@ -87,12 +87,12 @@ const BODY_PLANS: Option<CharacterBodyPlan>[] = [
 ];
 
 const IDENTITY_REPRESENTATIONS: Option<NonNullable<CharacterAppearance['identityRepresentation']>>[] = [
-  { id: 'man', label: 'Homem' },
-  { id: 'woman', label: 'Mulher' },
+  { id: 'woman', label: 'Feminino' },
+  { id: 'man', label: 'Masculino' },
   { id: 'open', label: 'Prefiro não limitar' },
 ];
 const IDENTITY_LABELS: Record<NonNullable<CharacterAppearance['identityRepresentation']>, string> = {
-  man: 'Homem', woman: 'Mulher', lgbtqia: 'Prefiro não limitar', open: 'Prefiro não limitar',
+  man: 'Masculino', woman: 'Feminino', lgbtqia: 'Prefiro não limitar', open: 'Prefiro não limitar',
 };
 const IDENTITY_START_PATCHES: Record<'man' | 'woman', Partial<CharacterAppearance>> = {
   man: {
@@ -117,29 +117,32 @@ const AGE_LABELS: Record<NonNullable<CharacterAppearance['ageGroup']>, string> =
 };
 const AGE_PATCHES: Record<NonNullable<CharacterAppearance['ageGroup']>, Partial<CharacterAppearance>> = {
   baby: {
-    headToBodyRatio: 2.25, limbLength: .44, shoulderWidth: .62, bodyWidth: .84, waistWidth: 1.08,
-    legStyle: 'short', armStyle: 'thin', headShape: 'round', faceShape: 'soft', eyeSize: 1.34,
-    eyeSpacing: 1.09, noseStyle: 'small', mouthStyle: 'small', stature: 'very-short', handSize: .66, footSize: .68,
-    headWidth: 1.08, headHeight: 1.1,
+    headToBodyRatio: 1.95, limbLength: .36, shoulderWidth: .55, bodyWidth: .8, waistWidth: 1.12,
+    legStyle: 'short', armStyle: 'thin', headShape: 'round', faceShape: 'soft', eyeSize: 1.46,
+    eyeSpacing: 1.12, noseStyle: 'small', mouthStyle: 'small', stature: 'very-short', handSize: .58, footSize: .62,
+    headWidth: 1.16, headHeight: 1.17, torsoShape: 'round', browStyle: 'soft', mouthSize: .82, noseSize: .72,
   },
   child: {
-    headToBodyRatio: 3.15, limbLength: .66, shoulderWidth: .76, bodyWidth: .9, waistWidth: .98,
-    legStyle: 'short', armStyle: 'regular', headShape: 'round', faceShape: 'soft', eyeSize: 1.2,
-    eyeSpacing: 1.05, noseStyle: 'small', mouthStyle: 'small', stature: 'short', handSize: .78, footSize: .82,
-    headWidth: 1.03, headHeight: 1.03,
+    headToBodyRatio: 2.85, limbLength: .58, shoulderWidth: .7, bodyWidth: .86, waistWidth: 1.0,
+    legStyle: 'short', armStyle: 'regular', headShape: 'round', faceShape: 'soft', eyeSize: 1.28,
+    eyeSpacing: 1.07, noseStyle: 'small', mouthStyle: 'small', stature: 'short', handSize: .72, footSize: .77,
+    headWidth: 1.08, headHeight: 1.08, torsoShape: 'rectangle', mouthSize: .9, noseSize: .82,
   },
   teen: {
-    headToBodyRatio: 4.65, limbLength: .98, shoulderWidth: .9, bodyWidth: .94, waistWidth: .9,
-    legStyle: 'long', armStyle: 'regular', headShape: 'oval', eyeSize: 1.04, stature: 'average', handSize: .93, footSize: .95,
+    headToBodyRatio: 4.45, limbLength: .98, shoulderWidth: .86, bodyWidth: .9, waistWidth: .88,
+    legStyle: 'long', armStyle: 'regular', headShape: 'oval', eyeSize: 1.06, stature: 'average', handSize: .91, footSize: .94,
+    torsoShape: 'rectangle', headWidth: .99, headHeight: 1.01,
   },
   adult: {
     headToBodyRatio: 5.7, limbLength: 1.03, shoulderWidth: 1, bodyWidth: 1, waistWidth: 1,
     legStyle: 'regular', armStyle: 'regular', eyeSize: 1, stature: 'average', handSize: 1, footSize: 1,
+    headWidth: 1, headHeight: 1,
   },
   'older-adult': {
-    headToBodyRatio: 5.0, limbLength: .88, shoulderWidth: .92, bodyWidth: 1.0, waistWidth: 1.03,
-    legStyle: 'regular', armStyle: 'regular', headShape: 'oval', faceShape: 'soft', eyeSize: .94,
-    stature: 'short', handSize: .94, footSize: .94, torsoShape: 'round', headHeight: .98,
+    headToBodyRatio: 5.15, limbLength: .82, shoulderWidth: .86, bodyWidth: 1.02, waistWidth: 1.08,
+    legStyle: 'short', armStyle: 'regular', headShape: 'oval', faceShape: 'soft', eyeSize: .9,
+    stature: 'short', handSize: .93, footSize: .93, torsoShape: 'round', headHeight: .96, headWidth: .97,
+    browStyle: 'soft', mouthSize: .94, noseSize: 1.06,
   },
 };
 
