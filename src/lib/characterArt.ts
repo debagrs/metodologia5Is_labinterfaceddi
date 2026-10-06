@@ -958,3 +958,4 @@ export function illustrateCharacter(
   const styled = styleCharacterMarkup(body, a);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="520" viewBox="${portrait ? (a.artStyle === "chibi" ? "50 -35 260 240" : "85 20 190 185") : "0 0 360 520"}">${styled.defs}<g stroke="${line}" stroke-width="${a.strokeEnabled===false?0:metric(a,"strokeWidth",1.8)}" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(180 260) scale(${portrait ? 1 : fit}) translate(-180 -260)">${styled.markup}</g></g></svg>`;
 }
+
