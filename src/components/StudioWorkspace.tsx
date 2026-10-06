@@ -123,3 +123,4 @@ export function StudioWorkspace({
     <div className="studio-preview">{children}</div>
   </div>;
 }
+
