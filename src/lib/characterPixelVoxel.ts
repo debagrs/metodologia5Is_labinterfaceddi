@@ -14,7 +14,7 @@ function shade(value: string, amount: number) {
 function pixelFace(a: CharacterAppearance, expression: CharacterExpression, x: number, y: number, scale = 1) {
   const skin = hex(a.skinColor || a.surfaceColor, '#D5A27C');
   const eye = hex(a.eyeColor, '#2D251F');
-  const line = hex(a.lineColor, '#171717');
+  const line = a.strokeEnabled === false ? 'none' : hex(a.lineColor, '#171717');
   const hair = hex(a.hairColor, '#2B211C');
   const variant = selectedStyleVariant(a);
   const low = variant.id === 'pixel-art-16' || (a.pixelResolution || 32) <= 16;
@@ -24,7 +24,7 @@ function pixelFace(a: CharacterAppearance, expression: CharacterExpression, x: n
   const sad = expression === 'sad' || expression === 'worried';
   const animal = (a.species || 'human') !== 'human' && (a.species || '') !== 'anthropomorphic';
   const radius = low ? 0 : high ? 2 * scale : 1 * scale;
-  let out = `<rect x="${x}" y="${y}" width="${40*scale}" height="${42*scale}" rx="${radius}" fill="${skin}"${a.pixelOutline === false ? '' : ` stroke="${line}" stroke-width="${Math.max(1, scale)}"`}/>`;
+  let out = `<rect x="${x}" y="${y}" width="${40*scale}" height="${42*scale}" rx="${radius}" fill="${skin}"${(a.pixelOutline === false || a.strokeEnabled === false) ? '' : ` stroke="${line}" stroke-width="${Math.max(1, scale)}"`}/>`;
   if (!animal && a.hairStyle !== 'none') {
     out += `<rect x="${x}" y="${y}" width="${40*scale}" height="${10*scale}" fill="${hair}"/>`;
     out += `<rect x="${x}" y="${y+8*scale}" width="${8*scale}" height="${12*scale}" fill="${hair}"/>`;
@@ -57,7 +57,7 @@ function pixelBiped(document: CharacterSpriteDocument, expression: CharacterExpr
   const skin = hex(a.skinColor || a.surfaceColor, '#D5A27C');
   const shirt = hex(a.outfitPrimary, '#2A877E');
   const pants = hex(a.outfitSecondary, '#303B4B');
-  const line = hex(a.lineColor, '#171717');
+  const line = a.strokeEnabled === false ? 'none' : hex(a.lineColor, '#171717');
   const age = a.ageGroup || 'adult';
   const ageHeadScale = age === 'baby' ? 1.28 : age === 'child' ? 1.16 : age === 'teen' ? 1.06 : age === 'older-adult' ? .99 : 1;
   const ageBodyScale = age === 'baby' ? .66 : age === 'child' ? .8 : age === 'teen' ? .92 : age === 'older-adult' ? .96 : 1;
@@ -94,7 +94,7 @@ function pixelAnimal(document: CharacterSpriteDocument, expression: CharacterExp
   const a = document.appearance!;
   const fill = hex(a.surfaceColor || a.skinColor, '#C9976D');
   const dark = shade(fill,-25);
-  const line = hex(a.lineColor,'#1B1B1B');
+  const line = a.strokeEnabled === false ? 'none' : hex(a.lineColor,'#1B1B1B');
   const plan = a.bodyPlan || 'quadruped';
   if (plan === 'aquatic') {
     return `<rect x="42" y="76" width="70" height="48" fill="${fill}"/><rect x="112" y="84" width="20" height="32" fill="${dark}"/><rect x="132" y="76" width="12" height="16" fill="${dark}"/><rect x="132" y="108" width="12" height="16" fill="${dark}"/><rect x="53" y="88" width="8" height="8" fill="${line}"/><rect x="39" y="96" width="10" height="8" fill="${shade(fill,-15)}"/>`;
@@ -192,7 +192,7 @@ function voxelAnimalParts(a: CharacterAppearance) {
 export function renderVoxelCharacterSvg(document: CharacterSpriteDocument) {
   const a=styledAppearance(document.appearance || ({} as CharacterAppearance));
   const yaw=clamp(a.voxelYaw ?? 28,-180,180), pitch=clamp(a.voxelPitch ?? 18,-45,45), scale=clamp(a.voxelDepth ?? 1, .7, 1.45) * 1.3;
-  const line=hex(a.lineColor,'#171717');
+  const line=a.strokeEnabled === false ? 'none' : hex(a.lineColor,'#171717');
   const parts=(a.bodyPlan || 'biped')==='biped' ? voxelBipedParts(a) : voxelAnimalParts(a);
   const faces:Face[]=[];
   parts.forEach(([cx,cy,cz,w,h,d,fill])=>faces.push(...cubeFaces(cx,cy,cz,w,h,d,fill,yaw,pitch,scale,line)));
