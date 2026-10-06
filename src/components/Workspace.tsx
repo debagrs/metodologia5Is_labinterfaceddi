@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
-  ChevronRight, ChevronLeft, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
+  ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
   Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
@@ -15,6 +15,7 @@ import AgentChatPanel from './AgentChatPanel';
 import ProjectCollaboratorsPanel from './ProjectCollaboratorsPanel';
 import { AgendaLauncher } from './Agenda5Is';
 import TutorialCoach from './TutorialCoach';
+import WorkspaceHistory from './WorkspaceHistory';
 import { ensureTursoSession } from '../lib/turso';
 
 interface MethodologyTechnique {
@@ -1571,16 +1572,6 @@ export default function Workspace({
   const desktopPanelsInitiallyOpen = () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(desktopPanelsInitiallyOpen);
-  const toggleLeftSidebar = () => {
-    const next = !isLeftSidebarOpen;
-    setIsLeftSidebarOpen(next);
-    if (next && typeof window !== 'undefined' && window.innerWidth < 1024) setIsRightSidebarOpen(false);
-  };
-  const toggleRightSidebar = () => {
-    const next = !isRightSidebarOpen;
-    setIsRightSidebarOpen(next);
-    if (next && typeof window !== 'undefined' && window.innerWidth < 1024) setIsLeftSidebarOpen(false);
-  };
   const [isCommentsOpen, setIsCommentsOpen] = useState<boolean>(false);
   const [isAgentChatOpen, setIsAgentChatOpen] = useState<boolean>(false);
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState<boolean>(false);
@@ -1778,8 +1769,6 @@ export default function Workspace({
             drawingName: clipForPublication(node.drawingName || '', 220),
             apiConnectionsName: clipForPublication(node.apiConnectionsName || '', 220),
             apiConnections: node.apiConnections ? clipForPublication(JSON.stringify(node.apiConnections), 3200) : '',
-            visualIdentityName: clipForPublication(node.visualIdentityName || '', 220),
-            visualIdentity: node.visualIdentity ? clipForPublication(JSON.stringify(node.visualIdentity), 3200) : '',
             attachments: (node.attachments || []).slice(0, 12).map((attachment) => ({
               name: clipForPublication(attachment.name, 220),
               type: clipForPublication(attachment.type, 120)
@@ -1886,8 +1875,6 @@ export default function Workspace({
           wireframe: node.wireframe ? clip(JSON.stringify(node.wireframe), 6500) : undefined,
           designSystemName: node.designSystemName || '',
           designSystem: node.designSystem ? clip(JSON.stringify(node.designSystem), 5000) : undefined,
-          visualIdentityName: node.visualIdentityName || '',
-          visualIdentity: node.visualIdentity ? clip(JSON.stringify(node.visualIdentity), 5000) : undefined,
           videoName: node.videoName || '',
           video: node.video ? clip(JSON.stringify(node.video), 3500) : undefined,
           uxWritingName: node.uxWritingName || '',
@@ -2186,7 +2173,7 @@ export default function Workspace({
       )}
 
       {/* Top Bar Navigation & Status */}
-      <header id="workspace-top-bar" className="min-h-16 bg-[#FDFDFB]/90 backdrop-blur-md border-b border-[#F0F0EE] px-2 sm:px-5 py-2 flex items-center justify-between gap-2 z-30 shrink-0">
+      <header id="workspace-top-bar" className="min-h-16 bg-[#FDFDFB]/90 backdrop-blur-md border-b border-[#F0F0EE] px-2 sm:px-5 py-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 z-30 shrink-0">
         <div className="flex items-center gap-1.5 sm:gap-4 min-w-0">
           <button 
             onClick={onExit}
@@ -2217,7 +2204,7 @@ export default function Workspace({
         </div>
 
         {/* Current status telemetry & Mobile Panel toggles */}
-        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+        <div className="workspace-top-actions order-3 sm:order-none w-full sm:w-auto flex min-w-0 items-center gap-1 sm:gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:pb-0">
           {currentUser && ['advisor', 'student'].includes(currentUser.role) && (
             <AgendaLauncher
               currentUser={currentUser}
@@ -2248,6 +2235,7 @@ export default function Workspace({
             <span className="hidden sm:inline text-[11px] font-mono font-bold uppercase">Comentários</span>
             {totalComments > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">{totalComments}</span>}
           </button>
+          <WorkspaceHistory />
           <button
             onClick={() => {
               const first = window.confirm('Apagar todo o conteúdo do canvas? A âncora central do projeto será mantida vazia.');
@@ -2261,7 +2249,10 @@ export default function Workspace({
           </button>
           <div className="flex items-center gap-1.5">
             <button
-              onClick={toggleLeftSidebar}
+              onClick={() => {
+                setIsLeftSidebarOpen(!isLeftSidebarOpen);
+                setIsRightSidebarOpen(false);
+              }}
               className={`p-2 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
                 isLeftSidebarOpen 
                   ? 'bg-black text-white border-black shadow-sm' 
@@ -2275,7 +2266,10 @@ export default function Workspace({
             </button>
             
             <button
-              onClick={toggleRightSidebar}
+              onClick={() => {
+                setIsRightSidebarOpen(!isRightSidebarOpen);
+                setIsLeftSidebarOpen(false);
+              }}
               className={`p-2 rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
                 isRightSidebarOpen 
                   ? 'bg-black text-white border-black shadow-sm' 
@@ -2289,8 +2283,7 @@ export default function Workspace({
             </button>
           </div>
 
-          <div id="workspace-history-slot" className="flex items-center shrink-0" />
-
+          
           <span className="text-[11px] font-mono text-[#70706E] bg-[#F5F5F3] border border-[#E0E0DE] rounded-full px-3 py-1 font-semibold uppercase tracking-wider hidden md:block">
             Draft: {project.projectType}
           </span>
@@ -2390,28 +2383,17 @@ export default function Workspace({
         {/* Left Sidebar: Metodologia 5I’s organism tracker */}
         <aside 
           id="left-sidebar-methodology" 
-          className={`workspace-sidebar absolute lg:relative top-0 left-0 h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-[transform,width] duration-300 ${
-            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 workspace-sidebar--collapsed'
+          className={`absolute lg:relative top-0 left-0 h-full w-72 max-w-[88vw] shrink-0 bg-white border-r border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+            isLeftSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'
           }`}
         >
-          <button
-            type="button"
-            onClick={() => setIsLeftSidebarOpen(true)}
-            className="workspace-sidebar-rail"
-            title="Expandir Metodologia 5I’s"
-            aria-label="Expandir painel Metodologia 5I’s"
-          >
-            <ChevronRight size={17} />
-            <span>METODOLOGIA</span>
-          </button>
           {/* Mobile close button inside Left Sidebar header */}
           <button 
             onClick={() => setIsLeftSidebarOpen(false)}
             className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
-            title="Recolher painel"
+            title="Fechar menu"
           >
-            <X size={15} className="lg:hidden" />
-            <ChevronLeft size={16} className="hidden lg:block" />
+            <X size={15} />
           </button>
           
           {/* Header section */}
@@ -2615,28 +2597,17 @@ export default function Workspace({
         {/* Right Sidebar: Intelligent Mediators Panel */}
         <aside 
           id="right-sidebar-mediators" 
-          className={`workspace-sidebar absolute lg:relative top-0 right-0 h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-[transform,width] duration-300 ${
-            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 workspace-sidebar--collapsed'
+          className={`absolute lg:relative top-0 right-0 h-full w-[330px] max-w-[88vw] shrink-0 bg-white border-l border-[#F0F0EE] flex flex-col justify-between z-40 lg:z-20 transition-transform duration-300 ${
+            isRightSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:hidden'
           }`}
         >
-          <button
-            type="button"
-            onClick={() => setIsRightSidebarOpen(true)}
-            className="workspace-sidebar-rail"
-            title="Expandir Agentes 5I’s"
-            aria-label="Expandir painel Agentes 5I’s"
-          >
-            <ChevronLeft size={17} />
-            <span>AGENTES</span>
-          </button>
           {/* Mobile close button inside Right Sidebar header */}
           <button 
             onClick={() => setIsRightSidebarOpen(false)}
             className="p-1.5 rounded-lg hover:bg-black/5 text-neutral-500 hover:text-black absolute top-4 right-4 z-50 cursor-pointer"
-            title="Recolher painel"
+            title="Fechar menu"
           >
-            <X size={15} className="lg:hidden" />
-            <ChevronRight size={16} className="hidden lg:block" />
+            <X size={15} />
           </button>
           
           {/* Top section: selection of mediators */}
