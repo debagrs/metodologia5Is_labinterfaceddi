@@ -62,7 +62,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections' | 'data-story';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections' | 'data-story' | 'graphic-system';
 
 export type DrawingElementType =
   | 'brush'
@@ -163,7 +163,7 @@ export interface DrawingDocument {
 export type WireframeDevicePreset = 'mobile' | 'tablet' | 'desktop' | 'watch' | 'custom';
 export type WireframeDirection = 'column' | 'row';
 export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
-export type WireframeBlockType = 'text' | 'heading' | 'button' | 'icon-button' | 'fab' | 'input' | 'textarea' | 'select' | 'search' | 'date-picker' | 'time-picker' | 'image' | 'video' | 'map' | 'webview' | 'card' | 'navbar' | 'appbar' | 'bottom-nav' | 'side-nav' | 'drawer' | 'tabs' | 'nav-item' | 'breadcrumb' | 'pagination' | 'list-item' | 'icon' | 'avatar' | 'badge' | 'checkbox' | 'radio' | 'toggle' | 'slider' | 'chip' | 'progress' | 'table' | 'accordion' | 'carousel' | 'divider' | 'section' | 'spacer' | 'container' | 'row' | 'column' | 'stack' | 'wrap' | 'form' | 'list-view' | 'grid-view' | 'page-view';
+export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'nav-item' | 'list-item' | 'icon' | 'avatar' | 'checkbox' | 'toggle' | 'divider' | 'section' | 'spacer';
 
 export interface WireframeBlock {
   fontFamily?: string; fontSize?: number; fontWeight?: number;
@@ -186,15 +186,6 @@ export interface WireframeBlock {
   interactionTarget?: string;
   gridColumnSpan?: number;
   alignSelf?: 'auto' | 'start' | 'center' | 'end' | 'stretch';
-  children?: WireframeBlock[];
-  direction?: WireframeDirection;
-  align?: WireframeAlign;
-  justify?: 'start' | 'center' | 'end' | 'between';
-  layoutMode?: 'flex' | 'grid' | 'stack';
-  wrap?: boolean;
-  opacity?: number;
-  borderColor?: string;
-  borderWidth?: number;
 }
 
 
@@ -210,7 +201,6 @@ export interface WireframeFrame {
   align: WireframeAlign;
   justify?: 'start' | 'center' | 'end' | 'between';
   layoutMode?: 'flex' | 'grid';
-  wrap?: boolean;
   gridColumns?: number;
   columnGap?: number;
   rowGap?: number;
@@ -483,6 +473,11 @@ export interface CharacterAppearance {
   earSize?:number; earAngle?:number; hairVolume?:number; muzzleSize?:number; muzzleHeight?:number;
   armLength?:number; armWidth?:number; legLength?:number; legWidth?:number; handSize?:number; footSize?:number; waistWidth?:number;
   tailSize?:number; wingSize?:number; hornSize?:number; whiskerLength?:number; strokeWidth?:number;
+  strokeEnabled?: boolean;
+  animalHeadScale?: number;
+  animalEyeScale?: number;
+  animalMouthScale?: number;
+  animalPersonality?: 'neutral' | 'gentle' | 'curious' | 'brave' | 'shy' | 'ferocious' | 'playful' | 'mysterious';
   noseColor?:string; mouthColor?:string; earColor?:string; wingColor?:string; tailColor?:string; hornColor?:string;
 
   species?: CharacterSpecies;
@@ -499,7 +494,7 @@ export interface CharacterAppearance {
   noseStyle: 'none' | 'small' | 'straight' | 'wide' | 'button' | 'broad' | 'aquiline';
   mouthStyle: 'line' | 'smile' | 'full' | 'small' | 'wide' | 'bow';
   earStyle: 'none' | 'simple' | 'round' | 'pointed' | 'long' | 'floppy' | 'large' | 'fin';
-  hairStyle: 'none' | 'short' | 'bob' | 'long' | 'curly' | 'spiky' | 'bun' | 'wavy' | 'afro' | 'coily' | 'locs' | 'braids' | 'pixie' | 'buzz' | 'ponytail' | 'undercut' | 'blunt';
+  hairStyle: 'none' | 'short' | 'pixie' | 'buzz' | 'undercut' | 'bob' | 'blunt' | 'lob' | 'long' | 'extra-long' | 'layered-long' | 'wavy' | 'curly' | 'afro' | 'coily' | 'locs' | 'locs-long' | 'braids' | 'box-braids' | 'cornrows' | 'ponytail' | 'high-ponytail' | 'pigtails' | 'half-up' | 'bun' | 'double-bun' | 'spiky';
   muzzleStyle?: CharacterMuzzleStyle;
   tailStyle?: CharacterTailStyle;
   wingStyle?: CharacterWingStyle;
@@ -686,12 +681,16 @@ export interface VisualIdentityApplication {
   title: string;
   notes?: string;
   productColor?: string;
-  scene?: 'studio' | 'warm' | 'dark' | 'paper';
-  material?: 'matte' | 'glossy' | 'fabric' | 'kraft';
+  scene?: 'studio' | 'warm' | 'dark' | 'paper' | 'softbox' | 'lifestyle';
+  material?: 'matte' | 'glossy' | 'fabric' | 'kraft' | 'cotton' | 'ceramic' | 'metal' | 'paper-texture';
+  printMode?: 'flat' | 'screenprint' | 'embroidered' | 'embossed' | 'sticker';
   artworkScale?: number;
   artworkX?: number;
   artworkY?: number;
   angle?: number;
+  artworkOpacity?: number;
+  shadowStrength?: number;
+  perspective?: number;
 }
 
 export interface VisualIdentityDocument {
@@ -781,6 +780,56 @@ export interface DataStoryDocument {
   aiPrompt?: string;
   aiNotes?: string[];
   updatedAt?: string;
+}
+
+
+export type GraphicToolMode = 'type' | 'brush' | 'spray' | 'pattern' | 'rapport' | 'compose' | 'ai';
+export type GraphicBrushKind = 'ink' | 'marker' | 'dry' | 'spray' | 'highlighter' | 'chalk';
+export type GraphicRepeatMode = 'grid' | 'half-drop' | 'mirror' | 'brick' | 'radial' | 'random';
+export interface GraphicStrokePoint { x:number; y:number; p?:number; }
+export interface GraphicElement {
+  id:string;
+  kind:'text' | 'stroke' | 'shape';
+  x:number; y:number; w:number; h:number;
+  rotation?:number;
+  scaleX?:number;
+  scaleY?:number;
+  skewX?:number;
+  color?:string;
+  opacity?:number;
+  text?:string;
+  fontFamily?:string;
+  fontSize?:number;
+  fontWeight?:number;
+  tracking?:number;
+  lineHeight?:number;
+  textStrokeWidth?:number;
+  textStrokeColor?:string;
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'difference';
+  warp?: 'none' | 'arc' | 'wave' | 'flag' | 'circle';
+  brush?: GraphicBrushKind;
+  size?:number;
+  points?:GraphicStrokePoint[];
+  shape?: 'circle' | 'square' | 'star' | 'blob';
+}
+export interface GraphicSystemDocument {
+  title:string;
+  width:number;
+  height:number;
+  background:string;
+  mode:GraphicToolMode;
+  elements:GraphicElement[];
+  activeElementId?:string;
+  palette:string[];
+  repeatMode:GraphicRepeatMode;
+  repeatGapX:number;
+  repeatGapY:number;
+  repeatScale:number;
+  repeatRotation:number;
+  patternPreview:boolean;
+  aiPrompt?:string;
+  aiNotes?:string[];
+  updatedAt?:string;
 }
 
 export type ApiCostModel = 'no-key' | 'free-tier' | 'open-self-hosted';
@@ -874,6 +923,8 @@ export interface ThoughtNode {
   apiConnectionsName?: string;
   dataStory?: DataStoryDocument;
   dataStoryName?: string;
+  graphicSystem?: GraphicSystemDocument;
+  graphicSystemName?: string;
   mediatorId?: string;
   scientificContext?: string;
   provocations?: string[];
