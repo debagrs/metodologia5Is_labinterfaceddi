@@ -196,7 +196,7 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   const s = selectedStyleVariant(a);
   const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving','minimal-lineart'].includes(s.family));
   if (s.family === 'minimal-lineart') {
-    const ink = a.lineColor || '#252525';
+    const ink = a.strokeEnabled === false ? 'none' : (a.lineColor || '#252525');
     const simplified = markup
       .replace(/fill="url\(#[^"]+\)"/gi, 'fill="none"')
       .replace(/fill="#[a-f\d]{6}"/gi, 'fill="none"')
@@ -258,5 +258,6 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
     markup = `<g filter="url(#cs-psy)">${markup}</g><path d="M108 78Q181 34 252 78" fill="none" stroke="#ff48b0" stroke-width="5" opacity=".35"/><path d="M118 102Q180 65 242 102" fill="none" stroke="#19d6ff" stroke-width="4" opacity=".32"/><ellipse cx="180" cy="255" rx="94" ry="155" fill="url(#cs-psy-stripe)" opacity=".14"/>`;
   }
 
+  if (a.strokeEnabled === false) markup = markup.replace(/stroke="[^"]+"/gi, 'stroke="none"');
   return { defs: `<defs>${defs}</defs>`, markup };
 }
