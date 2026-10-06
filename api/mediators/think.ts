@@ -733,9 +733,9 @@ function buildCharacterSvgMessages(body) {
   const c = body?.character || {};
   const system = `Você é concept artist, designer de personagens e ilustrador vetorial. Gere um SVG EDITÁVEL, autocontido, sem scripts, sem foreignObject e sem imagens externas. O ser pode ser HUMANO, ANIMAL, CRIATURA, MASCOTE ou HÍBRIDO. Quando species="hybrid", trate hybridPrimaryPreset, hybridSecondaryPreset e hybridBlend como um DNA visual explícito: preserve sinais reconhecíveis das duas bases sem simplesmente somar todas as partes. Respeite rigorosamente species, bodyPlan e partes opcionais recebidas: se browStyle, earStyle, muzzleStyle, tailStyle, wingStyle ou hornStyle forem "none", NÃO desenhe essa parte. Não force anatomia humana em quadrúpedes, aves, peixes, répteis, artrópodes ou seres serpentinos. Preserve locomoção, centro de massa e silhueta compatíveis com o plano corporal. Para animais estilizados, use anatomia observável como base antes de simplificar. Em híbridos, priorize silhueta coerente, centro de massa plausível e 2–4 traços fortes de cada origem; o valor hybridBlend indica qual base domina a morfologia.
 
-O campo artStyle define a linguagem visual: illustrated=realismo ilustrado com volume e íris detalhada; cartoon=cartoon expressivo; anime=anime com cel shading; manga=mangá monocromático; comic=quadrinhos; storybook=livro ilustrado; watercolor=aquarela vetorial; pencil=lápis/hachuras; ink=nanquim; chibi=proporções compactas; minimal-lineart=line art minimalista com traço simples/contínuo, foco no gesto e pouquíssimos detalhes; pixel-art=pixel art 2D em grade, paleta limitada e sprites; voxel=personagem 3D em blocos/cubos com rotação e leitura low-poly. Não entregue apenas figuras geométricas: use curvas anatômicas, articulações contínuas, mãos/patas coerentes, conexão do pescoço e cabelo com o rosto e acabamento consistente. Se houver bico, não desenhe nariz humano.
+O campo artStyle define a linguagem visual: illustrated=realismo ilustrado com volume e íris detalhada; cartoon=cartoon expressivo; anime=anime com cel shading; manga=mangá monocromático; comic=quadrinhos; storybook=livro ilustrado; watercolor=aquarela vetorial; pencil=lápis/hachuras; ink=nanquim; chibi=proporções compactas. Não entregue apenas figuras geométricas: use curvas anatômicas, articulações contínuas, mãos/patas coerentes, conexão do pescoço e cabelo com o rosto e acabamento consistente. Se houver bico, não desenhe nariz humano.
 Quando modo=refine, edite o SVG atual e preserve identidade, paleta, acessórios e partes não mencionadas no pedido. Quando modo=reference, as imagens enviadas são a fonte principal: preserve seus traços identificadores, silhueta e intenção autoral; a aparência modular é secundária. Quando modo=new, crie a partir do prompt e estilo selecionado. Nunca diga que leu uma imagem quando nenhuma foi enviada. O resultado é uma ilustração SVG, não uma reconstrução ou rig de animação automático.
-Princípios de projeto: silhueta clara, shape language coerente, leitura em tamanho pequeno, model sheet consistente, pose compatível com a espécie e acessibilidade cromática. Forma não determina personalidade de modo universal e não deve ser usada para estereotipar corpo, gênero, raça, deficiência, idade ou espécie. identityRepresentation pode ser man, woman ou open. Valores legados lgbtqia devem ser tratados como open. man e woman podem usar apenas um preset visual inicial suave e totalmente editável; open significa 'Prefiro não limitar' e não deve impor aparência. ageGroup pode ser baby, child, teen, adult ou older-adult; use diferenças visuais claras de proporção e sinais etários reconhecíveis, sem inferir personalidade, capacidade ou papel social. Use viewBox 0 0 360 520. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
+Princípios de projeto: silhueta clara, shape language coerente, leitura em tamanho pequeno, model sheet consistente, pose compatível com a espécie e acessibilidade cromática. Forma não determina personalidade de modo universal e não deve ser usada para estereotipar corpo, gênero, raça, deficiência, idade ou espécie. Use viewBox 0 0 360 520. Retorne SOMENTE JSON válido: {"svg":"<svg ...>...</svg>","notes":["decisão visual"]}.`;
   const user = `PEDIDO: ${String(body?.prompt || '')}
 NOME: ${String(c.name || '')}
 DESCRIÇÃO: ${String(c.description || '')}
@@ -751,12 +751,10 @@ SVG ATUAL PARA EDITAR (somente modo refine): ${body.characterSourceMode !== 'new
 }
 
 const CHARACTER_DESIGN_ENUMS = {
-  artStyle:['illustrated','cartoon','anime','manga','comic','storybook','watercolor','pencil','ink','chibi','engraving','lineart','minimal-lineart','realism','psychedelic','steampunk','pixel-art','voxel'],
-  styleVariant:['manga-shounen','manga-shoujo','manga-seinen','manga-chibi','manga-fashion','engraving-copper','engraving-woodcut','engraving-lino','lineart-ornamental','lineart-botanical','lineart-tattoo','minimal-lineart-continuous','minimal-lineart-editorial','minimal-lineart-boho','pixel-art-16','pixel-art-32','pixel-art-64','voxel-blocky','voxel-slim','voxel-chibi','realism-editorial','realism-concept','realism-scientific','psychedelic-70s','psychedelic-neon','psychedelic-surreal','steampunk-victorian','steampunk-diesel','steampunk-clockwork','comic-western','comic-noir','comic-indie','storybook-gouache','storybook-pencil','storybook-paper','anime-modern','anime-soft','cartoon-editorial','cartoon-rubber','illustrated-soft','watercolor-soft','pencil-graphite','ink-brush','chibi-kawaii'],
+  artStyle:['illustrated','cartoon','anime','manga','comic','storybook','watercolor','pencil','ink','chibi','engraving','lineart','realism','psychedelic','steampunk'],
+  styleVariant:['manga-shounen','manga-shoujo','manga-seinen','manga-chibi','manga-fashion','engraving-copper','engraving-woodcut','engraving-lino','lineart-ornamental','lineart-botanical','lineart-tattoo','realism-editorial','realism-concept','realism-scientific','psychedelic-70s','psychedelic-neon','psychedelic-surreal','steampunk-victorian','steampunk-diesel','steampunk-clockwork','comic-western','comic-noir','comic-indie','storybook-gouache','storybook-pencil','storybook-paper','anime-modern','anime-soft','cartoon-editorial','cartoon-rubber','illustrated-soft','watercolor-soft','pencil-graphite','ink-brush','chibi-kawaii'],
   species:['human','anthropomorphic','quadruped','bird','reptile','amphibian','fish','arthropod','fantasy','hybrid'],
   bodyPlan:['biped','quadruped','avian','serpentine','aquatic','six-limbed','eight-limbed','custom'],
-  identityRepresentation:['man','woman','open'],
-  ageGroup:['baby','child','teen','adult','older-adult'],
   headShape:['round','oval','square','heart','triangle','wide'], faceShape:['soft','angular','long','wide'], eyeStyle:['round','almond','narrow','dot','large','hooded','monolid','upturned','downturned'], browStyle:['none','soft','straight','arched','bold'], noseStyle:['none','small','straight','wide'], mouthStyle:['line','smile','full','small'], earStyle:['none','simple','round','pointed','long','floppy','large','fin'], hairStyle:['none','short','bob','long','curly','spiky','bun'],
   muzzleStyle:['none','short','long','round','beak-small','beak-long','beak-hooked'], tailStyle:['none','short','long','fluffy','curled','reptile','fish'], wingStyle:['none','feather','bat','fin'], hornStyle:['none','short','long','antlers','antennae'], surfaceStyle:['skin','fur-short','fur-long','feathers','scales','shell','chitin'], footStyle:['feet','paws','hooves','claws','talons','fins'], bodyShape:['slim','average','athletic','stocky','chibi'], torsoShape:['rectangle','trapezoid','round','triangle'], armStyle:['thin','regular','strong'], legStyle:['short','regular','long'], handStyle:['mitten','simple','defined'],
   outfitStyle:['none','basic','casual','sport','formal','fantasy','tech','street','school','kawaii','punk','steampunk','historical','scifi','workwear','elegant','adventure']
@@ -780,10 +778,8 @@ function buildCharacterDesignMessages(body) {
   const system=`Você é diretor(a) de arte, concept artist e especialista em character design modular. NÃO gere SVG. Seu trabalho é traduzir o pedido em decisões estruturadas que o renderizador determinístico da aplicação vai desenhar.
 
 A ordem é STYLE-FIRST: escolha primeiro a família visual e um subestilo coerente; depois refine espécie/plano corporal, rosto, proporções, figurino, acessórios e paleta. O estilo selecionado deve ser perceptível imediatamente e afetar características mínimas do personagem. Preserve anatomia e locomoção coerentes: não transforme ave, peixe, réptil, artrópode ou quadrúpede em humano com partes coladas. Híbridos devem ter uma base estrutural dominante e poucos sinais fortes da segunda base.
-Se identityRepresentation estiver presente, preserve-o. man=Homem, woman=Mulher, open=Prefiro não limitar. Valores legados lgbtqia devem ser convertidos para open. Homem e Mulher podem partir de presets visuais suaves, mas todos os parâmetros continuam editáveis e não determinam orientação, profissão, roupa, cor, personalidade ou comportamento.
-Se ageGroup estiver presente, preserve-o e torne a diferença VISUALMENTE LEGÍVEL: baby=Bebê com cabeça proporcionalmente maior, corpo e membros curtos e traços suaves; child=Criança com cabeça ainda ampliada e corpo menor; teen=Adolescente com corpo mais alongado e transição para proporções adultas; adult=Adulto como proporção-base; older-adult=Pessoa idosa com leve redução de estatura/postura e sinais faciais/capilares de idade. Nunca associe idade automaticamente a personalidade, capacidade, roupa, tecnologia assistiva ou papel social.
 
-Famílias/subestilos disponíveis: manga (manga-shounen, manga-shoujo, manga-seinen, manga-chibi, manga-fashion); engraving (engraving-copper, engraving-woodcut, engraving-lino); lineart (lineart-ornamental, lineart-botanical, lineart-tattoo); minimal-lineart (minimal-lineart-continuous, minimal-lineart-editorial, minimal-lineart-boho); pixel-art (pixel-art-16, pixel-art-32, pixel-art-64); voxel (voxel-blocky, voxel-slim, voxel-chibi); realism (realism-editorial, realism-concept, realism-scientific); psychedelic (psychedelic-70s, psychedelic-neon, psychedelic-surreal); steampunk (steampunk-victorian, steampunk-diesel, steampunk-clockwork); comic (comic-western, comic-noir, comic-indie); storybook (storybook-gouache, storybook-pencil, storybook-paper); anime (anime-modern, anime-soft); cartoon (cartoon-editorial, cartoon-rubber); illustrated (illustrated-soft); watercolor (watercolor-soft); pencil (pencil-graphite); ink (ink-brush); chibi (chibi-kawaii).
+Famílias/subestilos disponíveis: manga (manga-shounen, manga-shoujo, manga-seinen, manga-chibi, manga-fashion); engraving (engraving-copper, engraving-woodcut, engraving-lino); lineart (lineart-ornamental, lineart-botanical, lineart-tattoo); realism (realism-editorial, realism-concept, realism-scientific); psychedelic (psychedelic-70s, psychedelic-neon, psychedelic-surreal); steampunk (steampunk-victorian, steampunk-diesel, steampunk-clockwork); comic (comic-western, comic-noir, comic-indie); storybook (storybook-gouache, storybook-pencil, storybook-paper); anime (anime-modern, anime-soft); cartoon (cartoon-editorial, cartoon-rubber); illustrated (illustrated-soft); watercolor (watercolor-soft); pencil (pencil-graphite); ink (ink-brush); chibi (chibi-kawaii).
 
 Figurinos disponíveis: none, basic, casual, sport, formal, fantasy, tech, street, school, kawaii, punk, steampunk, historical, scifi, workwear, elegant, adventure.
 Acessórios combináveis: glasses, sunglasses, goggles, monocle, hat, cap, beanie, hood, bandana, headband, hairclip, flower, tiara, scarf, cape, backpack, satchel, headphones, earrings, necklace, brooch, bow, crown, bracelet, watch, belt, pouch, shoulderpad, mask.
@@ -853,6 +849,36 @@ PERGUNTAS/RESPOSTAS DO AUTOR: ${JSON.stringify(questions)}`;
   return {system,user};
 }
 
+
+
+function cleanGraphicExperimentJson(text) {
+  const data=extractJsonObject(text);
+  const allowedKinds=new Set(['text','shape']);
+  const allowedShapes=new Set(['circle','square','star','blob']);
+  const allowedWarps=new Set(['none','arc','wave','flag','circle']);
+  return {
+    elements:Array.isArray(data.elements)?data.elements.slice(0,18).map((item,index)=>({
+      kind:allowedKinds.has(String(item?.kind))?String(item.kind):'shape',
+      text:String(item?.text||'GRAFISMO').slice(0,140),
+      fontFamily:String(item?.fontFamily||'Space Grotesk').slice(0,120),
+      fontSize:Math.max(18,Math.min(220,Number(item?.fontSize)||72)),
+      fontWeight:Math.max(100,Math.min(900,Number(item?.fontWeight)||700)),
+      tracking:Math.max(-8,Math.min(36,Number(item?.tracking)||0)),
+      warp:allowedWarps.has(String(item?.warp))?String(item.warp):'none',
+      shape:allowedShapes.has(String(item?.shape))?String(item.shape):'blob',
+      x:Math.max(0,Number(item?.x)||80+index*24), y:Math.max(0,Number(item?.y)||100+index*20),
+      w:Math.max(40,Math.min(620,Number(item?.w)||220)), h:Math.max(40,Math.min(420,Number(item?.h)||180)),
+      rotation:Math.max(-180,Math.min(180,Number(item?.rotation)||0)),
+      color:/^#[0-9a-f]{6}$/i.test(String(item?.color||''))?String(item.color):'#111111',
+    })):[],
+    notes:Array.isArray(data.notes)?data.notes.slice(0,8).map((x)=>String(x).slice(0,360)):[],
+  };
+}
+function buildGraphicExperimentMessages(body) {
+  const system=`Você é designer gráfico experimental especializado em tipografia, gestualidade, sistemas modulares, padrões e rapports. Proponha uma composição editável, não uma imagem final fechada. Evite imitar marcas/artistas específicos. Trabalhe com relações entre texto, forma, ritmo, repetição, contraste e gesto. Retorne SOMENTE JSON válido no formato {"elements":[{"kind":"text|shape","text":"...","fontFamily":"Space Grotesk","fontSize":72,"fontWeight":700,"tracking":0,"warp":"none|arc|wave|flag|circle","shape":"circle|square|star|blob","x":80,"y":120,"w":240,"h":160,"rotation":0,"color":"#111111"}],"notes":["..."]}. Gere entre 4 e 12 elementos, usando apenas as cores fornecidas quando possível.`;
+  const user=`PEDIDO: ${String(body?.prompt||'')}\nPALETA: ${JSON.stringify(body?.palette||[])}\nÁREA: ${Number(body?.width)||900} × ${Number(body?.height)||900}`;
+  return {system,user};
+}
 
 function cleanBrandRefinementJson(text) {
   const data = extractJsonObject(text);
@@ -1388,6 +1414,13 @@ CORREÇÃO OBRIGATÓRIA: devolva JSON puro, sem markdown, e crie pelo menos uma 
     return { dataStory: cleanDataStoryJson(result.text), provider: result.provider, model: result.model };
   }
 
+  if (body?.mode === 'graphic-experiment') {
+    if (!String(body?.prompt || '').trim()) throw new Error('Descreva o experimento gráfico que deseja gerar.');
+    const { system, user } = buildGraphicExperimentMessages(body);
+    const result = await callGeminiStructured(system, user, 3600, Number(process.env.AI_GRAPHICS_TIMEOUT_MS || 35000), 0.24);
+    return { graphicExperiment: cleanGraphicExperimentJson(result.text), provider: result.provider, model: result.model };
+  }
+
   if (body?.mode === 'brand-refine') {
     const { system, user } = buildBrandRefinementMessages(body);
     const result = await callGeminiStructured(system, user, 2400, Number(process.env.AI_BRAND_TIMEOUT_MS || 35000), 0.18);
@@ -1500,4 +1533,3 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-
