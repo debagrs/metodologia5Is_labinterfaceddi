@@ -1,4 +1,6 @@
 import { characterStyle, styledAppearance, styleCharacterMarkup } from './characterStyles';
+
+const outlineColor=(a:CharacterAppearance,fallback='#382a29')=>a.strokeEnabled===false?'none':color(a.lineColor,fallback);
 import { metric, normalizeAppearance, characterAccessories } from './characterControls';
 import type {
   CharacterAppearance,
@@ -283,6 +285,26 @@ function hair(a: CharacterAppearance, back: boolean) {
     return `<g><path d="M133 108Q124 58 160 42Q191 35 214 53Q235 71 227 108Q212 93 205 79Q178 89 154 85Q143 98 133 108Z" fill="${h}"/><path d="M141 111q-13 26-8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M220 111q13 26 8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M137 127l10 9m-10 10l10 9m76-28l-10 9m10 10l-10 9" stroke="${light}" stroke-width="2" opacity=".5"/></g>`;
   if (a.hairStyle === "ponytail")
     return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M207 109Q239 122 231 154Q226 178 205 174Q219 143 207 109Z" fill="${h}"/></g>`;
+  if (a.hairStyle === "lob")
+    return `<g><path d="M130 105Q122 54 158 41Q192 32 218 50Q238 69 230 145Q215 162 204 150L204 92Q180 104 154 94L151 150Q137 162 126 145Z" fill="${h}"/><path d="M150 57q28-13 53 2" stroke="${light}" stroke-width="2" opacity=".5" fill="none"/></g>`;
+  if (a.hairStyle === "extra-long")
+    return `<g><path d="M130 104Q121 53 157 40Q192 31 218 49Q240 68 229 114L232 247Q215 270 201 246L202 91Q178 103 153 92L153 246Q139 270 123 247L130 104Z" fill="${h}"/><path d="M144 71q31-24 62-7M140 174q21 12 42 0m9 0q18 12 35 0" stroke="${light}" stroke-width="2" opacity=".4" fill="none"/></g>`;
+  if (a.hairStyle === "layered-long")
+    return `<g><path d="M131 105Q122 52 158 39Q193 31 219 51Q237 70 228 118L220 218Q205 245 194 219L199 95Q180 106 160 96L155 219Q144 245 130 218L131 105Z" fill="${h}"/><path d="M137 140q18 18 34 5m18 0q19 14 35-5M136 179q19 17 36 4m17 0q18 15 33-4" stroke="${light}" stroke-width="2.4" opacity=".45" fill="none"/></g>`;
+  if (a.hairStyle === "locs-long")
+    return `<g fill="${h}"><path d="M133 105Q125 57 158 43Q189 35 214 51Q234 65 227 108Q212 93 206 78Q180 90 154 85Q143 98 133 105Z"/>${[143,156,169,182,195,208,221].map((x,i)=>`<rect x="${x}" y="${92+(i%2)*4}" width="10" height="${100+(i%3)*18}" rx="5"/>`).join('')}</g>`;
+  if (a.hairStyle === "box-braids")
+    return `<g><path d="M133 106Q124 58 160 42Q193 34 216 54Q234 72 226 108" fill="${h}"/>${[140,152,164,176,188,200,212,224].map((x,i)=>`<path d="M${x} ${92+(i%2)*5}q${(i%2?5:-5)} 52 ${i%2?2:-2} 116" stroke="${h}" stroke-width="9" stroke-linecap="round" fill="none"/>`).join('')}</g>`;
+  if (a.hairStyle === "cornrows")
+    return `<g><path d="M140 92Q143 47 180 42Q217 47 220 92" fill="${h}" opacity=".9"/>${[-28,-18,-8,2,12,22,32].map((dx)=>`<path d="M${180+dx} 45Q${180+dx*.8} 66 ${180+dx*.55} 96" fill="none" stroke="${light}" stroke-width="3" opacity=".55"/>`).join('')}</g>`;
+  if (a.hairStyle === "high-ponytail")
+    return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M198 47Q239 16 244 58Q249 95 216 105Q222 71 198 47Z" fill="${h}"/></g>`;
+  if (a.hairStyle === "pigtails")
+    return `<g><path d="M132 104Q123 58 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M137 92Q101 102 111 143Q120 169 139 144Q129 116 137 92Z" fill="${h}"/><path d="M223 92Q259 102 249 143Q240 169 221 144Q231 116 223 92Z" fill="${h}"/></g>`;
+  if (a.hairStyle === "half-up")
+    return `<g><path d="M131 105Q122 52 158 39Q193 31 219 51Q237 70 228 118L219 204Q205 228 195 205L199 95Q179 106 158 94L154 205Q142 228 130 204Z" fill="${h}"/><ellipse cx="180" cy="43" rx="24" ry="18" fill="${h}"/></g>`;
+  if (a.hairStyle === "double-bun")
+    return `<g><path d="M133 108Q124 58 160 42Q191 35 214 53Q235 71 227 108Q212 93 205 79Q178 89 154 85Q143 98 133 108Z" fill="${h}"/><ellipse cx="139" cy="48" rx="22" ry="20" fill="${h}"/><ellipse cx="221" cy="48" rx="22" ry="20" fill="${h}"/></g>`;
   if (a.hairStyle === "blunt")
     d = "M133 104Q126 54 164 41Q192 35 214 52Q231 67 228 111Q215 108 206 98Q176 105 153 99Q142 107 133 104Z";
   if (a.hairStyle === "bob")
@@ -330,7 +352,7 @@ function eyes(a: CharacterAppearance, expression: string) {
     .join("");
 }
 function face(a: CharacterAppearance, expression: string, animal = false) {
-  const line = color(a.lineColor, "#382a29"),
+  const line = outlineColor(a, "#382a29"),
     skin = color(a.surfaceColor || a.skinColor, "#EAC3A9");
   let jaw =
     "M135 100C133 151 151 180 180 182C207 179 225 151 225 100C226 36 134 36 135 100Z";
@@ -519,6 +541,8 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
 }
 
 function animalHead(a: CharacterAppearance, expression: string) {
+  const personalityExpression = a.animalPersonality && a.animalPersonality !== 'neutral' && expression === 'neutral' ? ({gentle:'calm',curious:'surprised',brave:'determined',shy:'worried',ferocious:'angry',playful:'happy',mysterious:'calm'} as Record<string,string>)[a.animalPersonality] : expression;
+  expression = personalityExpression || expression;
   const fill=color(a.surfaceColor || a.skinColor,'#D4AD80');
   const line=color(a.lineColor,'#382a29');
   const eye=color(a.eyeColor,'#49372F');
@@ -604,7 +628,7 @@ function animalHead(a: CharacterAppearance, expression: string) {
 
 function wings(a: CharacterAppearance, x: number, y: number) {
   const fill = color(a.wingColor || a.surfaceColor || a.skinColor, "#EAC3A9"),
-    line = color(a.lineColor, "#382a29");
+    line = outlineColor(a, "#382a29");
   if (!a.wingStyle || a.wingStyle === "none") return "";
   return [-1, 1]
     .map(
@@ -622,7 +646,7 @@ function tail(a: CharacterAppearance, x: number, y: number) {
 }
 
 function wheelchairArt(a: CharacterAppearance) {
-  const line = color(a.lineColor, '#382a29');
+  const line = outlineColor(a, '#382a29');
   const frame = color(a.wheelchairColor, '#4C5968');
   const tire = tint(line, -8);
   const rim = tint(frame, 78);
@@ -651,7 +675,7 @@ function wheelchairArt(a: CharacterAppearance) {
 }
 
 function inclusiveSupports(a: CharacterAppearance, feet: P[]) {
-  const line = color(a.lineColor, '#382a29');
+  const line = outlineColor(a, '#382a29');
   const steel = tint(line, 120);
   const [leftFoot, rightFoot] = feet;
   let art = '';
@@ -677,7 +701,7 @@ function biped(
   adjustments: Record<string,number>={},
 ) {
   const skin = color(a.surfaceColor || a.skinColor, "#EAC3A9"),
-    line = color(a.lineColor, "#382a29"),
+    line = outlineColor(a, "#382a29"),
     shirt = color(a.outfitPrimary, "#3D8C8C"),
     pants = color(a.outfitSecondary, "#465D75");
   const inWheelchair = a.mobilityAid === "wheelchair";
@@ -791,7 +815,7 @@ function biped(
 function surfaceAccent(a: CharacterAppearance): string {
   const style = a.surfaceStyle;
   if (!style || style === "skin") return "";
-  const line = color(a.lineColor, "#382a29");
+  const line = outlineColor(a, "#382a29");
   const marks = Array.from({length: 20}, (_, i) => {
     const x = 156 + (i % 4) * 15, y = 278 + Math.floor(i / 4) * 15;
     return style === "scales" ? `<path d="M${x-5} ${y}q5 8 10 0"/>` : style === "feathers" ? `<path d="M${x-4} ${y}q4 14 8 0m-4 1v8"/>` : style === "shell" || style === "chitin" ? `<path d="M${x-5} ${y}h10"/>` : `<path d="M${x-2} ${y}l3 -5m0 7l3 -5"/>`;
@@ -808,15 +832,41 @@ function animal(
   adjustments:Record<string,number>={},
 ) {
   const fill = color(a.surfaceColor || a.skinColor, "#D4AD80"),
-    line = color(a.lineColor, "#382a29");
+    line = outlineColor(a, "#382a29");
   const wave = Math.sin(phase * Math.PI * 2),
     r = characterRig(pose, phase);
+  if (a.bodyPlan === 'aquatic' || a.species === 'fish') {
+    const preset=String(a.speciesPreset||'fish');
+    const hs=Math.max(.65,Math.min(1.65,a.animalHeadScale||1));
+    const eyeScale=Math.max(.45,Math.min(1.9,a.animalEyeScale||a.eyeSize||1));
+    const mouthScale=Math.max(.4,Math.min(1.8,a.animalMouthScale||a.mouthSize||1));
+    const swing=(pose==='swim'||pose==='action'||pose==='neutral')?Math.sin(phase*Math.PI*2)*15:0;
+    const bodyX=188, bodyY=302;
+    const personality=a.animalPersonality||'neutral';
+    const eyeY=personality==='shy'?291:personality==='ferocious'?296:289;
+    const brow=personality==='ferocious'?`<path d="M111 278l20 7m22-7-20 7" fill="none" stroke="${line}" stroke-width="3"/>`:personality==='curious'?`<path d="M112 277q10-7 20 0m20 0q10-7 20 0" fill="none" stroke="${line}" stroke-width="2"/>`:'';
+    const eyes=`<g><ellipse cx="126" cy="${eyeY}" rx="${10*eyeScale}" ry="${11*eyeScale}" fill="#fff" stroke="${line}" stroke-width="2"/><circle cx="126" cy="${eyeY}" r="${4.5*eyeScale}" fill="${color(a.eyeColor,'#4A3328')}"/><circle cx="123" cy="${eyeY-3}" r="${1.5*eyeScale}" fill="#fff"/></g>${brow}`;
+    const mouth=`<path d="M${96-mouthScale*8} 318q${mouthScale*8} ${personality==='gentle'||personality==='playful'?8:2} ${mouthScale*17} 0" fill="none" stroke="${line}" stroke-width="${1.8*Math.max(.7,mouthScale)}"/>`;
+    const baseBody=preset==='puffer'
+      ? `<ellipse cx="${bodyX}" cy="${bodyY}" rx="82" ry="72" fill="${fill}"/><path d="M145 237l9-18 7 20m30-6 8-18 8 21m37 20 18-9-8 20m-6 47 17 7-18 10m-49 31 7 18-18-10m-48-11-8 17-9-18" fill="none" stroke="${line}" stroke-width="3"/>`
+      : preset==='ray'
+        ? `<path d="M88 305Q130 232 190 258Q248 232 292 305Q248 333 203 324Q191 351 180 392Q169 349 158 324Q124 333 88 305Z" fill="${fill}"/>`
+        : preset==='seahorse'
+          ? `<path d="M150 235Q110 264 132 315Q151 349 180 329Q213 307 193 280Q176 258 155 272Q181 282 171 300Q163 314 150 305Q137 293 145 279" fill="${fill}"/><path d="M172 327Q223 334 216 384Q211 412 183 401Q207 394 202 376Q197 357 174 361Z" fill="none" stroke="${fill}" stroke-width="24" stroke-linecap="round"/>`
+          : preset==='shark'
+            ? `<path d="M82 305Q126 248 230 266L304 ${235+swing}L286 303L305 ${365-swing}L228 338Q130 352 82 305Z" fill="${fill}"/><path d="M185 270l33-48 24 55" fill="${tint(fill,-14)}"/>`
+            : `<path d="M80 305Q118 244 229 263L305 ${237+swing}L285 304L305 ${369-swing}L228 343Q116 356 80 305Z" fill="${fill}"/><path d="M174 268Q193 227 220 269" fill="${tint(fill,-12)}"/><path d="M166 340Q192 379 218 338" fill="${tint(fill,-12)}"/>`;
+    const gills=`<path d="M154 306q10 9 0 20m10-18q9 9 0 17" fill="none" stroke="${line}" stroke-width="2" opacity=".55"/>`;
+    const texture=a.surfaceStyle==='scales'?`<g fill="none" stroke="${line}" stroke-width=".8" opacity=".16">${Array.from({length:18},(_,i)=>{const x=166+(i%6)*13,y=285+Math.floor(i/6)*16;return `<path d="M${x-5} ${y}q5 8 10 0"/>`;}).join('')}</g>`:'';
+    const headGroup=`<g transform="translate(115 305) scale(${hs}) translate(-115 -305)">${eyes}${mouth}</g>`;
+    return `<g transform="translate(0 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 180 310)">${baseBody}${texture}${headGroup}${gills}${accessories(a,'body-front')}</g>`;
+  }
   if(a.bodyPlan==='quadruped' && (view==='side' || view==='three-quarter')){
    const running=pose==='run',gait=running || pose==='walk',standing=pose!=='sit';
    const torsoX=192,torsoY=pose==='sit'?326:300,torsoW=68*(a.bodyWidth || 1)*metric(a,'waistWidth'),torsoH=42,limb=(a.limbLength || 1)*metric(a,'legLength');
    const legs=[0,1,2,3].map(i=>{const near=i%2===1,front=i<2,origin=pt(torsoX+(front?-45:43),torsoY+20+(near?5:-6)),angle=gait?Math.sin(phase*Math.PI*2+(i===0||i===3?0:Math.PI))*(running?45:26):pose==='sit'&&!front?65:0;const length=(a.limbLength || 1)*metric(a,front?'armLength':'legLength');const knee=joint(origin,39*length,angle+(adjustments[front?(near?'ar':'al'):(near?'lr':'ll')]||0));const foot=joint(knee,38*length,angle+(standing?Math.max(0,-angle)*1.2:-60)+(adjustments[front?(near?'er':'el'):(near?'kr':'kl')]||0));const fillLeg=near?fill:tint(fill,-25);return `<g>${link(origin,knee,foot,18*metric(a,front?'armWidth':'legWidth'),fillLeg,line)}${ellipse(foot.x-3,foot.y+3,13*metric(a,front?'handSize':'footSize'),7,fillLeg)}</g>`;});
    const neck=`<path d="M${torsoX-49} ${torsoY-7}Q109 284 109 239L142 240Q149 267 ${torsoX-18} ${torsoY-30}Z" fill="${fill}"/>`;
-   const head=around(animalHead({...a,hairStyle:'none'},expression),180,165,.74*metric(a,'headWidth'),.74*metric(a,'headHeight'),adjustments.headTilt||0);
+   const animalHeadScale=Math.max(.65,Math.min(1.65,a.animalHeadScale||1)); const head=around(animalHead({...a,hairStyle:'none'},expression),180,165,.74*metric(a,'headWidth')*animalHeadScale,.74*metric(a,'headHeight')*animalHeadScale,adjustments.headTilt||0);
    return `<g transform="translate(0 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 180 310)">${legs.filter((_,i)=>i%2===0).join('')}${tail(a,torsoX+torsoW-8,torsoY)}${ellipse(torsoX,torsoY,torsoW,torsoH,fill)}${neck}${wings(a,torsoX,torsoY-12)}${legs.filter((_,i)=>i%2===1).join('')}<g transform="translate(-63 85) scale(${view==='side'?.84:1} 1)">${head}</g>${accessories(a,'body-front')}</g>`;
   }
   let body = "";
@@ -879,7 +929,8 @@ function animal(
         .join("") +
       "</g>";
   body += surfaceAccent(a);
-  const scaledHead = `<g transform="translate(180 287) rotate(${adjustments.headTilt||0}) scale(${metric(a,"headWidth")} ${metric(a,"headHeight")}) translate(-180 -177)">${view === "back" ? ellipse(180, 122, 46, 59, fill) : animalHead({ ...a, hairStyle: "none" }, expression)}</g>`;
+  const genericAnimalHeadScale=Math.max(.65,Math.min(1.65,a.animalHeadScale||1));
+  const scaledHead = `<g transform="translate(180 287) rotate(${adjustments.headTilt||0}) scale(${metric(a,"headWidth")*genericAnimalHeadScale} ${metric(a,"headHeight")*genericAnimalHeadScale}) translate(-180 -177)">${view === "back" ? ellipse(180, 122, 46, 59, fill) : animalHead({ ...a, hairStyle: "none" }, expression)}</g>`;
   return `<g transform="translate(180 ${r.lift}) rotate(${r.lean+(adjustments.lean||0)} 0 310) scale(${a.bodyWidth || 1} 1) translate(-180 0)">${accessories(a,"body-back")}${wings(a, 180, 280)}${body}${scaledHead}${accessories(a,"body-front")}</g>`;
 }
 export function illustrateCharacter(
@@ -891,7 +942,7 @@ export function illustrateCharacter(
   portrait = false,
 ): string {
   const a = styledAppearance(normalizeAppearance(document.appearance!));
-  const line = color(a.lineColor, "#382a29");
+  const line = outlineColor(a, "#382a29");
   const fit = Math.min(
     1,
     1 /
@@ -905,5 +956,5 @@ export function illustrateCharacter(
       ? biped(a, view, expression, pose, phase,document.poseAdjustments?.[pose] as Record<string,number>)
       : animal(a, view, expression, pose, phase,document.poseAdjustments?.[pose] as Record<string,number>);
   const styled = styleCharacterMarkup(body, a);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="520" viewBox="${portrait ? (a.artStyle === "chibi" ? "50 -35 260 240" : "85 20 190 185") : "0 0 360 520"}">${styled.defs}<g stroke="${line}" stroke-width="${metric(a,"strokeWidth",1.8)}" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(180 260) scale(${portrait ? 1 : fit}) translate(-180 -260)">${styled.markup}</g></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="520" viewBox="${portrait ? (a.artStyle === "chibi" ? "50 -35 260 240" : "85 20 190 185") : "0 0 360 520"}">${styled.defs}<g stroke="${line}" stroke-width="${a.strokeEnabled===false?0:metric(a,"strokeWidth",1.8)}" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(180 260) scale(${portrait ? 1 : fit}) translate(-180 -260)">${styled.markup}</g></g></svg>`;
 }
