@@ -348,7 +348,16 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
       "M128 100C125 149 143 179 180 181C216 180 236 150 232 100C234 36 126 36 128 100Z";
   if (a.headShape === "triangle")
     jaw = "M128 98C126 32 234 32 232 98L209 152Q185 183 180 183Q170 182 151 152Z";
-  const ageFaceScale = a.ageGroup === 'baby' ? 1.1 : a.ageGroup === 'child' ? 1.05 : a.ageGroup === 'older-adult' ? 0.96 : 1;
+  // Age is a structural characteristic, not a color filter. These silhouettes
+  // deliberately override part of the selected head shape so baby/child/older
+  // characters remain visually legible even inside strongly stylised families.
+  if (!animal && a.ageGroup === 'baby')
+    jaw = "M126 101C122 148 143 181 180 183C218 181 239 148 234 101C237 22 123 22 126 101Z";
+  if (!animal && a.ageGroup === 'child')
+    jaw = "M130 102C126 149 146 181 180 182C215 181 235 149 230 102C232 29 128 29 130 102Z";
+  if (!animal && a.ageGroup === 'older-adult')
+    jaw = "M136 97C132 143 143 174 160 181Q180 190 200 181C218 171 229 143 224 97C226 39 134 39 136 97Z";
+  const ageFaceScale = a.ageGroup === 'baby' ? 1.16 : a.ageGroup === 'child' ? 1.09 : a.ageGroup === 'older-adult' ? 0.95 : 1;
   const faceWidth =
     (a.faceShape === "wide" ? 1.1 : a.faceShape === "long" ? 0.9 : 1) * ageFaceScale;
   let browY = 89 + metric(a,"browHeight",0),
@@ -498,13 +507,13 @@ function face(a: CharacterAppearance, expression: string, animal = false) {
       ? ellipse(180, 123, 70, 77, color(a.hairColor, "#94622F"))
       : "";
   const ageMarks = !animal && a.ageGroup === 'older-adult'
-    ? `<g fill="none" stroke="${tint(skin,-50)}" stroke-width="1" opacity=".48" stroke-linecap="round"><path d="M144 118q7 5 13 1m46 0q7 4 13 0"/><path d="M159 146q5 9 10 13m31-13q-5 9-10 13"/><path d="M152 98q8-4 16-2m24 0q8-2 16 2"/><path d="M151 159q12 7 23 6m14 0q11 0 21-6"/><path d="M171 129q3 4 9 4q6 0 9-4"/></g>`
+    ? `<g fill="none" stroke="${tint(skin,-54)}" stroke-width="1.05" opacity=".55" stroke-linecap="round"><path d="M143 116q8 5 15 1m44 0q8 5 15 0"/><path d="M157 145q6 10 12 14m32-14q-6 10-12 14"/><path d="M151 96q9-5 18-2m22 0q9-3 18 2"/><path d="M150 159q12 8 24 7m13 0q12 1 23-7"/><path d="M169 128q4 5 11 5q7 0 11-5"/><path d="M146 126q6 3 12 1m44 0q6 3 12-1"/><path d="M164 170q16 7 32 0"/></g>`
     : '';
   const ageHairMarks = !animal && a.ageGroup === 'older-adult' && a.hairStyle !== 'none'
-    ? `<g fill="none" stroke="#D8D3CF" stroke-width="3" opacity=".72" stroke-linecap="round"><path d="M145 76q-10 15-8 34"/><path d="M215 76q10 15 8 34"/><path d="M163 58q-4 11-3 24"/><path d="M197 58q4 11 3 24"/></g>`
+    ? `<g fill="none" stroke="#D6D2CE" stroke-width="3.4" opacity=".82" stroke-linecap="round"><path d="M143 74q-10 17-7 38"/><path d="M217 74q10 17 7 38"/><path d="M156 58q-5 13-4 29"/><path d="M171 51q-3 14-2 29"/><path d="M189 51q3 14 2 29"/><path d="M204 58q5 13 4 29"/></g>`
     : '';
   const babyFaceMarks = !animal && a.ageGroup === 'baby'
-    ? `<g stroke="none"><ellipse cx="149" cy="139" rx="14" ry="8" fill="#E7A19A" opacity=".3"/><ellipse cx="211" cy="139" rx="14" ry="8" fill="#E7A19A" opacity=".3"/><ellipse cx="180" cy="166" rx="18" ry="7" fill="#fff" opacity=".08"/></g>`
+    ? `<g stroke="none"><ellipse cx="148" cy="140" rx="15" ry="9" fill="#E7A19A" opacity=".34"/><ellipse cx="212" cy="140" rx="15" ry="9" fill="#E7A19A" opacity=".34"/><ellipse cx="180" cy="164" rx="20" ry="8" fill="#fff" opacity=".1"/></g>`
     : '';
   return `<g transform="translate(180 0) scale(${faceWidth} 1) translate(-180 0)">${mane}${around(horns,180,77,metric(a,"hornSize")).replaceAll(tint(skin,30),color(a.hornColor,tint(skin,30)))}${animal ? "" : around(hair(a, true),180,90,metric(a,"hairVolume"))}${ageHairMarks}${around(ears,180,103,metric(a,'earSize'),metric(a,'earSize'),metric(a,'earAngle',0)).replaceAll(skin,color(a.earColor,skin))}<path d="${jaw}" fill="${skin}"/>${shadow}${modeling}${ellipse(151, 134, 10, 5, "#DB908A", 'stroke="none" opacity=".22"')}${ellipse(210, 134, 10, 5, "#DB908A", 'stroke="none" opacity=".22"')}${babyFaceMarks}${eyes(a, expression)}${brows}${nose}${muzzle}${mouth}${freckles}${ageMarks}${a.whiskers ? around('<path d="M156 143l-20 -4m20 9l-23 5m71-10l20-4m-20 9l23 5" fill="none" stroke-width="1.1"/>',180,143,metric(a,'whiskerLength'),1) : ""}${animal ? "" : around(hair(a, false),180,90,metric(a,"hairVolume"))}${accessories(a,"head")}</g>`;
 }
@@ -752,11 +761,11 @@ function biped(
   else if (a.outfitStyle === "adventure") details = '<path d="M153 205L207 205L202 271H158Z" fill="'+tint(shirt,-12)+'"/><path d="M158 217h44M180 205v66" stroke="'+pants+'" stroke-width="4"/><path d="M151 274h58" stroke="#77583F" stroke-width="7"/>';
   else if (a.outfitStyle === "casual") details = '<path d="M159 204Q180 214 201 204" fill="none" stroke="'+tint(shirt,-28)+'" stroke-width="3"/><path d="M166 248h28" stroke="'+tint(shirt,-20)+'" stroke-width="2" opacity=".55"/>';
   const body = `${wings(a, 180, 220)}${tail(a, 210, 275)}${inclusiveSupports(a, [fl, fr])}${link(sl, el, wl, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(sr, er, wr, (a.armStyle === "strong" ? 23 : a.armStyle === "thin" ? 14 : 18)*metric(a,"armWidth"), skin, line)}${link(hl, kl, fl, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${link(hr, kr, fr, 28*metric(a,"legWidth"), a.outfitStyle === "none" ? skin : pants, line)}${shoe(fl, -1)}${shoe(fr, 1)}${lower}${sleeves}${torso}${neck}${details}<path d="M${180 - shoulder + 9} 215Q${180 - shoulder + 3} 252 ${180 - 24 * width} 279Q180 294 ${180 + 27 * width} 279" fill="none" stroke="${tint(shirt, -25)}" stroke-width="4" opacity=".35"/><path d="M166 181Q180 192 194 181" stroke="${tint(shirt, -45)}" fill="none"/>${hand(wl, -1)}${hand(wr, 1)}`;
-  const ageHeadBoost = a.ageGroup === 'baby' ? 1.16 : a.ageGroup === 'child' ? 1.1 : a.ageGroup === 'teen' ? 1.03 : a.ageGroup === 'older-adult' ? 0.98 : 1;
+  const ageHeadBoost = a.ageGroup === 'baby' ? 1.34 : a.ageGroup === 'child' ? 1.2 : a.ageGroup === 'teen' ? 1.04 : a.ageGroup === 'older-adult' ? 0.97 : 1;
   const headScale = clamp(
     ((a.bodyShape === "chibi" ? 5.5 : 4.8) / (a.headToBodyRatio || 4.8)) * ageHeadBoost,
-    0.72,
-    1.42,
+    0.7,
+    1.58,
   );
   const profile = `<path d="M153 80Q188 65 211 94L212 114L227 132Q224 140 211 141L209 161Q201 178 179 179L154 162Q139 113 153 80Z" fill="${skin}"/><path d="M201 109Q209 103 216 110" fill="none" stroke-width="2"/>${ellipse(209, 111, 3, 4, color(a.eyeColor, line))}<path d="M198 150L210 151" fill="none"/>${ellipse(156, 118, 9, 15, skin)}${hair(a, false)}`;
   const headRaw =
@@ -766,13 +775,17 @@ function biped(
         ? `<path d="M135 100Q133 173 180 182Q227 173 225 100Z" fill="${skin}"/><path d="M133 112Q119 37 180 37Q241 37 227 112L218 143Q180 156 142 143Z" fill="${color(a.hairColor, "#604136")}"/>`
         : face(a, expression);
   const visionGlasses = a.visionAid === 'dark-glasses' ? `<g stroke="${line}" stroke-width="2.5" fill="${tint(line,-20)}"><rect x="141" y="99" width="33" height="24" rx="8"/><rect x="186" y="99" width="33" height="24" rx="8"/><path d="M174 108Q180 104 186 108" fill="none" stroke="${line}"/></g>` : '';
-  const head = `<g transform="rotate(${adjustments.headTilt||0} 180 177)"><g transform="translate(180 177) scale(${headScale*metric(a,'headWidth')} ${headScale*metric(a,'headHeight')}) translate(-180 -177)">${headRaw}${visionGlasses}${view==='front' || view==='three-quarter'?'':accessories(a,'head')}</g></g>`;
+  const ageHeadShiftX = a.ageGroup === 'older-adult' ? 7 : 0;
+  const ageHeadShiftY = a.ageGroup === 'baby' ? -3 : a.ageGroup === 'child' ? -2 : a.ageGroup === 'older-adult' ? 7 : 0;
+  const ageHeadTilt = a.ageGroup === 'older-adult' ? 5 : 0;
+  const head = `<g transform="translate(${ageHeadShiftX} ${ageHeadShiftY}) rotate(${(adjustments.headTilt||0)+ageHeadTilt} 180 177)"><g transform="translate(180 177) scale(${headScale*metric(a,'headWidth')} ${headScale*metric(a,'headHeight')}) translate(-180 -177)">${headRaw}${visionGlasses}${view==='front' || view==='three-quarter'?'':accessories(a,'head')}</g></g>`;
   const viewX = view === "side" ? 0.62 : view === "three-quarter" ? 0.88 : 1;
-  const ageBodyScaleY = a.ageGroup === 'baby' ? .5 : a.ageGroup === 'child' ? .68 : a.ageGroup === 'teen' ? .9 : a.ageGroup === 'older-adult' ? .92 : 1;
-  const ageBodyScaleX = a.ageGroup === 'baby' ? .78 : a.ageGroup === 'child' ? .88 : a.ageGroup === 'teen' ? .96 : a.ageGroup === 'older-adult' ? .97 : 1;
-  const ageBodyShiftY = a.ageGroup === 'baby' ? 18 : a.ageGroup === 'child' ? 9 : a.ageGroup === 'teen' ? 2 : a.ageGroup === 'older-adult' ? 5 : 0;
-  const ageLean = a.ageGroup === 'older-adult' ? 6 : 0;
-  const agedBody = `<g transform="translate(180 177) translate(0 ${ageBodyShiftY}) scale(${ageBodyScaleX} ${ageBodyScaleY}) translate(-180 -177)">${accessories(a,'body-back')}${body}${accessories(a,'body-front',[wl,wr])}</g>`;
+  const ageBodyScaleY = a.ageGroup === 'baby' ? .4 : a.ageGroup === 'child' ? .6 : a.ageGroup === 'teen' ? .88 : a.ageGroup === 'older-adult' ? .86 : 1;
+  const ageBodyScaleX = a.ageGroup === 'baby' ? .72 : a.ageGroup === 'child' ? .83 : a.ageGroup === 'teen' ? .94 : a.ageGroup === 'older-adult' ? .95 : 1;
+  const ageBodyShiftY = a.ageGroup === 'baby' ? 44 : a.ageGroup === 'child' ? 24 : a.ageGroup === 'teen' ? 4 : a.ageGroup === 'older-adult' ? 10 : 0;
+  const ageLean = a.ageGroup === 'older-adult' ? 5 : 0;
+  const ageBodySkew = a.ageGroup === 'older-adult' ? -4 : 0;
+  const agedBody = `<g transform="translate(180 177) translate(0 ${ageBodyShiftY}) skewX(${ageBodySkew}) scale(${ageBodyScaleX} ${ageBodyScaleY}) translate(-180 -177)">${accessories(a,'body-back')}${body}${accessories(a,'body-front',[wl,wr])}</g>`;
   return `<g transform="translate(180 ${r.lift}) rotate(${r.lean + ageLean} 0 275) scale(${viewX} 1) translate(-180 0)">${agedBody}${head}</g>`;
 }
 function surfaceAccent(a: CharacterAppearance): string {
