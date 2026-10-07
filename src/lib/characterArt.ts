@@ -250,6 +250,18 @@ function hair(a: CharacterAppearance, back: boolean) {
       return `<path d="M132 116Q124 46 181 39Q238 45 228 116L216 96Q180 74 144 96Z" fill="${h}"/><g fill="${h}"><path d="M139 118q-14 33-7 73" stroke="${h}" stroke-width="12" stroke-linecap="round" fill="none"/><path d="M221 118q14 33 7 73" stroke="${h}" stroke-width="12" stroke-linecap="round" fill="none"/><path d="M134 134l11 11m-11 11l11 11m72-33l-11 11m11 11l-11 11" stroke="${light}" stroke-width="2" opacity=".45"/></g>`;
     if (a.hairStyle === "ponytail")
       return `<path d="M132 114Q122 42 181 38Q236 44 228 114L214 92Q179 71 146 95Z" fill="${h}"/><path d="M208 110Q250 126 238 172Q226 215 204 179Q217 148 208 110Z" fill="${h}"/>`;
+    if (a.hairStyle === "extra-long")
+      return `<path d="M130 104Q121 53 157 40Q192 31 218 49Q240 68 229 114L232 247Q215 270 201 246L202 91Q178 103 153 92L153 246Q139 270 123 247L130 104Z" fill="${h}"/>`;
+    if (a.hairStyle === "layered-long")
+      return `<path d="M131 105Q122 52 158 39Q193 31 219 51Q237 70 228 118L220 218Q205 245 194 219L199 95Q180 106 160 96L155 219Q144 245 130 218L131 105Z" fill="${h}"/>`;
+    if (a.hairStyle === "locs-long")
+      return `<g fill="${h}"><path d="M133 105Q125 57 158 43Q189 35 214 51Q234 65 227 108Q212 93 206 78Q180 90 154 85Q143 98 133 105Z"/>${[143,156,169,182,195,208,221].map((x,i)=>`<rect x="${x}" y="${92+(i%2)*4}" width="10" height="${100+(i%3)*18}" rx="5"/>`).join('')}</g>`;
+    if (a.hairStyle === "box-braids")
+      return `<g><path d="M133 106Q124 58 160 42Q193 34 216 54Q234 72 226 108" fill="${h}"/>${[140,152,164,176,188,200,212,224].map((x,i)=>`<path d="M${x} ${92+(i%2)*5}q${(i%2?5:-5)} 52 ${i%2?2:-2} 116" stroke="${h}" stroke-width="9" stroke-linecap="round" fill="none"/>`).join('')}</g>`;
+    if (a.hairStyle === "pigtails")
+      return `<g><path d="M132 104Q123 58 159 42Q191 35 214 52Q234 69 226 108" fill="${h}"/><path d="M137 92Q101 102 111 143Q120 169 139 144Q129 116 137 92Z" fill="${h}"/><path d="M223 92Q259 102 249 143Q240 169 221 144Q231 116 223 92Z" fill="${h}"/></g>`;
+    if (a.hairStyle === "high-ponytail")
+      return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108" fill="${h}"/><path d="M198 47Q239 16 244 58Q249 95 216 105Q222 71 198 47Z" fill="${h}"/></g>`;
     if (a.hairStyle === "bun") return ellipse(210, 35, 24, 22, h);
     if (a.hairStyle === "buzz") return `<path d="M142 82Q153 40 181 40Q211 41 220 82Q181 62 142 82Z" fill="${h}" opacity=".85"/>`;
     return `<path d="M133 115Q120 38 180 37Q240 38 227 115L216 94Q180 74 144 94Z" fill="${h}"/>`;
@@ -284,23 +296,23 @@ function hair(a: CharacterAppearance, back: boolean) {
   if (a.hairStyle === "braids")
     return `<g><path d="M133 108Q124 58 160 42Q191 35 214 53Q235 71 227 108Q212 93 205 79Q178 89 154 85Q143 98 133 108Z" fill="${h}"/><path d="M141 111q-13 26-8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M220 111q13 26 8 57" stroke="${h}" stroke-width="10" stroke-linecap="round" fill="none"/><path d="M137 127l10 9m-10 10l10 9m76-28l-10 9m10 10l-10 9" stroke="${light}" stroke-width="2" opacity=".5"/></g>`;
   if (a.hairStyle === "ponytail")
-    return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M207 109Q239 122 231 154Q226 178 205 174Q219 143 207 109Z" fill="${h}"/></g>`;
+    return `<path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/>`;
   if (a.hairStyle === "lob")
     return `<g><path d="M130 105Q122 54 158 41Q192 32 218 50Q238 69 230 145Q215 162 204 150L204 92Q180 104 154 94L151 150Q137 162 126 145Z" fill="${h}"/><path d="M150 57q28-13 53 2" stroke="${light}" stroke-width="2" opacity=".5" fill="none"/></g>`;
   if (a.hairStyle === "extra-long")
-    return `<g><path d="M130 104Q121 53 157 40Q192 31 218 49Q240 68 229 114L232 247Q215 270 201 246L202 91Q178 103 153 92L153 246Q139 270 123 247L130 104Z" fill="${h}"/><path d="M144 71q31-24 62-7M140 174q21 12 42 0m9 0q18 12 35 0" stroke="${light}" stroke-width="2" opacity=".4" fill="none"/></g>`;
+    return `<path d="M132 103Q124 58 158 41Q192 32 218 50Q236 69 226 107Q210 88 205 74Q184 89 162 85Q146 101 132 103Z" fill="${h}"/>`;
   if (a.hairStyle === "layered-long")
-    return `<g><path d="M131 105Q122 52 158 39Q193 31 219 51Q237 70 228 118L220 218Q205 245 194 219L199 95Q180 106 160 96L155 219Q144 245 130 218L131 105Z" fill="${h}"/><path d="M137 140q18 18 34 5m18 0q19 14 35-5M136 179q19 17 36 4m17 0q18 15 33-4" stroke="${light}" stroke-width="2.4" opacity=".45" fill="none"/></g>`;
+    return `<path d="M132 104Q124 57 159 40Q194 32 219 52Q237 70 227 109Q211 92 205 77Q181 91 158 86Q146 100 132 104Z" fill="${h}"/>`;
   if (a.hairStyle === "locs-long")
-    return `<g fill="${h}"><path d="M133 105Q125 57 158 43Q189 35 214 51Q234 65 227 108Q212 93 206 78Q180 90 154 85Q143 98 133 105Z"/>${[143,156,169,182,195,208,221].map((x,i)=>`<rect x="${x}" y="${92+(i%2)*4}" width="10" height="${100+(i%3)*18}" rx="5"/>`).join('')}</g>`;
+    return `<path d="M133 105Q125 57 158 43Q189 35 214 51Q234 65 227 108Q212 93 206 78Q180 90 154 85Q143 98 133 105Z" fill="${h}"/>`;
   if (a.hairStyle === "box-braids")
-    return `<g><path d="M133 106Q124 58 160 42Q193 34 216 54Q234 72 226 108" fill="${h}"/>${[140,152,164,176,188,200,212,224].map((x,i)=>`<path d="M${x} ${92+(i%2)*5}q${(i%2?5:-5)} 52 ${i%2?2:-2} 116" stroke="${h}" stroke-width="9" stroke-linecap="round" fill="none"/>`).join('')}</g>`;
+    return `<path d="M133 106Q124 58 160 42Q193 34 216 54Q234 72 226 108Q210 92 204 78Q180 90 155 85Q143 99 133 106Z" fill="${h}"/>`;
   if (a.hairStyle === "cornrows")
     return `<g><path d="M140 92Q143 47 180 42Q217 47 220 92" fill="${h}" opacity=".9"/>${[-28,-18,-8,2,12,22,32].map((dx)=>`<path d="M${180+dx} 45Q${180+dx*.8} 66 ${180+dx*.55} 96" fill="none" stroke="${light}" stroke-width="3" opacity=".55"/>`).join('')}</g>`;
   if (a.hairStyle === "high-ponytail")
-    return `<g><path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M198 47Q239 16 244 58Q249 95 216 105Q222 71 198 47Z" fill="${h}"/></g>`;
+    return `<path d="M132 104Q123 59 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/>`;
   if (a.hairStyle === "pigtails")
-    return `<g><path d="M132 104Q123 58 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/><path d="M137 92Q101 102 111 143Q120 169 139 144Q129 116 137 92Z" fill="${h}"/><path d="M223 92Q259 102 249 143Q240 169 221 144Q231 116 223 92Z" fill="${h}"/></g>`;
+    return `<path d="M132 104Q123 58 159 42Q191 35 214 52Q234 69 226 108Q211 92 205 79Q178 90 154 85Q143 98 132 104Z" fill="${h}"/>`;
   if (a.hairStyle === "half-up")
     return `<g><path d="M131 105Q122 52 158 39Q193 31 219 51Q237 70 228 118L219 204Q205 228 195 205L199 95Q179 106 158 94L154 205Q142 228 130 204Z" fill="${h}"/><ellipse cx="180" cy="43" rx="24" ry="18" fill="${h}"/></g>`;
   if (a.hairStyle === "double-bun")
