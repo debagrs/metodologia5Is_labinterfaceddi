@@ -1,3 +1,4 @@
+import ResizableStudioGrid from './ResizableStudioGrid';
 import StudioAreaGuide from './StudioAreaGuide';
 import React, { useMemo, useState } from 'react';
 import { Accessibility, Copy, Languages, Plus, Save, Sparkles, Trash2, X, Hand, Download, Check } from 'lucide-react';
@@ -125,7 +126,7 @@ export default function UXWritingStudio({ document, project, title = 'UX Writing
       <StudioAreaGuide area="ux-writing" />
       <button type="button" disabled={!canEdit} onClick={()=>onSave({...draft,updatedAt:new Date().toISOString()})} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15}/> SALVAR</button>
     </header>
-    <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[270px_minmax(0,1fr)_360px]">
+    <ResizableStudioGrid storageKey="UXWritingStudio:panels" defaults={[23,48,29]}>
       <aside className="min-h-0 overflow-y-auto bg-white border-b lg:border-b-0 lg:border-r border-black/10 p-3">
         <button type="button" onClick={addEntry} disabled={!canEdit} className="w-full h-11 rounded-xl bg-black text-white flex items-center justify-center gap-2 text-xs font-bold"><Plus size={15}/> NOVO TEXTO</button>
         {availableWireframes.length>0&&<button type="button" onClick={importWireframeTexts} disabled={!canEdit} className="mt-2 w-full min-h-10 rounded-xl border border-black flex items-center justify-center gap-2 px-2 text-[9px] font-mono font-bold"><Sparkles size={13}/> IMPORTAR TEXTOS DOS WIREFRAMES</button>}
@@ -147,6 +148,6 @@ export default function UXWritingStudio({ document, project, title = 'UX Writing
         {error&&<div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
         <div className="mt-5 border-t border-black/10 pt-4"><div className="text-[9px] font-mono font-bold uppercase text-neutral-500">Glossário do projeto</div><textarea value={draft.glossary.join('\n')} onChange={(e)=>setDraft({...draft,glossary:e.target.value.split('\n').map((v)=>v.trim()).filter(Boolean)})} placeholder={'Metodologia 5I’s\nNome da marca\nTermos que não devem ser traduzidos'} className="mt-2 min-h-32 w-full rounded-xl border border-black/10 p-3 text-xs"/></div>
       </aside>
-    </main>
+    </ResizableStudioGrid>
   </div>;
 }
