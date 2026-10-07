@@ -1,5 +1,7 @@
 export type Phase = 'Ideação' | 'Inambulação' | 'Instauração' | 'Inspeção' | 'Implementação';
 
+export type ProjectCanvasPage = 'process' | 'wireframes' | 'experiments';
+
 export interface Project {
   id: string;
   name: string;
@@ -62,7 +64,7 @@ export interface AdminProjectSummary {
   nodeCount: number;
 }
 
-export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections' | 'data-story' | 'graphic-system';
+export type ThoughtType = 'core' | 'question' | 'user-thought' | 'insight' | 'canvas-image' | 'drawing-sheet' | 'text-system' | 'interactive-lab' | 'wireframe-board' | 'design-system' | 'visual-identity' | 'video-board' | 'ux-writing' | 'sound-board' | 'hardware-board' | 'sprite-character' | 'game-design' | 'api-connections' | 'data-story' | 'graphic-system';
 
 export type DrawingElementType =
   | 'brush'
@@ -84,6 +86,29 @@ export type DrawingElementType =
   | 'text'
   | 'image';
 
+
+
+export type TextPracticeMode = 'calligraphy' | 'lettering' | 'typography' | 'type-design';
+export interface TextStudioDocument {
+  title: string;
+  mode: TextPracticeMode;
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  lineHeight: number;
+  letterSpacing: number;
+  color: string;
+  background: string;
+  align: 'left' | 'center' | 'right';
+  tool: 'broad-nib' | 'pointed-pen' | 'brush' | 'monoline' | 'pencil';
+  nibAngle: number;
+  pressure: number;
+  slant: number;
+  guides: boolean;
+  notes?: string;
+  updatedAt?: string;
+}
 
 export type InteractiveEngine = 'p5' | 'three' | 'gsap' | 'anime' | 'matter' | 'svg';
 
@@ -713,7 +738,12 @@ export interface VisualIdentityApplication {
   artworkOpacity?: number;
   shadowStrength?: number;
   perspective?: number;
+  /** Foto real escolhida para aplicação da marca. */
+  mockupImageUrl?: string;
+  mockupImageName?: string;
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay' | 'soft-light';
 }
+
 
 export interface VisualIdentityDocument {
   title: string;
@@ -914,6 +944,8 @@ export interface ThoughtNode {
   title: string;
   content: string;
   phase: Phase;
+  /** Página organizacional do projeto. Itens legados são inferidos por tipo. */
+  canvasPage?: ProjectCanvasPage;
   x: number;
   y: number;
   width?: number;
@@ -925,6 +957,8 @@ export interface ThoughtNode {
   aspectRatio?: number;
   drawing?: DrawingDocument;
   drawingName?: string;
+  textStudio?: TextStudioDocument;
+  textStudioName?: string;
   interactive?: InteractiveDocument;
   interactiveName?: string;
   wireframe?: WireframeDocument;
