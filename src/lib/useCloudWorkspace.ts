@@ -83,6 +83,11 @@ export function useCloudWorkspace(options: Options): CloudState {
   const historyAtRef=useRef(0);
   const accountId = options.activeProfile?.id || null;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('5is:cloud-state', { detail: { state, ownerId: accountId } }));
+  }, [state, accountId]);
+
   const currentSnapshot = useMemo(
     () =>
       normalizeSnapshot({
