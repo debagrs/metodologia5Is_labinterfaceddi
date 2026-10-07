@@ -509,3 +509,35 @@ body.studio-is-resizing{user-select:none!important;cursor:col-resize;}
   .workspace-help-launch{min-width:40px;min-height:40px;}
 }
 
+
+/* Readable desktop and tablet dock. */
+@media(min-width:640px){
+ .canvas-bottom-tools{grid-template-columns:repeat(auto-fit,minmax(112px,1fr));max-height:32vh;overflow-y:auto!important;}
+ .canvas-bottom-tools .canvas-tool-button{min-height:66px;padding:8px 6px;gap:7px;}
+ .canvas-bottom-tools .canvas-tool-button svg{width:22px;height:22px;}
+ .canvas-bottom-tools .canvas-tool-label,.canvas-bottom-tools .canvas-tool-button>span{font-size:11px;line-height:1.25;overflow-wrap:normal;}
+}
+.resizable-studio-grid{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;overflow:hidden;}
+.studio-grid-divider{display:none;}
+@media(min-width:768px){
+ .resizable-studio-grid{display:grid!important;grid-template-columns:var(--studio-columns)!important;}
+ .resizable-studio-grid>.studio-grid-divider{display:flex;}
+ .resizable-studio-grid>.hidden{display:block!important;}
+ .resizable-studio-grid>main.hidden{display:flex!important;}
+ .resizable-studio-grid>*{min-width:0;min-height:0;}
+}
+.wireframe-drop-slot{position:relative;flex:0 0 0!important;height:0!important;min-height:0!important;width:100%;z-index:6;}
+.wireframe-drop-slot::after{content:'';position:absolute;inset:-8px 0;}
+.wireframe-drop-slot.is-over::after{background:#20867c;border-radius:4px;height:4px;top:-2px;box-shadow:0 0 0 3px #d8f3ee;}
+.wireframe-block{transition:box-shadow .12s;min-width:0;}
+.wireframe-block[data-drop='before']{box-shadow:0 -4px #20867c;}
+.wireframe-block[data-drop='after']{box-shadow:0 4px #20867c;}
+.wireframe-block[data-drop='inside']{outline:3px dashed #20867c;outline-offset:3px;}
+
+@media(min-width:768px){
+ .resizable-studio-grid>.studio-grid-divider{width:14px;height:100%;cursor:col-resize;grid-row:1;}
+ .resizable-studio-grid>.studio-grid-divider span{width:4px;height:58px;}
+ .video-workspace.has-panel>.video-main{grid-column:3;grid-row:1;}
+ .video-workspace.has-panel>.studio-grid-divider{grid-column:2;}
+ .video-workspace.has-panel>.video-tool-panel{grid-column:1;grid-row:1;}
+}
