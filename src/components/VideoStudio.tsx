@@ -887,7 +887,7 @@ export default function VideoStudio({
           <span>Exportar</span>
         </button>
       </header>
-      <ResizableStudioGrid storageKey="video:panels" defaults={[50,50]} className={`video-workspace ${panelOpen ? "has-panel" : ""}`}>
+      <ResizableStudioGrid storageKey="video:panels" mode="ratio" defaults={[34,66]} className={`video-workspace ${panelOpen ? "has-panel" : ""}`}>
         <main className="video-main">
           <div className="video-preview-zone" ref={previewZoneRef}>
             <div
