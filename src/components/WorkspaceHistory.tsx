@@ -137,6 +137,7 @@ export default function WorkspaceHistory() {
         <button
           type="button"
           className="workspace-history-launch"
+          data-tour="workspace-history"
           title="Histórico e versões"
           aria-label="Histórico e versões"
           onClick={() => {
