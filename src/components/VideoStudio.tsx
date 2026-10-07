@@ -1,3 +1,4 @@
+import ResizableStudioGrid from './ResizableStudioGrid';
 import { upload as uploadToBlob } from "@vercel/blob/client";
 import {
   FontPicker,
@@ -886,7 +887,7 @@ export default function VideoStudio({
           <span>Exportar</span>
         </button>
       </header>
-      <div className={`video-workspace ${panelOpen ? "has-panel" : ""}`}>
+      <ResizableStudioGrid storageKey="video:panels" defaults={[50,50]} className={`video-workspace ${panelOpen ? "has-panel" : ""}`}>
         <main className="video-main">
           <div className="video-preview-zone" ref={previewZoneRef}>
             <div
@@ -2137,7 +2138,7 @@ export default function VideoStudio({
             </div>
           </aside>
         )}
-      </div>
+      </ResizableStudioGrid>
       {(busy || error || status || downloadUrl || draft.generatedUrl) && (
         <div className="video-status" aria-live="polite">
           {busy ? (
