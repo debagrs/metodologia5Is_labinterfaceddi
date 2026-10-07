@@ -11,7 +11,7 @@ import {
   HelpCircle, Compass, Sparkles, BookOpen, User, CornerDownRight, Check, MessageCircle, Paperclip,
   ImagePlus, Link2, Loader2, MoveDiagonal2, X, Pencil, Code2, Play, Pause, PanelsTopLeft, Palette, Film, WandSparkles, Languages, Volume2, Cpu, Gamepad2, ChevronUp, ChevronDown, Plug, Fingerprint
 } from 'lucide-react';
-import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument, VisualIdentityDocument, DataStoryDocument, GraphicSystemDocument } from '../types';
+import { ThoughtNode, Project, Phase, UserProfile, CollaborationPermission, DrawingDocument, InteractiveDocument, WireframeDocument, DesignSystemDocument, VideoDocument, UXWritingDocument, SoundDocument, HardwareDocument, CharacterSpriteDocument, GameDesignDocument, ApiConnectionsDocument, VisualIdentityDocument, DataStoryDocument, GraphicSystemDocument, TextStudioDocument } from '../types';
 import NodeCollaborationPanel from './NodeCollaborationPanel';
 import MediatorSticker from './MediatorSticker';
 import RichNote from './RichNote';
@@ -30,6 +30,7 @@ import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from
 import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity } from './VisualIdentityStudio';
 import DataStoryStudio, { DataStoryPreview, blankDataStory } from './DataStoryStudio';
 import GraphicsStudio, { GraphicsPreview, blankGraphicSystem } from './GraphicsStudio';
+import TextStudio, { TextStudioPreview, blankTextStudio } from './TextStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
 export interface InfiniteCanvasHandle {
@@ -72,6 +73,8 @@ function wireframeToSvgString(document: WireframeDocument, defaultFont="Inter") 
 interface InfiniteCanvasProps {
   project: Project;
   nodes: ThoughtNode[];
+  /** Todos os assets do projeto, inclusive os que estão em outras páginas. */
+  allProjectNodes?: ThoughtNode[];
   activePhase: Phase;
   onUpdateNodeCoords: (id: string, x: number, y: number) => void;
   onAddCustomThought: (x: number, y: number) => void;
@@ -87,6 +90,7 @@ interface InfiniteCanvasProps {
 const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(function InfiniteCanvas({
   project,
   nodes,
+  allProjectNodes,
   activePhase,
   onUpdateNodeCoords,
   onAddCustomThought,
@@ -165,6 +169,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [newDataStory, setNewDataStory] = useState<DataStoryDocument | null>(null);
   const [graphicEditorNodeId, setGraphicEditorNodeId] = useState<string | null>(null);
   const [newGraphicSystem, setNewGraphicSystem] = useState<GraphicSystemDocument | null>(null);
+  const [textEditorNodeId, setTextEditorNodeId] = useState<string | null>(null);
+  const [newTextStudio, setNewTextStudio] = useState<TextStudioDocument | null>(null);
+  const [projectLibraryOpen, setProjectLibraryOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -182,10 +189,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   const [canvasImageError, setCanvasImageError] = useState('');
   const canvasImageInputRef = useRef<HTMLInputElement>(null);
   const canEditCanvas = !collaborationPermission || collaborationPermission === 'edit';
-  const projectDesignSystem = [...nodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
-  const projectVisualIdentity = [...nodes].reverse().find((item) => item.type === 'visual-identity' && item.visualIdentity)?.visualIdentity;
+  const projectNodes = allProjectNodes || nodes;
+  const projectDesignSystem = [...projectNodes].reverse().find((item) => item.type === 'design-system' && item.designSystem)?.designSystem;
+  const projectVisualIdentity = [...projectNodes].reverse().find((item) => item.type === 'visual-identity' && item.visualIdentity)?.visualIdentity;
 
-  const atelierOpen = Boolean(newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId || newDataStory || dataStoryEditorNodeId || newGraphicSystem || graphicEditorNodeId);
+  const atelierOpen = Boolean(newTextStudio || textEditorNodeId || newDrawing || drawingEditorNodeId || newInteractive || interactiveEditorNodeId || newWireframe || wireframeEditorNodeId || newDesignSystem || designSystemEditorNodeId || newVisualIdentity || visualIdentityEditorNodeId || newVideo || videoEditorNodeId || newUXWriting || uxWritingEditorNodeId || newSound || soundEditorNodeId || newHardware || hardwareEditorNodeId || newSprite || spriteEditorNodeId || newGame || gameEditorNodeId || newApiConnections || apiEditorNodeId || newDataStory || dataStoryEditorNodeId || newGraphicSystem || graphicEditorNodeId);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.classList.toggle('atelier-open', atelierOpen);
@@ -193,7 +201,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   }, [atelierOpen]);
 
   useGraphicFonts([projectDesignSystem?.primaryFont,...Object.values(projectDesignSystem?.fontFamilies || {})]);
-  const projectVideoMedia = nodes.flatMap((item) => {
+  const projectVideoMedia = projectNodes.flatMap((item) => {
     const media: Array<{ id: string; kind: 'image' | 'video'; url: string; name: string; source: 'project' }> = [];
     if (item.type === 'canvas-image' && item.imageUrl) media.push({ id: item.id, kind: 'image', url: item.imageUrl, name: item.imageName || item.title || 'Imagem do projeto', source: 'project' });
     if (item.type === 'drawing-sheet' && item.drawing) media.push({ id: item.id, kind: 'image', url: svgDataUrl(drawingToVideoSvg(item.drawing)), name: item.drawingName || item.title || 'Desenho do projeto', source: 'project' });
@@ -205,13 +213,13 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     return media;
   });
 
-  const projectSpriteAssets: SpriteAssetOption[] = nodes.flatMap((item) => {
+  const projectSpriteAssets: SpriteAssetOption[] = projectNodes.flatMap((item) => {
     if (item.type === 'canvas-image' && item.imageUrl) return [{ id: item.id, name: item.imageName || item.title || 'Imagem do projeto', url: item.imageUrl, source: 'project' as const }];
     if (item.type === 'drawing-sheet' && item.drawing) return [{ id: item.id, name: item.drawingName || item.title || 'Desenho do projeto', url: svgDataUrl(drawingToSvgString(item.drawing)), source: 'project' as const }];
     return [];
   });
 
-  const projectGameAssets = nodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type)).map((item) => {
+  const projectGameAssets = projectNodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type)).map((item) => {
     const spriteAnimation = item.sprite?.animations?.find((animation) => animation.id === item.sprite?.activeAnimationId) || item.sprite?.animations?.[0];
     const spriteUrl = spriteAnimation?.frames?.[0]?.url || (item.sprite ? svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')) : undefined);
     return {
@@ -226,6 +234,9 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     const compactCanvas = typeof window !== 'undefined' && window.innerWidth < 640;
     if (node.type === 'canvas-image') {
       return { width: node.width || (compactCanvas ? 280 : 320), height: node.height || (compactCanvas ? 210 : 240) };
+    }
+    if (node.type === 'text-system') {
+      return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 220 : 280) };
     }
     if (node.type === 'drawing-sheet') {
       return { width: node.width || (compactCanvas ? 300 : 380), height: node.height || (compactCanvas ? 200 : 255) };
@@ -1120,6 +1131,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             const isUserThought = node.type === 'user-thought';
             const isCanvasImage = node.type === 'canvas-image';
             const isDrawingSheet = node.type === 'drawing-sheet';
+            const isTextSystem = node.type === 'text-system';
             const isInteractiveLab = node.type === 'interactive-lab';
             const isWireframeBoard = node.type === 'wireframe-board';
             const isDesignSystem = node.type === 'design-system';
@@ -1248,6 +1260,20 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                       </div>
                     </>
                   )}
+                </motion.div>
+              );
+            }
+
+            if (isTextSystem) {
+              const textDocument = node.textStudio || blankTextStudio(projectDesignSystem);
+              return (
+                <motion.div key={node.id} data-node-id={node.id} initial={{opacity:0,scale:.96}} animate={{opacity:1,scale:1}}
+                  className={`absolute thought-card pointer-events-auto rounded-xl bg-white shadow-lg select-none overflow-visible ${isSelected?'ring-2 ring-black':'ring-1 ring-black/10'}`}
+                  style={{left:node.x,top:node.y,width:dimensions.width,height:dimensions.height,touchAction:'none'}}
+                  onPointerDown={(event)=>handleNodePointerDown(event,node.id)} onClick={(event)=>{event.stopPropagation();setSelectedNodeId(node.id);setSelectedConnection(null);}}>
+                  <div className="absolute inset-0 rounded-xl overflow-hidden"><TextStudioPreview document={textDocument}/></div>
+                  <div className="absolute left-2 top-2 z-20 rounded-lg bg-white/90 border border-black/10 px-2 py-1 text-[9px] font-mono font-bold uppercase">TEXTOS · {textDocument.mode}</div>
+                  {isSelected && canEditCanvas && <div className="absolute -top-11 right-0 z-40 flex gap-1 rounded-xl border bg-white p-1 shadow-lg canvas-control"><button className="h-8 px-2 rounded-lg hover:bg-black/5 text-[9px] font-mono font-bold" onClick={(e)=>{e.stopPropagation();setTextEditorNodeId(node.id)}}>EDITAR</button><button className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50 flex items-center justify-center" onClick={(e)=>{e.stopPropagation();onDeleteNode(node.id)}}><Trash2 size={14}/></button></div>}
                 </motion.div>
               );
             }
@@ -1958,6 +1984,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
             <>
               <div className="canvas-tool-separator w-px h-5 bg-[#E0E0DE] mx-1" />
               <button type="button" onClick={() => setImageStudioOpen(true)} disabled={uploadingCanvasImage} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Imagem · upar, buscar Creative Commons, vetorizar, editar com Photopea ou gerar com IA">{uploadingCanvasImage ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}<span>IMAGEM</span></button>
+              <button type="button" data-tour="atelier-texts" onClick={() => setNewTextStudio(blankTextStudio(projectDesignSystem))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Textos · caligrafia, lettering, tipografia e design de tipos"><Languages size={14}/><span className="canvas-tool-label">TEXTOS</span></button>
               <button
                 type="button"
                 onClick={() => setNewDrawing(blankDrawing())}
@@ -1988,6 +2015,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
               <button type="button" data-tour="atelier-api" onClick={() => setNewApiConnections(blankApiConnections())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · explorar, incorporar e criar APIs"><Plug size={14}/><span className="canvas-tool-label">APIs</span></button>
               <button type="button" data-tour="atelier-data-story" onClick={() => setNewDataStory(blankDataStory(projectDesignSystem, projectVisualIdentity))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · storytelling de dados, gráficos, mapas e infográficos livres"><PanelsTopLeft size={14}/><span className="canvas-tool-label">INFODESIGN</span></button>
               <button type="button" data-tour="atelier-graphics" onClick={() => setNewGraphicSystem(blankGraphicSystem())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Grafismos · tipografia experimental, pincéis, sprays, padrões e rapports"><WandSparkles size={14}/><span className="canvas-tool-label">GRAFISMOS</span></button>
+              <button type="button" data-tour="atelier-library" onClick={() => setProjectLibraryOpen(true)} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Biblioteca do projeto · reutilize tudo o que já foi criado"><BookOpen size={14}/><span className="canvas-tool-label">BIBLIOTECA</span></button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -2220,6 +2248,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       }} onClose={()=>setNewDataStory(null)}/>}
 
       {dataStoryEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===dataStoryEditorNodeId&&item.type==='data-story'); if(!node)return null; return <DataStoryStudio key={node.id} document={node.dataStory||blankDataStory(projectDesignSystem,projectVisualIdentity)} designSystem={projectDesignSystem} visualIdentity={projectVisualIdentity} title={node.dataStoryName||'Infodesign & Dados'} canEdit={canEditCanvas} onSave={(dataStory)=>onUpdateNode({...node,dataStory,dataStoryName:dataStory.title||node.dataStoryName,title:dataStory.title||node.title,content:`${dataStory.chartType} · ${dataStory.insight||dataStory.goal}`})} onClose={()=>setDataStoryEditorNodeId(null)}/>})()}
+
+      {newTextStudio && <TextStudio document={newTextStudio} title="Novo texto" canEdit={canEditCanvas} onSave={(textStudio)=>{ const startWidth=380,startHeight=280,position=getCenteredPosition(startWidth,startHeight); onAddNode({type:'text-system',title:textStudio.title||'Textos',textStudioName:textStudio.title||'Textos',content:`${textStudio.mode} · ${textStudio.text}`,phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,textStudio,connections:[]}); setNewTextStudio(null); }} onClose={()=>setNewTextStudio(null)}/>}
+      {textEditorNodeId && (()=>{const node=nodes.find(item=>item.id===textEditorNodeId&&item.type==='text-system'); if(!node)return null; return <TextStudio key={node.id} document={node.textStudio||blankTextStudio(projectDesignSystem)} title={node.textStudioName||'Textos'} canEdit={canEditCanvas} onSave={(textStudio)=>onUpdateNode({...node,textStudio,textStudioName:textStudio.title||node.textStudioName,title:textStudio.title||node.title,content:`${textStudio.mode} · ${textStudio.text}`})} onClose={()=>setTextEditorNodeId(null)}/>})()}
+
+      {projectLibraryOpen && <div className="project-library-overlay" onClick={()=>setProjectLibraryOpen(false)}><section className="project-library" onClick={e=>e.stopPropagation()}><header><div><b>Biblioteca do projeto</b><small>Assets criados neste projeto · disponíveis em qualquer página</small></div><button onClick={()=>setProjectLibraryOpen(false)}><X/></button></header><div className="project-library-grid">{projectNodes.filter(n=>n.type!=='core'&&n.type!=='question'&&n.type!=='user-thought').map(n=><button key={n.id} onClick={()=>{const pos=getCenteredPosition(n.width||340,n.height||260);onAddNode({...n,id:undefined as never,createdAt:undefined as never,x:pos.x,y:pos.y,title:`${n.title} · cópia`,connections:[]} as any);setProjectLibraryOpen(false)}}><span>{n.type.replaceAll('-',' ')}</span><b>{n.title}</b><small>Inserir nesta página</small></button>)}{!projectNodes.some(n=>!['core','question','user-thought'].includes(n.type))&&<p>A biblioteca será preenchida conforme você criar imagens, textos, marcas, wireframes, vídeos, personagens e experimentos.</p>}</div></section></div>}
 
       {newGraphicSystem && <GraphicsStudio document={newGraphicSystem} title="Novo sistema de grafismos" canEdit={canEditCanvas} onSave={(graphicSystem)=>{
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?300:380; const startHeight=startWidth; const position=getCenteredPosition(startWidth,startHeight);
