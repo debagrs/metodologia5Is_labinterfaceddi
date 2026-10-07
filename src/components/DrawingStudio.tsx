@@ -4,7 +4,6 @@ import PhotopeaEditor from './PhotopeaEditor';
 import {imageCredit,type OpenImage} from '../lib/openImages';
 import {ImagePlus,Layers,Eye,EyeOff,ArrowUp,ArrowDown} from 'lucide-react';
 import { StudioWorkspace } from './StudioWorkspace';
-import StudioAreaGuide from './StudioAreaGuide';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
@@ -26,7 +25,7 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { DrawingDocument, DrawingElement, DrawingElementType, DrawingPoint } from '../types';
+import { DrawingDocument, DrawingElement, DrawingElementType, DrawingPoint, DrawingBrushKind, DrawingSymmetry } from '../types';
 
 type DrawingTool = DrawingElementType | 'select';
 type ExportFormat = 'svg' | 'png' | 'jpg';
@@ -50,6 +49,21 @@ interface DrawingStudioProps {
 }
 
 const PALETTE = ['#111111', '#6B7280', '#EF4444', '#F97316', '#EAB308', '#22C55E', '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899', '#FFFFFF'];
+const BRUSH_PRESETS: Array<{id:DrawingBrushKind; label:string; width:number; opacity:number; note:string}> = [
+  {id:'round',label:'Redondo',width:8,opacity:1,note:'Traço limpo e uniforme'},
+  {id:'pencil',label:'Lápis',width:3,opacity:.72,note:'Leve e sensível à pressão'},
+  {id:'ink',label:'Nanquim',width:7,opacity:1,note:'Contorno firme'},
+  {id:'marker',label:'Marcador',width:18,opacity:.82,note:'Ponta plana'},
+  {id:'calligraphy',label:'Caligráfico',width:14,opacity:1,note:'Ponta oblíqua'},
+  {id:'dry',label:'Pincel seco',width:20,opacity:.72,note:'Falhas e textura'},
+  {id:'chalk',label:'Giz',width:16,opacity:.68,note:'Textura granulada'},
+  {id:'spray',label:'Spray',width:34,opacity:.5,note:'Partículas espalhadas'},
+  {id:'stipple',label:'Pontilhismo',width:20,opacity:.78,note:'Pontos controlados'},
+  {id:'stain',label:'Mancha',width:42,opacity:.5,note:'Mancha gráfica orgânica'},
+];
+const SYMMETRY_OPTIONS: Array<{id:DrawingSymmetry;label:string}> = [
+  {id:'none',label:'Sem simetria'},{id:'vertical',label:'Vertical'},{id:'horizontal',label:'Horizontal'},{id:'both',label:'Dupla'},
+];
 
 const FALLBACK_FONTS = [
   'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Poppins', 'Nunito', 'Raleway',
@@ -180,16 +194,33 @@ const renderDrawingElement = (element: DrawingElement, selected = false) => {
     case 'image':return <image href={element.imageUrl} x={bounds.minX} y={bounds.minY} width={bounds.width} height={bounds.height} opacity={opacity} preserveAspectRatio="xMidYMid meet" style={selectionStyle}/>;
     case 'brush': {
       const points = element.points || [];
-      const hasPressure = points.some((point) => typeof point.pressure === 'number');
-      if (hasPressure && points.length > 1) {
-        return <g opacity={opacity} style={selectionStyle}>{points.slice(1).map((point, index) => {
-          const previous = points[index];
-          const pressure = Math.max(0.08, Math.min(1, ((previous.pressure ?? .55) + (point.pressure ?? .55)) / 2));
-          const width = strokeWidth * (.45 + pressure);
-          return <line key={index} x1={previous.x} y1={previous.y} x2={point.x} y2={point.y} stroke={stroke} strokeWidth={width} strokeLinecap="round" vectorEffect="non-scaling-stroke" />;
+      const kind = element.brushKind || 'round';
+      const flow = Math.max(.08, Math.min(1, element.brushFlow ?? opacity));
+      const jitter = Math.max(0, element.brushJitter ?? 0);
+      if (kind === 'spray' || kind === 'stipple' || kind === 'stain') {
+        const every = kind === 'spray' ? 2 : kind === 'stipple' ? 4 : 7;
+        return <g opacity={flow} style={selectionStyle}>{points.filter((_,i)=>i%every===0).flatMap((point,index)=>{
+          const count = kind === 'spray' ? 7 : kind === 'stipple' ? 3 : 2;
+          return Array.from({length:count},(_,k)=>{
+            const seed=(index+1)*(k+3)*12.9898;
+            const dx=Math.sin(seed)*strokeWidth*(kind==='spray'?1.8:.55+jitter*.03);
+            const dy=Math.cos(seed*.77)*strokeWidth*(kind==='spray'?1.8:.55+jitter*.03);
+            const r=kind==='stain' ? strokeWidth*(.35+.18*((index+k)%3)) : Math.max(1,strokeWidth*(kind==='spray'?.05:.11)*(1+((index+k)%3)*.35));
+            return <circle key={`${index}-${k}`} cx={point.x+dx} cy={point.y+dy} r={r} fill={stroke} opacity={kind==='stain'?.34+.12*((index+k)%3):.75}/>;
+          });
         })}</g>;
       }
-      return <path d={pointsToPath(points)} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" opacity={opacity} vectorEffect="non-scaling-stroke" style={selectionStyle} />;
+      const hasPressure = points.some((point) => typeof point.pressure === 'number');
+      if (hasPressure && points.length > 1 && !['dry','chalk'].includes(kind)) {
+        return <g opacity={flow} style={selectionStyle}>{points.slice(1).map((point, index) => {
+          const previous = points[index];
+          const pressure = Math.max(0.08, Math.min(1, ((previous.pressure ?? .55) + (point.pressure ?? .55)) / 2));
+          const multiplier = kind === 'pencil' ? .6 : kind === 'calligraphy' ? 1.15 : 1;
+          const width = strokeWidth * (.4 + pressure) * multiplier;
+          return <line key={index} x1={previous.x} y1={previous.y} x2={point.x} y2={point.y} stroke={stroke} strokeWidth={width} strokeLinecap={kind==='marker'||kind==='calligraphy'?'square':'round'} vectorEffect="non-scaling-stroke" opacity={kind==='pencil'?.72:1}/>;
+        })}</g>;
+      }
+      return <path d={pointsToPath(points)} fill="none" stroke={stroke} strokeWidth={kind==='marker'?strokeWidth*1.15:strokeWidth} strokeLinecap={kind==='marker'||kind==='calligraphy'?'square':'round'} strokeLinejoin="round" opacity={kind==='pencil'?flow*.72:flow} strokeDasharray={kind==='dry'?'14 5 3 7':kind==='chalk'?'5 3':undefined} vectorEffect="non-scaling-stroke" style={selectionStyle} />;
     }
     case 'line':
       return <line x1={x} y1={y} x2={x2} y2={y2} {...common} fill="none" strokeLinecap="round" />;
@@ -320,7 +351,19 @@ const elementToSvgString = (element: DrawingElement) => {
 
   switch (element.type) {
     case 'image':return `<image href="${escapeXml(element.imageUrl || '')}" x="${bounds.minX}" y="${bounds.minY}" width="${bounds.width}" height="${bounds.height}" opacity="${opacity}" preserveAspectRatio="xMidYMid meet"/>`;
-    case 'brush': { const pts = element.points || []; const pressured = pts.some((point) => typeof point.pressure === 'number'); if (pressured && pts.length > 1) return `<g opacity="${opacity}">${pts.slice(1).map((point,index)=>{ const prev=pts[index]; const pressure=Math.max(.08,Math.min(1,((prev.pressure??.55)+(point.pressure??.55))/2)); const width=strokeWidth*(.45+pressure); return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" stroke="${escapeXml(stroke)}" stroke-width="${width}" stroke-linecap="round"/>`; }).join('')}</g>`; return `<path d="${pointsToPath(pts)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}"/>`; }
+    case 'brush': {
+      const pts = element.points || [];
+      const kind = element.brushKind || 'round';
+      const flow = Math.max(.08,Math.min(1,element.brushFlow ?? opacity));
+      if (kind === 'spray' || kind === 'stipple' || kind === 'stain') {
+        const every=kind==='spray'?2:kind==='stipple'?4:7;
+        return `<g opacity="${flow}">${pts.filter((_,i)=>i%every===0).flatMap((point,index)=>Array.from({length:kind==='spray'?7:kind==='stipple'?3:2},(_,k)=>{const seed=(index+1)*(k+3)*12.9898;const dx=Math.sin(seed)*strokeWidth*(kind==='spray'?1.8:.55);const dy=Math.cos(seed*.77)*strokeWidth*(kind==='spray'?1.8:.55);const r=kind==='stain'?strokeWidth*(.35+.18*((index+k)%3)):Math.max(1,strokeWidth*(kind==='spray'?.05:.11));return `<circle cx="${point.x+dx}" cy="${point.y+dy}" r="${r}" fill="${escapeXml(stroke)}" opacity="${kind==='stain'?.4:.78}"/>`;}).join('')).join('')}</g>`;
+      }
+      const pressured = pts.some((point) => typeof point.pressure === 'number');
+      if (pressured && pts.length > 1 && !['dry','chalk'].includes(kind)) return `<g opacity="${flow}">${pts.slice(1).map((point,index)=>{ const prev=pts[index]; const pressure=Math.max(.08,Math.min(1,((prev.pressure??.55)+(point.pressure??.55))/2)); const width=strokeWidth*(.4+pressure)*(kind==='pencil'?.6:kind==='calligraphy'?1.15:1); return `<line x1="${prev.x}" y1="${prev.y}" x2="${point.x}" y2="${point.y}" stroke="${escapeXml(stroke)}" stroke-width="${width}" stroke-linecap="${kind==='marker'||kind==='calligraphy'?'square':'round'}"/>`; }).join('')}</g>`;
+      const dash=kind==='dry'?' stroke-dasharray="14 5 3 7"':kind==='chalk'?' stroke-dasharray="5 3"':'';
+      return `<path d="${pointsToPath(pts)}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="${kind==='marker'||kind==='calligraphy'?'square':'round'}" stroke-linejoin="round" opacity="${flow}"${dash}/>`;
+    }
     case 'line': return `<line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" ${attrs} fill="none" stroke-linecap="round"/>`;
     case 'arrow': return `<g opacity="${opacity}"><line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round"/><polyline points="${arrowHead(x, y, x2, y2, Math.max(12, strokeWidth * 4))}" fill="none" stroke="${escapeXml(stroke)}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/></g>`;
     case 'rectangle': return `<rect x="${bounds.minX}" y="${bounds.minY}" width="${Math.max(bounds.width, 1)}" height="${Math.max(bounds.height, 1)}" ${attrs}/>`;
@@ -459,6 +502,12 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
   const [fontFamily, setFontFamily] = useState(defaultFontFamily);
   const [stabilization, setStabilization] = useState(36);
   const [pressureEnabled, setPressureEnabled] = useState(true);
+  const [brushKind, setBrushKind] = useState<DrawingBrushKind>('round');
+  const [brushOpacity, setBrushOpacity] = useState(1);
+  const [brushFlow, setBrushFlow] = useState(1);
+  const [brushSpacing, setBrushSpacing] = useState(8);
+  const [brushJitter, setBrushJitter] = useState(0);
+  const [symmetry, setSymmetry] = useState<DrawingSymmetry>('none');
   const [fontFamilies, setFontFamilies] = useState<string[]>(FALLBACK_FONTS);
   const [fontSearch, setFontSearch] = useState('');
   const [draft, setDraft] = useState<DrawingElement | null>(null);
@@ -589,6 +638,12 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
         stroke: strokeColor,
         strokeWidth,
         fill: 'none',
+        opacity: brushOpacity,
+        brushKind,
+        brushFlow,
+        brushSpacing,
+        brushJitter,
+        symmetry,
         points: [point],
       });
       return;
@@ -651,7 +706,23 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
     }
     if (!draft) return;
     if (draft.type === 'brush') {
-      if ((draft.points?.length || 0) > 1) commit({ ...current, elements: [...current.elements, draft] });
+      if ((draft.points?.length || 0) > 1) {
+        const copies: DrawingElement[] = [draft];
+        const mirror = (axis:'vertical'|'horizontal'|'both', suffix:string):DrawingElement => ({
+          ...draft,
+          id: `${draft.id}-${suffix}`,
+          symmetry:'none',
+          points:(draft.points||[]).map((point)=>({
+            ...point,
+            x: axis==='vertical'||axis==='both' ? current.width-point.x : point.x,
+            y: axis==='horizontal'||axis==='both' ? current.height-point.y : point.y,
+          })),
+        });
+        if (draft.symmetry === 'vertical' || draft.symmetry === 'both') copies.push(mirror('vertical','mv'));
+        if (draft.symmetry === 'horizontal' || draft.symmetry === 'both') copies.push(mirror('horizontal','mh'));
+        if (draft.symmetry === 'both') copies.push(mirror('both','mb'));
+        commit({ ...current, elements: [...current.elements, ...copies] });
+      }
       setDraft(null);
       return;
     }
@@ -721,7 +792,6 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
           <button type="button" onClick={() => setMobilePanel(mobilePanel === 'export' ? null : 'export')} className="hidden h-10 w-10 rounded-xl border border-black/10 bg-white flex items-center justify-center" aria-label="Exportar desenho"><Download size={16} /></button>
           {onWireframe && <button type="button" disabled={!canEdit} onClick={() => onWireframe(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Transformar este desenho em wireframe editável"><PanelsTopLeft size={15}/><span className="hidden sm:inline">WIREFRAME</span></button>}
           {onAnimate && <button type="button" disabled={!canEdit} onClick={() => onAnimate(drawingWithPendingText())} className="h-10 px-3 rounded-xl border border-black bg-white flex items-center gap-1.5 text-[10px] font-mono font-bold disabled:opacity-40" title="Animar este desenho na Camada Interativa"><WandSparkles size={15}/><span className="hidden sm:inline">ANIMAR</span></button>}
-          <StudioAreaGuide area="drawing" />
           <button type="button" onClick={saveDrawing} className="h-10 px-3 rounded-xl bg-black text-white flex items-center gap-1.5 text-xs font-mono cursor-pointer"><Save size={15} /><span className="hidden sm:inline">SALVAR</span></button>
         </div>
       </header>
@@ -811,12 +881,17 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
               )}
 
               {tool === 'brush' && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-neutral-50 px-2 py-1">
-                  <SlidersHorizontal size={13} className="text-neutral-400"/>
-                  <span className="text-[9px] font-mono text-neutral-400 uppercase">Estabilização</span>
-                  <input type="range" min="0" max="85" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-24"/>
-                  <span className="text-[9px] font-mono w-8">{stabilization}%</span>
-                  <label className="text-[9px] font-mono uppercase flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)}/> Pressão</label>
+                <div className="w-full rounded-xl bg-neutral-50 p-2 space-y-2">
+                  <div className="grid grid-cols-5 gap-1.5">{BRUSH_PRESETS.map((preset)=><button key={preset.id} type="button" onClick={()=>{setBrushKind(preset.id);setStrokeWidth(preset.width);setBrushOpacity(preset.opacity);setBrushFlow(preset.opacity)}} className={`min-h-12 rounded-lg border px-2 py-1 text-[9px] font-mono ${brushKind===preset.id?'bg-black text-white border-black':'bg-white border-black/10'}`} title={preset.note}><span className="block font-bold">{preset.label}</span><span className={`block text-[8px] ${brushKind===preset.id?'text-white/65':'text-neutral-400'}`}>{preset.note}</span></button>)}</div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <SlidersHorizontal size={13} className="text-neutral-400"/>
+                    <label className="text-[9px] font-mono uppercase flex items-center gap-1.5">Estabilização <input type="range" min="0" max="90" value={stabilization} onChange={(event)=>setStabilization(Number(event.target.value))} className="w-20"/><b>{stabilization}%</b></label>
+                    <label className="text-[9px] font-mono uppercase flex items-center gap-1.5">Fluxo <input type="range" min=".1" max="1" step=".05" value={brushFlow} onChange={(event)=>setBrushFlow(Number(event.target.value))} className="w-20"/><b>{Math.round(brushFlow*100)}%</b></label>
+                    <label className="text-[9px] font-mono uppercase flex items-center gap-1.5">Opacidade <input type="range" min=".1" max="1" step=".05" value={brushOpacity} onChange={(event)=>setBrushOpacity(Number(event.target.value))} className="w-20"/><b>{Math.round(brushOpacity*100)}%</b></label>
+                    <label className="text-[9px] font-mono uppercase flex items-center gap-1.5">Jitter <input type="range" min="0" max="30" value={brushJitter} onChange={(event)=>setBrushJitter(Number(event.target.value))} className="w-20"/></label>
+                    <label className="text-[9px] font-mono uppercase flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={pressureEnabled} onChange={(event)=>setPressureEnabled(event.target.checked)}/> Pressão</label>
+                    <select value={symmetry} onChange={(event)=>setSymmetry(event.target.value as DrawingSymmetry)} className="h-8 rounded-lg border bg-white px-2 text-[9px] font-mono uppercase">{SYMMETRY_OPTIONS.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</select>
+                  </div>
                 </div>
               )}
             </>
