@@ -124,6 +124,10 @@ export interface InteractiveDocument {
   revisions?: Array<{ code: string; title: string; engine: InteractiveEngine }>;
 }
 
+
+export type DrawingBrushKind = 'round' | 'pencil' | 'ink' | 'marker' | 'calligraphy' | 'dry' | 'chalk' | 'spray' | 'stipple' | 'stain';
+export type DrawingSymmetry = 'none' | 'vertical' | 'horizontal' | 'both';
+
 export interface DrawingPoint {
   x: number;
   y: number;
@@ -150,7 +154,15 @@ export interface DrawingElement {
   text?: string;
   fontSize?: number;
   fontFamily?: string;
+  brushKind?: DrawingBrushKind;
+  brushFlow?: number;
+  brushSpacing?: number;
+  brushJitter?: number;
+  brushAngle?: number;
+  symmetry?: DrawingSymmetry;
+  blendMode?: 'normal' | 'multiply' | 'screen' | 'overlay';
 }
+
 
 export interface DrawingDocument {
   width: number;
@@ -783,8 +795,8 @@ export interface DataStoryDocument {
 }
 
 
-export type GraphicToolMode = 'type' | 'brush' | 'spray' | 'pattern' | 'rapport' | 'compose' | 'ai';
-export type GraphicBrushKind = 'ink' | 'marker' | 'dry' | 'spray' | 'highlighter' | 'chalk';
+export type GraphicToolMode = 'type' | 'brush' | 'spray' | 'stain' | 'pattern' | 'rapport' | 'compose' | 'motion' | 'ai';
+export type GraphicBrushKind = 'ink' | 'marker' | 'calligraphy' | 'dry' | 'spray' | 'highlighter' | 'chalk' | 'stipple' | 'stain' | 'square' | 'ribbon';
 export type GraphicRepeatMode = 'grid' | 'half-drop' | 'mirror' | 'brick' | 'radial' | 'random';
 export interface GraphicStrokePoint { x:number; y:number; p?:number; }
 export interface GraphicElement {
@@ -811,6 +823,10 @@ export interface GraphicElement {
   size?:number;
   points?:GraphicStrokePoint[];
   shape?: 'circle' | 'square' | 'star' | 'blob';
+  brushTip?: 'round' | 'square' | 'flat' | 'needle' | 'scatter';
+  scatter?: number;
+  motion?: 'none' | 'float' | 'pulse' | 'spin' | 'jitter' | 'reveal';
+  motionSpeed?: number;
 }
 export interface GraphicSystemDocument {
   title:string;
@@ -983,4 +999,3 @@ export interface StudentProfile {
   project?: Project;
   nodes?: ThoughtNode[];
 }
-
