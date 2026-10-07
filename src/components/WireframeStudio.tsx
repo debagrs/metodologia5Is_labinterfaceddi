@@ -1,3 +1,4 @@
+import ResizableStudioGrid from './ResizableStudioGrid';
 import { FontPicker, useGraphicFonts } from '../lib/graphicFonts';
 import StudioAreaGuide from './StudioAreaGuide';
 import React, { useMemo, useRef, useState } from 'react';
@@ -258,11 +259,11 @@ function LeafPreview({ b, ds }: { b: WireframeBlock; ds?: DesignSystemDocument }
 function DropZone({ onDrop }: { onDrop: (payload: DragPayload) => void }) {
   const [active, setActive] = useState(false);
   return <div
-    className={`transition-all rounded-md ${active ? 'h-6 bg-[#D8F3EE] border border-dashed border-[#20867C]' : 'h-2'}`}
+    className={`wireframe-drop-slot ${active ? 'is-over' : ''}`}
     onDragEnter={e => { e.preventDefault(); setActive(true); }}
     onDragOver={e => { e.preventDefault(); setActive(true); }}
     onDragLeave={() => setActive(false)}
-    onDrop={e => { e.preventDefault(); setActive(false); try { onDrop(JSON.parse(e.dataTransfer.getData('text/plain'))); } catch { /* noop */ } }}
+    onDrop={e => { e.preventDefault(); e.stopPropagation(); setActive(false); try { onDrop(JSON.parse(e.dataTransfer.getData('text/plain'))); } catch { /* noop */ } }}
   />;
 }
 
@@ -276,11 +277,20 @@ function MiniFrame({ frame, ds }: { frame: WireframeFrame; ds?: DesignSystemDocu
 }
 
 function CanvasBlock({
-  block, ds, selectedId, prototype, onSelect, onDrop, onRun,
+  block, ds, selectedId, prototype, onSelect, onDrop, onRun, parentId = null, index = 0, direction = 'column',
 }: {
+  parentId?: string | null; index?: number; direction?: string;
   block: WireframeBlock; ds?: DesignSystemDocument; selectedId: string | null; prototype: boolean;
   onSelect: (id: string) => void; onDrop: (parentId: string | null, index: number, payload: DragPayload) => void; onRun: (block: WireframeBlock) => void;
 }) {
+  const [over, setOver] = useState('');
+  const targetAt = (element: HTMLElement, x: number, y: number) => {
+    const rect = element.getBoundingClientRect();
+    const horizontal = element.dataset.direction === 'row';
+    const fraction = horizontal ? (x-rect.left)/rect.width : (y-rect.top)/rect.height;
+    const inside = element.dataset.container === 'true' && fraction > .25 && fraction < .75;
+    return {parent: inside ? element.dataset.blockId! : element.dataset.parent || null, index: inside ? Number(element.dataset.children) : Number(element.dataset.index)+(fraction>.5?1:0), hint: inside?'inside':fraction>.5?'after':'before'};
+  };
   const selected = selectedId === block.id;
   const children = blockChildren(block);
   const containerStyle: React.CSSProperties = {
@@ -301,20 +311,29 @@ function CanvasBlock({
     position: 'relative',
   };
   return <div
+    data-block-id={block.id} data-parent={parentId || ''} data-index={index} data-direction={direction} data-container={isContainer(block)} data-children={children.length} data-drop={over}
+    onDragOver={e=>{if(prototype)return;e.preventDefault();e.stopPropagation();setOver(targetAt(e.currentTarget,e.clientX,e.clientY).hint);}}
+    onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setOver('');}}
+    onDrop={e=>{if(prototype)return;e.preventDefault();e.stopPropagation();const target=targetAt(e.currentTarget,e.clientX,e.clientY);setOver('');try{onDrop(target.parent,target.index,JSON.parse(e.dataTransfer.getData('text/plain')));}catch{}}}
     draggable={!prototype}
     onDragStart={e => { if (prototype) return; e.stopPropagation(); e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'block', id: block.id } satisfies DragPayload)); e.dataTransfer.effectAllowed = 'move'; }}
     onClick={e => { e.stopPropagation(); prototype ? onRun(block) : onSelect(block.id); }}
-    className={`relative group ${selected && !prototype ? 'outline outline-2 outline-[#20867C] outline-offset-2 rounded-md' : ''} ${prototype && block.interaction && block.interaction !== 'none' ? 'cursor-pointer' : ''}`}
+    className={`wireframe-block relative group ${selected && !prototype ? 'outline outline-2 outline-[#20867C] outline-offset-2 rounded-md' : ''} ${prototype && block.interaction && block.interaction !== 'none' ? 'cursor-pointer' : ''}`}
     style={{ alignSelf: block.alignSelf === 'auto' ? undefined : block.alignSelf as any, gridColumn: `span ${Math.max(1, block.gridColumnSpan || 1)}` }}
   >
-    {!prototype && <div className="absolute -left-5 top-1 opacity-0 group-hover:opacity-100 cursor-grab text-neutral-400"><GripVertical size={15} /></div>}
+    {!prototype && <button type="button" aria-label={`Arrastar ${block.label}`} title="Arraste para reordenar; solte no centro de um grupo para inserir" className="absolute -left-7 top-0 z-10 w-7 h-9 flex items-center justify-center rounded bg-white/90 border border-teal-200 cursor-grab text-teal-800 touch-none"
+      onPointerDown={e=>{e.stopPropagation();e.preventDefault();const el=e.currentTarget;el.setPointerCapture(e.pointerId);onSelect(block.id);let target:ReturnType<typeof targetAt>|null=null;let highlighted:HTMLElement|null=null;
+        const move=(ev:PointerEvent)=>{const node=window.document.elementFromPoint(ev.clientX,ev.clientY)?.closest<HTMLElement>('[data-block-id]');if(highlighted)highlighted.removeAttribute('data-drop');target=null;if(node && node.dataset.blockId!==block.id){target=targetAt(node,ev.clientX,ev.clientY);node.dataset.drop=target.hint;highlighted=node;}const scroller=node?.closest('section');if(scroller){const r=scroller.getBoundingClientRect();if(ev.clientY>r.bottom-50)scroller.scrollTop+=18;if(ev.clientY<r.top+50)scroller.scrollTop-=18;}};
+        const end=(ev:PointerEvent)=>{if(highlighted)highlighted.removeAttribute('data-drop');if(ev.type==='pointerup'&&target)onDrop(target.parent,target.index,{kind:'block',id:block.id});el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',end);el.removeEventListener('pointercancel',end);};
+        el.addEventListener('pointermove',move);el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+      }}><GripVertical size={18}/></button>}
     {isContainer(block) ? <div style={containerStyle} className="border border-dashed border-black/15 min-w-[80px]">
       {children.length === 0 ? <div className="min-h-14 flex items-center justify-center text-[10px] text-neutral-400">Solte elementos aqui</div> : null}
       {children.map((child, index) => <React.Fragment key={child.id}>
-        {!prototype && <DropZone onDrop={payload => onDrop(block.id, index, payload)} />}
-        <CanvasBlock block={child} ds={ds} selectedId={selectedId} prototype={prototype} onSelect={onSelect} onDrop={onDrop} onRun={onRun} />
+        
+        <CanvasBlock parentId={block.id} index={index} direction={block.direction} block={child} ds={ds} selectedId={selectedId} prototype={prototype} onSelect={onSelect} onDrop={onDrop} onRun={onRun} />
       </React.Fragment>)}
-      {!prototype && <DropZone onDrop={payload => onDrop(block.id, children.length, payload)} />}
+      
     </div> : <LeafPreview b={block} ds={ds} />}
     {prototype && block.interaction && block.interaction !== 'none' ? <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-[#20867C] text-white flex items-center justify-center"><MousePointerClick size={11} /></span> : null}
   </div>;
@@ -436,6 +455,10 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
       const component = draft.componentLibrary?.find(item => item.id === payload.id);
       moving = component ? cloneBlock(component) : null;
     } else {
+      const source = findBlock(blocks, payload.id);
+      if (!source || parentId === payload.id || (parentId && findBlock(blockChildren(source), parentId))) return;
+      const location = findBlockLocation(blocks, payload.id);
+      if (location?.parentId === parentId && location.index < index) index -= 1;
       const removed = removeBlockDeep(blocks, payload.id);
       blocks = removed.blocks;
       moving = removed.removed;
@@ -443,7 +466,7 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
     if (!moving) return;
     if (parentId === moving.id) return;
     const parent = parentId ? findBlock(blocks, parentId) : null;
-    if (parentId && parent && !isContainer(parent)) return;
+    if (parentId && (!parent || !isContainer(parent))) return;
     blocks = insertBlockDeep(blocks, parentId, index, moving);
     patchActiveFrame({ blocks });
     setSelectedId(moving.id);
@@ -697,7 +720,7 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
       <button onClick={() => setMobilePane('inspector')} className={`flex-1 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 ${mobilePane === 'inspector' ? 'bg-black text-white' : 'bg-[#F3F2EE]'}`}><PanelRight size={13} /> EDIÇÃO</button>
     </div>
 
-    <div className="flex-1 min-h-0 lg:grid lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+    <ResizableStudioGrid storageKey="wireframe:panels" defaults={[23, 51, 26]}>
       <div className={`${mobilePane === 'library' ? 'block' : 'hidden'} lg:block h-full min-h-0`}>{LibraryPane}</div>
       <main className={`${mobilePane === 'canvas' ? 'flex' : 'hidden'} lg:flex h-full min-h-0 flex-col bg-[#E7E5E0] overflow-hidden`}>
         <div className="shrink-0 min-h-12 bg-white/90 border-b px-3 flex items-center gap-2 overflow-x-auto">
@@ -722,17 +745,17 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
               }}
             >
               {frame.blocks.map((b, index) => <React.Fragment key={b.id}>
-                {!prototypeMode && frame.layoutMode !== 'grid' ? <DropZone onDrop={payload => dropBlock(null, index, payload)} /> : null}
-                <CanvasBlock block={b} ds={designSystem} selectedId={selectedId} prototype={prototypeMode} onSelect={id => { setSelectedId(id); setMobilePane('inspector'); }} onDrop={dropBlock} onRun={runInteraction} />
+                
+                <CanvasBlock index={index} direction={frame.direction} block={b} ds={designSystem} selectedId={selectedId} prototype={prototypeMode} onSelect={id => { setSelectedId(id); setMobilePane('inspector'); }} onDrop={dropBlock} onRun={runInteraction} />
               </React.Fragment>)}
-              {!prototypeMode && frame.layoutMode !== 'grid' ? <DropZone onDrop={payload => dropBlock(null, frame.blocks.length, payload)} /> : null}
+              
               {!prototypeMode && !frame.blocks.length ? <div className="min-h-32 flex flex-col items-center justify-center text-neutral-400 text-[11px]"><GripVertical size={24} /><span className="mt-2">Arraste um item da lateral esquerda</span></div> : null}
             </div>
           </div> : null}
         </section>
       </main>
       <div className={`${mobilePane === 'inspector' ? 'block' : 'hidden'} lg:block h-full min-h-0`}>{InspectorPane}</div>
-    </div>
+    </ResizableStudioGrid>
   </div>;
 }
 
@@ -744,7 +767,7 @@ function TreeItem({ block, depth, parentId, selectedId, onSelect, onDropAt, inde
       onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'block', id: block.id } satisfies DragPayload)); e.dataTransfer.effectAllowed = 'move'; }}
       onDragOver={e => { e.preventDefault(); e.stopPropagation(); setOver(true); }}
       onDragLeave={() => setOver(false)}
-      onDrop={e => { e.preventDefault(); e.stopPropagation(); setOver(false); try { const payload = JSON.parse(e.dataTransfer.getData('text/plain')) as DragPayload; onDropAt(isContainer(block) ? block.id : parentId, isContainer(block) ? blockChildren(block).length : index, payload); } catch { /* noop */ } }}
+      onDrop={e => { e.preventDefault(); e.stopPropagation(); setOver(false); try { const payload = JSON.parse(e.dataTransfer.getData('text/plain')) as DragPayload; const rect=e.currentTarget.getBoundingClientRect(); const fraction=(e.clientY-rect.top)/rect.height; const inside=isContainer(block)&&fraction>.25&&fraction<.75; onDropAt(inside ? block.id : parentId, inside ? blockChildren(block).length : index+(fraction>.5?1:0), payload); } catch { /* noop */ } }}
       onClick={() => onSelect(block.id)}
       className={`w-full rounded-lg min-h-8 px-2 flex items-center gap-2 text-left text-[9px] transition ${selectedId === block.id ? 'bg-black text-white' : over ? 'bg-[#DDF4EF] outline outline-1 outline-[#20867C]' : 'hover:bg-neutral-100'}`}
       style={{ paddingLeft: 8 + depth * 14 }}
