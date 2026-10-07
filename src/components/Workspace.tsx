@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone, HelpCircle
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
@@ -2234,6 +2234,16 @@ export default function Workspace({
             <MessageCircle size={15} />
             <span className="hidden sm:inline text-[11px] font-mono font-bold uppercase">Comentários</span>
             {totalComments > 0 && <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-black text-white text-[9px] font-bold flex items-center justify-center">{totalComments}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('5is:open-tutorial', { detail: { scope: 'workspace' } }))}
+            className="workspace-help-launch p-2 rounded-xl border border-[#E0E0DE] bg-white hover:border-black transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Ajuda e tutorial"
+            aria-label="Abrir ajuda e tutorial"
+          >
+            <HelpCircle size={15} />
+            <span className="hidden xl:inline text-[11px] font-mono font-bold uppercase">Ajuda</span>
           </button>
           <WorkspaceHistory />
           <button
