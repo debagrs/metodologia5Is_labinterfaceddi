@@ -4,7 +4,9 @@ import { ChevronLeft, PanelLeftOpen } from 'lucide-react';
 const clampRatio = (value: number) => Math.max(24, Math.min(76, value));
 const readStoredRatio = (key: string, fallback: number) => {
   if (typeof window === 'undefined') return fallback;
-  const raw = Number(window.localStorage.getItem(key));
+  const stored = window.localStorage.getItem(key);
+  if (stored === null) return fallback;
+  const raw = Number(stored);
   return Number.isFinite(raw) ? clampRatio(raw) : fallback;
 };
 
@@ -53,7 +55,7 @@ export function StudioWorkspace({
   };
 
   const beginResize = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (split !== 'equal' || !open) return;
+    if (!open) return;
     event.preventDefault();
     const box = rootRef.current?.getBoundingClientRect();
     if (!box) return;
@@ -68,11 +70,13 @@ export function StudioWorkspace({
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       document.body.classList.remove('studio-is-resizing');
     };
     document.body.classList.add('studio-is-resizing');
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   const nudge = (delta: number) => setActiveRatio((isMobile ? mobileRatio : desktopRatio) + delta);
@@ -80,11 +84,11 @@ export function StudioWorkspace({
 
   return <div
     ref={rootRef}
-    className={`studio-workspace ${open ? 'is-open' : ''} ${split === 'equal' ? 'studio-workspace--equal' : ''}`}
-    style={split === 'equal' ? ({
+    className={`studio-workspace ${open ? 'is-open' : ''} studio-workspace--equal`}
+    style={({
       '--studio-tools-ratio-desktop': `${desktopRatio}%`,
       '--studio-tools-ratio-mobile': `${mobileRatio}%`,
-    } as React.CSSProperties) : undefined}
+    } as React.CSSProperties)}
   >
     <aside className="studio-sidebar" aria-label="Ferramentas e edição">
       <button
@@ -100,7 +104,7 @@ export function StudioWorkspace({
       <div id={panelId} className="studio-tools" hidden={!open}>{tools}</div>
     </aside>
 
-    {split === 'equal' && open ? <div
+    {open ? <div
       className="studio-resize-handle"
       role="separator"
       aria-orientation={isMobile ? 'horizontal' : 'vertical'}
