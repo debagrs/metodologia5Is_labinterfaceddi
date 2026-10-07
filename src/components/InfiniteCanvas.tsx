@@ -1,4 +1,5 @@
 import {useGraphicFonts} from '../lib/graphicFonts';
+import ImageStudio from './ImageStudio';
 import {Search as ImageSearch} from 'lucide-react';
 import ImageLibrary from './ImageLibrary';
 import PhotopeaEditor from './PhotopeaEditor';
@@ -132,6 +133,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     currentY: number;
   } | null>(null);
   const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
+  const [imageStudioOpen,setImageStudioOpen]=useState(false);
   const [imageLibraryOpen,setImageLibraryOpen]=useState(false);
   const [photoEditor,setPhotoEditor]=useState<{url?:string;name:string;nodeId?:string}|null>(null);
   const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
@@ -318,7 +320,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     image.src = url;
   });
 
-  const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageLibraryOpen(false);};
+  const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageLibraryOpen(false);setImageStudioOpen(false);};
   const uploadCanvasImage = async (file: File,replaceNodeId?:string) => {
     if (!canEditCanvas) return;
     if (!file.type.startsWith('image/')) {
@@ -1926,87 +1928,66 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         )}
 
         {/* Collapsible Ateliê dock: same control on mobile and desktop. */}
-        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="pointer-events-auto self-center h-9 w-16 rounded-t-2xl rounded-b-xl border border-[#D8D8D4] bg-white/95 shadow-lg flex items-center justify-center hover:bg-black hover:text-white transition-colors" aria-label={mobileToolsOpen ? 'Recolher barra de ferramentas' : 'Abrir barra de ferramentas'} title={mobileToolsOpen ? 'Recolher ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}</button>
+        <button type="button" onClick={() => setMobileToolsOpen((open) => !open)} className="canvas-tools-toggle pointer-events-auto self-center h-10 min-w-16 rounded-2xl border border-black bg-black text-white px-4 shadow-lg flex items-center justify-center gap-2 hover:bg-neutral-800 transition-colors" aria-label={mobileToolsOpen ? 'Recolher barra de ferramentas' : 'Abrir barra de ferramentas'} title={mobileToolsOpen ? 'Recolher ferramentas' : 'Abrir ferramentas'}>{mobileToolsOpen ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}<span className="text-[9px] font-mono font-bold uppercase tracking-[.12em] sm:hidden">{mobileToolsOpen?'Fechar':'Ferramentas'}</span></button>
 
         {/* Action button bar */}
-        <div className={`${mobileToolsOpen ? 'flex' : 'hidden'} canvas-bottom-tools pointer-events-auto w-full flex-nowrap items-center justify-start sm:justify-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#E0E0DE] rounded-2xl px-2 py-1.5 shadow-lg overflow-x-auto overflow-y-hidden overscroll-x-contain`}>
+        <div className={`${mobileToolsOpen ? 'grid' : 'hidden'} canvas-bottom-tools pointer-events-auto w-full bg-white/97 backdrop-blur-md border border-[#E0E0DE] rounded-3xl p-3 shadow-2xl`}>
           <button 
             onClick={() => handleZoom(0.1)} 
-            className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
+            className="canvas-tool-button canvas-tool-button--utility rounded-2xl hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
             title="Aumentar zoom"
           >
             <ZoomIn size={16} />
           </button>
           <button 
             onClick={() => handleZoom(-0.1)} 
-            className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
+            className="canvas-tool-button canvas-tool-button--utility rounded-2xl hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
             title="Diminuir zoom"
           >
             <ZoomOut size={16} />
           </button>
-          <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
+          <div className="canvas-tool-separator w-px h-5 bg-[#E0E0DE] mx-1" />
           <button 
             onClick={handleResetView} 
-            className="w-8 h-8 rounded-lg hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
+            className="canvas-tool-button canvas-tool-button--utility rounded-2xl hover:bg-black/5 flex items-center justify-center text-neutral-700 hover:text-black transition-colors cursor-pointer"
             title="Centralizar âncora do projeto"
           >
             <Maximize size={15} />
           </button>
           {canEditCanvas && (
             <>
-              <div className="w-px h-5 bg-[#E0E0DE] mx-1" />
-              <button type="button" onClick={()=>setImageLibraryOpen(true)} title="Pesquisar imagens livres" aria-label="Pesquisar imagens livres" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><ImageSearch size={14}/><span className="hidden sm:inline">BUSCAR IMAGEM</span></button>
-              <button type="button" onClick={()=>setPhotoEditor({name:'Novo projeto'})} title="Criar e editar imagem com camadas" aria-label="Editor de imagem com camadas" className="px-2.5 h-8 rounded-lg border flex items-center gap-1.5 text-xs"><Pencil size={14}/><span className="hidden sm:inline">EDITAR IMAGEM</span></button>
-              <input
-                ref={canvasImageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadCanvasImage(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => canvasImageInputRef.current?.click()}
-                disabled={uploadingCanvasImage}
-                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
-                title="Adicionar imagem solta ao canvas"
-              >
-                {uploadingCanvasImage ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
-                <span className="hidden sm:inline">IMAGEM</span>
-              </button>
+              <div className="canvas-tool-separator w-px h-5 bg-[#E0E0DE] mx-1" />
+              <button type="button" onClick={() => setImageStudioOpen(true)} disabled={uploadingCanvasImage} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Imagem · upar, buscar Creative Commons, vetorizar, editar com Photopea ou gerar com IA">{uploadingCanvasImage ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}<span>IMAGEM</span></button>
               <button
                 type="button"
                 onClick={() => setNewDrawing(blankDrawing())}
-                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
                 title="Abrir uma folha branca para desenhar"
               >
                 <Pencil size={14} />
-                <span className="hidden sm:inline">DESENHO</span>
+                <span className="canvas-tool-label">DESENHO</span>
               </button>
               <button
                 type="button"
                 onClick={() => setNewInteractive(blankInteractiveDocument('p5'))}
-                className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
                 title="Criar uma camada interativa com p5.js ou Three.js por prompt"
               >
                 <Code2 size={14} />
-                <span className="hidden sm:inline">INTERAÇÃO</span>
+                <span className="canvas-tool-label">INTERAÇÃO</span>
               </button>
-              <button type="button" onClick={() => { setNewWireframeSource(null); setNewWireframe(blankWireframe(projectDesignSystem)); }} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="hidden sm:inline">WIREFRAME</span></button>
-              <button type="button" onClick={() => setNewDesignSystem(blankDesignSystem(projectVisualIdentity))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · tipografia, paleta, tokens e acessibilidade"><Palette size={14}/><span className="hidden sm:inline">DESIGN SYSTEM</span></button>
-              <button type="button" data-tour="atelier-identity" onClick={() => setNewVisualIdentity(blankVisualIdentity(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · estratégia de marca, logo, cor, tipografia, photobrief e aplicações"><Fingerprint size={14}/><span className="hidden sm:inline">IDENTIDADE</span></button>
-              <button type="button" data-tour="atelier-video" onClick={() => setNewVideo(blankVideo(projectDesignSystem))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · inserir e gerar motion para vídeo e redes"><Film size={14}/><span className="hidden sm:inline">VÍDEO</span></button>
-              <button type="button" data-tour="atelier-uxwriting" onClick={() => setNewUXWriting(blankUXWriting())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · microcopy, linguagem simples, tradução e apoio para Libras"><Languages size={14}/><span className="hidden sm:inline">UX WRITING</span></button>
-              <button type="button" data-tour="atelier-sound" onClick={() => setNewSound(blankSound())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · pequenos efeitos e identidade sonora"><Volume2 size={14}/><span className="hidden sm:inline">SOM</span></button>
-              <button type="button" data-tour="atelier-hardware" onClick={() => setNewHardware(blankHardware())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · giroscópio, sensores e microcontroladores"><Cpu size={14}/><span className="hidden sm:inline">HARDWARE</span></button>
-              <button type="button" data-tour="atelier-sprite" onClick={() => setNewSprite(blankSpriteCharacter())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · personagens, sprites, estados e pequenas animações locais"><User size={14}/><span className="hidden sm:inline">PERSONAGENS</span></button>
-              <button type="button" data-tour="atelier-game" onClick={() => setNewGame(blankGameDesign())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · GDD, fases, sprites, mecânicas e playtest"><Gamepad2 size={14}/><span className="hidden sm:inline">GAME DESIGN</span></button>
-              <button type="button" data-tour="atelier-api" onClick={() => setNewApiConnections(blankApiConnections())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · explorar, incorporar e criar APIs"><Plug size={14}/><span className="hidden sm:inline">APIs</span></button>
-              <button type="button" data-tour="atelier-data-story" onClick={() => setNewDataStory(blankDataStory(projectDesignSystem, projectVisualIdentity))} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · storytelling de dados, gráficos, mapas e infográficos livres"><PanelsTopLeft size={14}/><span className="hidden sm:inline">INFODESIGN</span></button>
-              <button type="button" data-tour="atelier-graphics" onClick={() => setNewGraphicSystem(blankGraphicSystem())} className="px-2.5 sm:px-3 h-8 rounded-lg border border-[#E0E0DE] bg-white hover:border-black flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Grafismos · tipografia experimental, pincéis, sprays, padrões e rapports"><WandSparkles size={14}/><span className="hidden sm:inline">GRAFISMOS</span></button>
+              <button type="button" onClick={() => { setNewWireframeSource(null); setNewWireframe(blankWireframe(projectDesignSystem)); }} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · criar telas, auto layout e componentes"><PanelsTopLeft size={14}/><span className="canvas-tool-label">WIREFRAME</span></button>
+              <button type="button" onClick={() => setNewDesignSystem(blankDesignSystem(projectVisualIdentity))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · tipografia, paleta, tokens e acessibilidade"><Palette size={14}/><span className="canvas-tool-label">DESIGN SYSTEM</span></button>
+              <button type="button" data-tour="atelier-identity" onClick={() => setNewVisualIdentity(blankVisualIdentity(projectDesignSystem))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · estratégia de marca, logo, cor, tipografia, photobrief e aplicações"><Fingerprint size={14}/><span className="canvas-tool-label">IDENTIDADE</span></button>
+              <button type="button" data-tour="atelier-video" onClick={() => setNewVideo(blankVideo(projectDesignSystem))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · inserir e gerar motion para vídeo e redes"><Film size={14}/><span className="canvas-tool-label">VÍDEO</span></button>
+              <button type="button" data-tour="atelier-uxwriting" onClick={() => setNewUXWriting(blankUXWriting())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · microcopy, linguagem simples, tradução e apoio para Libras"><Languages size={14}/><span className="canvas-tool-label">UX WRITING</span></button>
+              <button type="button" data-tour="atelier-sound" onClick={() => setNewSound(blankSound())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · pequenos efeitos e identidade sonora"><Volume2 size={14}/><span className="canvas-tool-label">SOM</span></button>
+              <button type="button" data-tour="atelier-hardware" onClick={() => setNewHardware(blankHardware())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · giroscópio, sensores e microcontroladores"><Cpu size={14}/><span className="canvas-tool-label">HARDWARE</span></button>
+              <button type="button" data-tour="atelier-sprite" onClick={() => setNewSprite(blankSpriteCharacter())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · personagens, sprites, estados e pequenas animações locais"><User size={14}/><span className="canvas-tool-label">PERSONAGENS</span></button>
+              <button type="button" data-tour="atelier-game" onClick={() => setNewGame(blankGameDesign())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · GDD, fases, sprites, mecânicas e playtest"><Gamepad2 size={14}/><span className="canvas-tool-label">GAME DESIGN</span></button>
+              <button type="button" data-tour="atelier-api" onClick={() => setNewApiConnections(blankApiConnections())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · explorar, incorporar e criar APIs"><Plug size={14}/><span className="canvas-tool-label">APIs</span></button>
+              <button type="button" data-tour="atelier-data-story" onClick={() => setNewDataStory(blankDataStory(projectDesignSystem, projectVisualIdentity))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Ateliê · storytelling de dados, gráficos, mapas e infográficos livres"><PanelsTopLeft size={14}/><span className="canvas-tool-label">INFODESIGN</span></button>
+              <button type="button" data-tour="atelier-graphics" onClick={() => setNewGraphicSystem(blankGraphicSystem())} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Grafismos · tipografia experimental, pincéis, sprays, padrões e rapports"><WandSparkles size={14}/><span className="canvas-tool-label">GRAFISMOS</span></button>
               <button 
                 onClick={() => {
                   const rect = containerRef.current?.getBoundingClientRect();
@@ -2016,11 +1997,11 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
                     Math.max(0, (rect.height / 2 - panOffset.y) / zoom - 100)
                   );
                 }} 
-                className="px-2.5 sm:px-3 h-8 rounded-lg bg-black text-white hover:bg-neutral-800 flex items-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
+                className="canvas-tool-button rounded-2xl bg-black text-white hover:bg-neutral-800 flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer"
                 title="Criar bloco de notas"
               >
                 <Plus size={14} />
-                <span className="hidden sm:inline">NOTAS</span>
+                <span className="canvas-tool-label">NOTAS</span>
               </button>
             </>
           )}
@@ -2030,6 +2011,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
 
+      {imageStudioOpen && <ImageStudio onUpload={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível adicionar a imagem ao canvas.');}} onChooseOpenImage={addOpenImage} onOpenEditor={()=>{setImageStudioOpen(false);setPhotoEditor({name:'Novo projeto'});}} onGeneratedFile={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível salvar a imagem gerada.');}} onClose={()=>setImageStudioOpen(false)}/>}
       {imageLibraryOpen && <ImageLibrary onChoose={addOpenImage} onClose={()=>setImageLibraryOpen(false)}/>}
       {photoEditor && <PhotopeaEditor key={photoEditor.nodeId || photoEditor.name} url={photoEditor.url} name={photoEditor.name} onSave={async file=>{const result=await uploadCanvasImage(file,photoEditor.nodeId);if(!result)throw new Error('Não foi possível salvar a imagem. Verifique sua sessão e envie uma versão PNG de até 4 MB.');}} onClose={()=>setPhotoEditor(null)}/>}
       {newDrawing && (
@@ -2251,4 +2233,3 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 });
 
 export default InfiniteCanvas;
-
