@@ -302,6 +302,15 @@ function ApplicationPreview({ document, app }: { document: VisualIdentityDocumen
   );
   const cardBase = 'aspect-[4/3] rounded-[22px] overflow-hidden border border-black/10 relative';
 
+  if (app.mockupImageUrl) return <div className={cardBase} style={{ background:'#D9D7D0' }}>
+    <img src={app.mockupImageUrl} alt={app.mockupImageName || app.title} className="absolute inset-0 h-full w-full object-cover"/>
+    <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-black/10" />
+    <div className="absolute inset-0 flex items-center justify-center" style={{mixBlendMode:app.blendMode || 'multiply'}}>
+      {artLayer(false, 'md', 'max-w-[58%]')}
+    </div>
+    {label}
+  </div>;
+
   if (app.type === 'social') return <div className={cardBase} style={{ background: `linear-gradient(145deg, ${mixHex(primary, '#FFFFFF', 0.86)}, ${mixHex(support, '#FFFFFF', 0.8)})` }}>
     <div className="absolute inset-0 opacity-70" style={{ background: `radial-gradient(circle at 18% 18%, ${mixHex(accent, '#FFFFFF', 0.38)} 0, transparent 22%), radial-gradient(circle at 82% 20%, ${mixHex(support, '#FFFFFF', 0.4)} 0, transparent 18%), linear-gradient(120deg, transparent 0, rgba(255,255,255,0.5) 46%, transparent 75%)` }} />
     <div className="absolute left-4 top-4">{brandPlate(false, 'sm')}</div>
@@ -630,6 +639,8 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
   const [sketchOpen, setSketchOpen] = useState(false);
   const [noteDone, setNoteDone] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingMockupId, setUploadingMockupId] = useState<string | null>(null);
+  const [mockupError, setMockupError] = useState('');
   const [logoError, setLogoError] = useState('');
   const [refiningLogo, setRefiningLogo] = useState(false);
   const [refineError, setRefineError] = useState('');
@@ -675,6 +686,20 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
       });
     } catch (error:any) { setLogoError(error?.message || 'Falha no upload da marca.'); }
     finally { setUploadingLogo(false); if (logoFileRef.current) logoFileRef.current.value=''; }
+  };
+
+  const uploadMockup = async (applicationId: string, file: File) => {
+    if (!file.type.startsWith('image/')) { setMockupError('Envie uma fotografia ou imagem de mockup.'); return; }
+    if (file.size > 8 * 1024 * 1024) { setMockupError('A imagem de aplicação precisa ter até 8 MB.'); return; }
+    setUploadingMockupId(applicationId); setMockupError('');
+    try {
+      const session = await ensureTursoSession();
+      const response = await fetch('/api/upload', { method:'POST', headers:{ 'Content-Type': file.type, 'X-File-Name': encodeURIComponent(file.name), ...(session?.token ? { Authorization:`Bearer ${session.token}` } : {}) }, body:file });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.url) throw new Error(data.error || 'Falha no upload da fotografia.');
+      setDraft(current => ({ ...current, applications: current.applications.map(app => app.id===applicationId ? { ...app, mockupImageUrl:data.url, mockupImageName:file.name, blendMode:app.blendMode || 'multiply' } : app), updatedAt:new Date().toISOString() }));
+    } catch(error:any) { setMockupError(error?.message || 'Falha no upload da fotografia.'); }
+    finally { setUploadingMockupId(null); }
   };
 
   const applyRefinementAlternative = (alternativeId: string) => {
@@ -782,10 +807,16 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
         </>}
 
         {tab === 'applications' && <>
-          <div className="rounded-2xl border bg-white p-4"><b className="flex items-center gap-2"><ImageIcon size={15} /> Mockups e pontos de contato</b><p className="mt-1 text-[10px] text-neutral-500">A mesma marca, paleta e tipografia são aplicadas automaticamente em peças físicas e digitais. Use os mockups para testar escala, contraste e consistência.</p></div>
+          {mockupError ? <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-[10px] text-red-700">{mockupError}</div> : null}
+          <div className="rounded-2xl border bg-white p-4"><b className="flex items-center gap-2"><ImageIcon size={15} /> Mockups e pontos de contato</b><p className="mt-1 text-[10px] text-neutral-500">Aplique a marca em mockups paramétricos ou envie uma fotografia real. Ajuste cor do produto, material, impressão, posição, escala, rotação, perspectiva e mesclagem.</p></div>
           <div className="grid grid-cols-1 min-[430px]:grid-cols-2 gap-3">{draft.applications.map((app) => {
             const updateApplication = (next: Partial<VisualIdentityApplication>) => patch({ applications: draft.applications.map((a) => a.id === app.id ? { ...a, ...next } : a) });
             return <div key={app.id} className="rounded-2xl border bg-white p-2.5 shadow-sm"><ApplicationPreview document={draft} app={app} /><div className="mt-2 grid grid-cols-[1fr_auto] gap-2"><select value={app.type} onChange={(e)=>updateApplication({ type:e.target.value as VisualIdentityApplication['type'], title:APPLICATION_TYPES.find(x=>x.id===e.target.value)?.label||app.title })} className="h-8 min-w-0 rounded-lg border px-2 text-[9px]">{APPLICATION_TYPES.map(type=><option key={type.id} value={type.id}>{type.label}</option>)}</select><button disabled={draft.applications.length<=1} onClick={()=>patch({applications:draft.applications.filter(a=>a.id!==app.id)})} className="h-8 w-8 rounded-lg border text-red-600 disabled:opacity-20"><Trash2 size={13} className="mx-auto"/></button></div><input value={app.title} onChange={(e) => updateApplication({ title:e.target.value })} className="mt-2 h-8 w-full rounded-lg border px-2 text-[10px]" />
+            <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+              <label className="h-9 rounded-lg border bg-white px-2 flex items-center justify-center gap-2 text-[9px] font-bold cursor-pointer">{uploadingMockupId===app.id?'ENVIANDO…':'FOTO / MOCKUP REAL'}<input type="file" accept="image/*" className="hidden" disabled={uploadingMockupId===app.id} onChange={e=>{const file=e.target.files?.[0];if(file)void uploadMockup(app.id,file);e.currentTarget.value='';}}/></label>
+              {app.mockupImageUrl ? <button type="button" onClick={()=>updateApplication({mockupImageUrl:undefined,mockupImageName:undefined})} className="h-9 px-3 rounded-lg border text-[9px] font-bold">REMOVER FOTO</button> : null}
+            </div>
+            {app.mockupImageUrl ? <label className="mt-2 block text-[8px] font-mono text-neutral-500">MESCLAGEM<select value={app.blendMode || 'multiply'} onChange={e=>updateApplication({blendMode:e.target.value as any})} className="mt-1 h-8 w-full rounded-md border bg-white px-2 text-[9px]"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="soft-light">Soft light</option></select></label> : null}
             <div className="mt-2 rounded-xl bg-neutral-50 p-2 space-y-2">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5"><label className="text-[8px] font-mono text-neutral-500">PRODUTO<input type="color" value={app.productColor || '#F4F2ED'} onChange={(e)=>updateApplication({productColor:e.target.value})} className="mt-1 h-8 w-full rounded-md border bg-white p-1"/></label><label className="text-[8px] font-mono text-neutral-500">CENA<select value={app.scene || 'studio'} onChange={(e)=>updateApplication({scene:e.target.value as VisualIdentityApplication['scene']})} className="mt-1 h-8 w-full rounded-md border bg-white px-1 text-[9px]"><option value="studio">Estúdio</option><option value="softbox">Softbox</option><option value="lifestyle">Lifestyle</option><option value="warm">Quente</option><option value="dark">Escura</option><option value="paper">Papel</option></select></label><label className="text-[8px] font-mono text-neutral-500">MATERIAL<select value={app.material || 'matte'} onChange={(e)=>updateApplication({material:e.target.value as VisualIdentityApplication['material']})} className="mt-1 h-8 w-full rounded-md border bg-white px-1 text-[9px]"><option value="matte">Fosco</option><option value="glossy">Brilho</option><option value="fabric">Tecido</option><option value="cotton">Algodão</option><option value="kraft">Kraft</option><option value="ceramic">Cerâmica</option><option value="metal">Metal</option><option value="paper-texture">Papel texturizado</option></select></label><label className="text-[8px] font-mono text-neutral-500">APLICAÇÃO<select value={app.printMode || 'flat'} onChange={(e)=>updateApplication({printMode:e.target.value as VisualIdentityApplication['printMode']})} className="mt-1 h-8 w-full rounded-md border bg-white px-1 text-[9px]"><option value="flat">Impressão plana</option><option value="screenprint">Silk / tinta</option><option value="embroidered">Bordado</option><option value="embossed">Baixo relevo</option><option value="sticker">Adesivo</option></select></label></div>
               <label className="block text-[8px] font-mono text-neutral-500">ESCALA DA MARCA <span className="float-right">{Math.round((app.artworkScale ?? 1)*100)}%</span><input type="range" min="0.32" max="1.85" step="0.03" value={app.artworkScale ?? 1} onChange={(e)=>updateApplication({artworkScale:Number(e.target.value)})} className="mt-1 w-full"/></label>
