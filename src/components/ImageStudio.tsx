@@ -1,3 +1,4 @@
+import ResizableStudioGrid from './ResizableStudioGrid';
 import React, { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Search, Pencil, Sparkles, Upload, X, Loader2, ExternalLink, WandSparkles } from 'lucide-react';
 import { ensureTursoSession } from '../lib/turso';
@@ -333,7 +334,7 @@ export default function ImageStudio({
           )}
 
           {tab === 'trace' && (
-            <section className="grid xl:grid-cols-[360px_minmax(0,1fr)] gap-5 items-start">
+            <ResizableStudioGrid storageKey="image:edit" defaults={[32, 68]} className="gap-3">
               <aside className="rounded-3xl border bg-white p-5 sticky top-0">
                 <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">TRACE · RASTER → VETOR</div>
                 <h2 className="mt-2 text-xl font-bold">Vetorizar imagem</h2>
@@ -353,11 +354,11 @@ export default function ImageStudio({
                 <div className="rounded-3xl border bg-[#E9E7E0] p-4 flex flex-col"><div className="text-[10px] font-mono text-neutral-500">ORIGINAL RASTER</div><div className="mt-3 flex-1 min-h-[430px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-4">{tracePreview ? <img src={tracePreview} alt="Original" className="max-h-[620px] max-w-full object-contain"/> : <div className="text-sm text-neutral-400 text-center max-w-xs">Escolha uma fotografia, logo JPG/PNG, desenho escaneado ou ilustração raster.</div>}</div></div>
                 <div className="rounded-3xl border bg-[#E9E7E0] p-4 flex flex-col"><div className="flex justify-between gap-3 items-center"><div className="text-[10px] font-mono text-neutral-500">SVG EDITÁVEL</div>{traceSvg && <button onClick={() => void saveTrace()} className="h-9 rounded-xl bg-[#27877D] text-white px-3 text-[10px] font-bold">USAR NO CANVAS</button>}</div><div className="mt-3 flex-1 min-h-[430px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-4" style={{ backgroundImage: 'linear-gradient(45deg,#f5f5f5 25%,transparent 25%),linear-gradient(-45deg,#f5f5f5 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f5f5f5 75%),linear-gradient(-45deg,transparent 75%,#f5f5f5 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0,0 10px,10px -10px,-10px 0px' }}>{traceSvg ? <img alt="Trace vetorial" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(traceSvg)}`} className="max-h-[620px] max-w-full object-contain"/> : <div className="text-sm text-neutral-400 text-center max-w-xs">O resultado vetorial aparece aqui. Ajuste detalhe, suavização e cores até chegar à forma desejada.</div>}</div></div>
               </div>
-            </section>
+            </ResizableStudioGrid>
           )}
 
           {tab === 'generate' && (
-            <section className="grid xl:grid-cols-[420px_minmax(0,1fr)] gap-5">
+            <ResizableStudioGrid storageKey="image:generate" defaults={[38, 62]} className="gap-3">
               <div className="rounded-3xl border bg-white p-5 sm:p-6">
                 <WandSparkles size={30}/><h2 className="mt-4 text-xl font-bold">Assistente visual por IA</h2>
                 <p className="mt-2 text-sm text-neutral-600">Em vez de apenas “gerar uma imagem”, o fluxo lê a referência, entende o que você quer preservar e atua sobre ela. A saída continua sendo SVG editável.</p>
@@ -377,7 +378,7 @@ export default function ImageStudio({
                 <div className="mt-4 flex-1 min-h-[420px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-5">{generatedSvg ? <img alt="Imagem gerada" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} className="max-h-[620px] max-w-full object-contain"/> : <div className="max-w-md text-center text-sm text-neutral-400">A prévia aparecerá aqui. Nos modos de referência, a IA primeiro recebe a imagem e as regras do que deve preservar; depois recria, adapta ou refina.</div>}</div>
                 {!!generatedNotes.length && <div className="mt-4 rounded-2xl bg-white border p-4"><div className="text-[9px] font-mono text-neutral-500">O QUE FOI FEITO</div><ul className="mt-2 space-y-1 text-xs text-neutral-700">{generatedNotes.map((note,index) => <li key={index}>• {note}</li>)}</ul></div>}
               </div>
-            </section>
+            </ResizableStudioGrid>
           )}
         </div>
       </main>
