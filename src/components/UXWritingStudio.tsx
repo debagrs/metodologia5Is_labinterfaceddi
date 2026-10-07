@@ -126,7 +126,7 @@ export default function UXWritingStudio({ document, project, title = 'UX Writing
       <StudioAreaGuide area="ux-writing" />
       <button type="button" disabled={!canEdit} onClick={()=>onSave({...draft,updatedAt:new Date().toISOString()})} className="h-11 px-4 rounded-xl bg-black text-white flex items-center gap-2 text-xs font-bold disabled:opacity-40"><Save size={15}/> SALVAR</button>
     </header>
-    <ResizableStudioGrid storageKey="UXWritingStudio:panels" defaults={[23,48,29]}>
+    <ResizableStudioGrid storageKey="UXWritingStudio:panels" mode="three-pane" sidebarPixels={[320, 360]}>
       <aside className="min-h-0 overflow-y-auto bg-white border-b lg:border-b-0 lg:border-r border-black/10 p-3">
         <button type="button" onClick={addEntry} disabled={!canEdit} className="w-full h-11 rounded-xl bg-black text-white flex items-center justify-center gap-2 text-xs font-bold"><Plus size={15}/> NOVO TEXTO</button>
         {availableWireframes.length>0&&<button type="button" onClick={importWireframeTexts} disabled={!canEdit} className="mt-2 w-full min-h-10 rounded-xl border border-black flex items-center justify-center gap-2 px-2 text-[9px] font-mono font-bold"><Sparkles size={13}/> IMPORTAR TEXTOS DOS WIREFRAMES</button>}
