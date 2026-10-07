@@ -94,6 +94,16 @@ export default function TutorialCoach({ scope, userId = 'local', className = '' 
   };
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{scope?: TutorialScope}>).detail;
+      if (detail?.scope && detail.scope !== scope) return;
+      restart();
+    };
+    window.addEventListener('5is:open-tutorial', handler as EventListener);
+    return () => window.removeEventListener('5is:open-tutorial', handler as EventListener);
+  }, [scope]);
+
+  useEffect(() => {
     if (typeof document === 'undefined') return;
     const body = document.body;
     const sync = () => { if (body.classList.contains('atelier-open')) setOpen(false); };
@@ -123,7 +133,7 @@ export default function TutorialCoach({ scope, userId = 'local', className = '' 
       onClick={restart}
       aria-label="Abrir tutorial da plataforma"
       title="Tutorial"
-      className={`tutorial-coach-launcher fixed z-[180] right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] w-11 h-11 rounded-full bg-black text-white shadow-xl border-2 border-white flex items-center justify-center cursor-pointer ${className}`}
+      className={`tutorial-coach-launcher hidden sm:flex fixed z-[180] right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] w-11 h-11 rounded-full bg-black text-white shadow-xl border-2 border-white flex items-center justify-center cursor-pointer ${className}`}
     >
       <HelpCircle size={21} />
     </button>
