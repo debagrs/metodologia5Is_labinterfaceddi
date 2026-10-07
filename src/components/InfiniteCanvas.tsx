@@ -2251,3 +2251,4 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 });
 
 export default InfiniteCanvas;
+
