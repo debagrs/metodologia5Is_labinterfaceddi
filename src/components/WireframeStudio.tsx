@@ -720,7 +720,7 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
       <button onClick={() => setMobilePane('inspector')} className={`flex-1 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 ${mobilePane === 'inspector' ? 'bg-black text-white' : 'bg-[#F3F2EE]'}`}><PanelRight size={13} /> EDIÇÃO</button>
     </div>
 
-    <ResizableStudioGrid storageKey="wireframe:panels" defaults={[23, 51, 26]}>
+    <ResizableStudioGrid storageKey="wireframe:panels" mode="three-pane" sidebarPixels={[320, 340]}>
       <div className={`${mobilePane === 'library' ? 'block' : 'hidden'} lg:block h-full min-h-0`}>{LibraryPane}</div>
       <main className={`${mobilePane === 'canvas' ? 'flex' : 'hidden'} lg:flex h-full min-h-0 flex-col bg-[#E7E5E0] overflow-hidden`}>
         <div className="shrink-0 min-h-12 bg-white/90 border-b px-3 flex items-center gap-2 overflow-x-auto">
