@@ -261,3 +261,4 @@ export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   if (a.strokeEnabled === false) markup = markup.replace(/stroke="[^"]+"/gi, 'stroke="none"');
   return { defs: `<defs>${defs}</defs>`, markup };
 }
+
