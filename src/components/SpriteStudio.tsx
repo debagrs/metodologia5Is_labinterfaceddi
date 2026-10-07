@@ -1095,3 +1095,4 @@ export default function SpriteStudio({ document, title = 'Novo personagem & cria
     </StudioWorkspace></VisualCharacterContext.Provider>
   </div>;
 }
+
