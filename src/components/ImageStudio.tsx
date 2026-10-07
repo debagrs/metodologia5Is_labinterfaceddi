@@ -334,7 +334,7 @@ export default function ImageStudio({
           )}
 
           {tab === 'trace' && (
-            <ResizableStudioGrid storageKey="image:edit" defaults={[32, 68]} className="gap-3">
+            <ResizableStudioGrid storageKey="image:edit" mode="sidebar" sidebarPixels={[380]} className="gap-3">
               <aside className="rounded-3xl border bg-white p-5 sticky top-0">
                 <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">TRACE · RASTER → VETOR</div>
                 <h2 className="mt-2 text-xl font-bold">Vetorizar imagem</h2>
@@ -358,7 +358,7 @@ export default function ImageStudio({
           )}
 
           {tab === 'generate' && (
-            <ResizableStudioGrid storageKey="image:generate" defaults={[38, 62]} className="gap-3">
+            <ResizableStudioGrid storageKey="image:generate" mode="sidebar" sidebarPixels={[400]} className="gap-3">
               <div className="rounded-3xl border bg-white p-5 sm:p-6">
                 <WandSparkles size={30}/><h2 className="mt-4 text-xl font-bold">Assistente visual por IA</h2>
                 <p className="mt-2 text-sm text-neutral-600">Em vez de apenas “gerar uma imagem”, o fluxo lê a referência, entende o que você quer preservar e atua sobre ela. A saída continua sendo SVG editável.</p>
