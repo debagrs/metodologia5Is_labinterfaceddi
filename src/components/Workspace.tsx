@@ -5,7 +5,7 @@ import {
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
   Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone, HelpCircle
 } from 'lucide-react';
-import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument } from '../types';
+import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument, ProjectCanvasPage } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
 import { drawingToSvgString } from './DrawingStudio';
 import MediatorSticker from './MediatorSticker';
@@ -1582,6 +1582,36 @@ export default function Workspace({
   const [expandedTechniquesPhase, setExpandedTechniquesPhase] = useState<Phase | null>(null);
   const speechRecognitionRef = useRef<any>(null);
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
+  const [activeCanvasPage, setActiveCanvasPage] = useState<ProjectCanvasPage>('process');
+  const [saveState, setSaveState] = useState<'connecting'|'synced'|'local'|'error'|'disabled'>('synced');
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!currentUser?.id || detail?.ownerId === currentUser.id) setSaveState(detail?.state || 'synced');
+    };
+    window.addEventListener('5is:cloud-state', handler);
+    return () => window.removeEventListener('5is:cloud-state', handler);
+  }, [currentUser?.id]);
+
+  React.useEffect(() => { setActiveCanvasPage('process'); }, [project.id]);
+
+  const inferredCanvasPage = (node: ThoughtNode): ProjectCanvasPage => {
+    if (node.canvasPage) return node.canvasPage;
+    if (node.type === 'wireframe-board') return 'wireframes';
+    if (['drawing-sheet','interactive-lab','text-system','visual-identity','video-board','sound-board','hardware-board','sprite-character','game-design','graphic-system'].includes(node.type)) return 'experiments';
+    return 'process';
+  };
+  const pageNodes = nodes.filter((node) => inferredCanvasPage(node) === activeCanvasPage);
+  const pageAwareAddNode = (node: Omit<ThoughtNode, 'id' | 'createdAt'>) => onAddNode({ ...node, canvasPage: activeCanvasPage });
+  const pageAwareAddCustomThought = (x: number, y: number) => pageAwareAddNode({ type: 'user-thought', title: 'Nova nota', content: '', phase: project.activePhase, x, y, connections: [], isCompleted: false });
+  const pageAwareUpdateNodes = (updated: ThoughtNode[]) => {
+    const visibleIds = new Set(pageNodes.map((node) => node.id));
+    onUpdateNodes([
+      ...nodes.filter((node) => !visibleIds.has(node.id)),
+      ...updated.map((node) => ({ ...node, canvasPage: activeCanvasPage })),
+    ]);
+  };
 
   const activeMediator = MEDIATORS.find(m => m.id === selectedMediatorId) || MEDIATORS[0];
   const totalComments = nodes.reduce((sum, node) => sum + (node.comments?.length || 0), 0);
@@ -2245,6 +2275,7 @@ export default function Workspace({
             <HelpCircle size={15} />
             <span className="hidden xl:inline text-[11px] font-mono font-bold uppercase">Ajuda</span>
           </button>
+          <div id="workspace-history-slot" className="contents" />
           <WorkspaceHistory />
           <button
             onClick={() => {
@@ -2294,11 +2325,29 @@ export default function Workspace({
           </div>
 
           
+          {!collaborationPermission && !studentName && <span className={`workspace-save-state ${saveState === 'error' ? 'is-error' : saveState === 'local' || saveState === 'connecting' ? 'is-saving' : 'is-saved'}`} title="Salvamento automático do projeto">
+            {saveState === 'error' ? 'ERRO AO SALVAR' : saveState === 'local' || saveState === 'connecting' ? 'SALVANDO…' : saveState === 'disabled' ? 'SALVO LOCAL' : 'SALVO ✓'}
+          </span>}
           <span className="text-[11px] font-mono text-[#70706E] bg-[#F5F5F3] border border-[#E0E0DE] rounded-full px-3 py-1 font-semibold uppercase tracking-wider hidden md:block">
             Draft: {project.projectType}
           </span>
         </div>
       </header>
+
+      <nav id="workspace-project-pages" data-tour="workspace-pages" className="project-page-tabs" aria-label="Páginas do projeto">
+        <div className="project-page-tabs__inner">
+          <button type="button" className={activeCanvasPage==='process'?'active':''} onClick={()=>setActiveCanvasPage('process')}>
+            <span className="project-page-tabs__icon">01</span><span><b>PROCESSO</b><small>pesquisa · notas · análises</small></span>
+          </button>
+          <button type="button" className={activeCanvasPage==='wireframes'?'active':''} onClick={()=>setActiveCanvasPage('wireframes')}>
+            <span className="project-page-tabs__icon">02</span><span><b>WIREFRAMES</b><small>telas · fluxos · protótipos</small></span>
+          </button>
+          <button type="button" className={activeCanvasPage==='experiments'?'active':''} onClick={()=>setActiveCanvasPage('experiments')}>
+            <span className="project-page-tabs__icon">03</span><span><b>EXPERIMENTAÇÕES</b><small>rabiscos · linguagem · código</small></span>
+          </button>
+          <div className="project-page-tabs__hint">Todas as ferramentas funcionam em todas as páginas</div>
+        </div>
+      </nav>
 
       {isCollaboratorsOpen && canManageCollaborators && (
         <ProjectCollaboratorsPanel project={project} onClose={() => setIsCollaboratorsOpen(false)} />
@@ -2591,15 +2640,16 @@ export default function Workspace({
         <InfiniteCanvas
           ref={canvasRef}
           project={project}
-          nodes={nodes}
+          nodes={pageNodes}
+          allProjectNodes={nodes}
           activePhase={project.activePhase}
           onUpdateNodeCoords={onUpdateNodeCoords}
-          onAddCustomThought={onAddCustomThought}
+          onAddCustomThought={pageAwareAddCustomThought}
           onUpdateNodeContent={onUpdateNodeContent}
           onDeleteNode={onDeleteNode}
           onUpdateNode={onUpdateNode}
-          onUpdateNodes={onUpdateNodes}
-          onAddNode={onAddNode}
+          onUpdateNodes={pageAwareUpdateNodes}
+          onAddNode={pageAwareAddNode}
           currentUser={currentUser!}
           collaborationPermission={collaborationPermission}
         />
