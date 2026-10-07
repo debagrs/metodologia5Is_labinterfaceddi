@@ -210,3 +210,4 @@ export function renderVoxelCharacterSvg(document: CharacterSpriteDocument) {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 520" width="${document.width || 360}" height="${document.height || 520}"><title>${esc(document.characterName)}</title><g stroke-linejoin="round">${faces.map(face=>`<polygon points="${face.points}" fill="${face.fill}" stroke="${face.stroke}" stroke-width="1.4"/>`).join('')}${extra}</g></svg>`;
 }
+
