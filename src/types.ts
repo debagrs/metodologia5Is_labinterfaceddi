@@ -175,9 +175,16 @@ export interface DrawingDocument {
 export type WireframeDevicePreset = 'mobile' | 'tablet' | 'desktop' | 'watch' | 'custom';
 export type WireframeDirection = 'column' | 'row';
 export type WireframeAlign = 'start' | 'center' | 'end' | 'stretch';
-export type WireframeBlockType = 'text' | 'button' | 'input' | 'image' | 'card' | 'navbar' | 'nav-item' | 'list-item' | 'icon' | 'avatar' | 'checkbox' | 'toggle' | 'divider' | 'section' | 'spacer';
+export type WireframeBlockType = 'column' | 'row' | 'container' | 'stack' | 'wrap' | 'section' | 'form' | 'list-view' | 'grid-view' | 'page-view' | 'text' | 'heading' | 'button' | 'icon-button' | 'fab' | 'image' | 'video' | 'map' | 'webview' | 'icon' | 'avatar' | 'badge' | 'divider' | 'spacer' | 'input' | 'search' | 'textarea' | 'select' | 'date-picker' | 'time-picker' | 'checkbox' | 'radio' | 'toggle' | 'slider' | 'navbar' | 'side-nav' | 'drawer' | 'appbar' | 'bottom-nav' | 'tabs' | 'breadcrumb' | 'pagination' | 'nav-item' | 'list-item' | 'card' | 'accordion' | 'carousel' | 'chip' | 'progress' | 'table';
 
 export interface WireframeBlock {
+  opacity?: number;
+  children?: WireframeBlock[];
+  direction?: WireframeDirection;
+  align?: WireframeAlign;
+  justify?: 'start' | 'center' | 'end' | 'between';
+  layoutMode?: 'flex' | 'grid' | 'stack';
+  wrap?: boolean;
   fontFamily?: string; fontSize?: number; fontWeight?: number;
   id: string;
   type: WireframeBlockType;
@@ -202,6 +209,7 @@ export interface WireframeBlock {
 
 
 export interface WireframeFrame {
+  wrap?: boolean;
   id: string;
   name: string;
   preset: WireframeDevicePreset;
@@ -521,6 +529,8 @@ export interface CharacterAppearance {
   voxelPitch?: number;
   voxelDepth?: number;
   voxelBevel?: number;
+  voxelVolume?: number;
+  voxelTorsoHeight?: number;
   bodyShape: 'slim' | 'very-slim' | 'average' | 'athletic' | 'stocky' | 'plus-size' | 'chibi';
   torsoShape: 'rectangle' | 'trapezoid' | 'round' | 'triangle';
   armStyle: 'thin' | 'regular' | 'strong';
