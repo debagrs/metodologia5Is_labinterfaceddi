@@ -1,13 +1,11 @@
 import ResizableStudioGrid from './ResizableStudioGrid';
 import React, { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Search, Pencil, Sparkles, Upload, X, Loader2, ExternalLink, WandSparkles } from 'lucide-react';
-import { ensureTursoSession } from '../lib/turso';
 import { searchOpenImages, type ImageProvider, type OpenImage } from '../lib/openImages';
 import { traceImageFile, type TraceMode } from '../lib/vectorTrace';
+import { generateAiImage, generatedImagePreviewUrl, generatedImageToFile, prepareAiImageReference, urlToAiReference, type AiGeneratedImage, type AiImageAction } from '../lib/aiImage';
 
 type Tab = 'upload' | 'search' | 'edit' | 'trace' | 'generate';
-type AiImageAction = 'create' | 'recreate' | 'adapt' | 'refine';
-
 async function imagePreview(file: File) {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -17,49 +15,26 @@ async function imagePreview(file: File) {
   });
 }
 
-async function prepareVisualReference(file: File): Promise<{ mimeType: string; data: string }> {
-  const source = await imagePreview(file);
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Não foi possível preparar a referência visual.'));
-    img.src = source;
-  });
-  let max = 820;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const ratio = Math.min(1, max / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
-    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * ratio));
-    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * ratio));
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Seu navegador não disponibilizou o canvas necessário.');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', Math.max(.45, .82 - attempt * .08));
-    const data = dataUrl.split(',')[1] || '';
-    if (data.length <= 430000) return { mimeType: 'image/jpeg', data };
-    max = Math.round(max * .74);
-  }
-  throw new Error('A referência ficou grande demais. Use uma imagem menor ou mais simples.');
-}
-
 export default function ImageStudio({
   onUpload,
   onChooseOpenImage,
   onOpenEditor,
   onGeneratedFile,
+  onGeneratedAsset,
+  referenceAssets = [],
+  initialTab = 'upload',
   onClose,
 }: {
   onUpload: (file: File) => Promise<void> | void;
   onChooseOpenImage: (image: OpenImage) => Promise<void> | void;
   onOpenEditor: () => void;
   onGeneratedFile: (file: File) => Promise<void> | void;
+  onGeneratedAsset?: (image: AiGeneratedImage) => Promise<void> | void;
+  referenceAssets?: Array<{ id: string; name: string; url: string }>;
+  initialTab?: Tab;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('upload');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState('');
   const [provider, setProvider] = useState<ImageProvider>('commons');
   const [items, setItems] = useState<OpenImage[]>([]);
@@ -71,11 +46,12 @@ export default function ImageStudio({
   const [adding, setAdding] = useState('');
 
   const [prompt, setPrompt] = useState('');
-  const [generatedSvg, setGeneratedSvg] = useState('');
-  const [generatedName, setGeneratedName] = useState('imagem-gerada.svg');
+  const [generatedImage, setGeneratedImage] = useState<AiGeneratedImage | null>(null);
   const [generatedNotes, setGeneratedNotes] = useState<string[]>([]);
+  const [aspectRatio, setAspectRatio] = useState('1:1');
   const [aiAction, setAiAction] = useState<AiImageAction>('create');
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referenceAsset, setReferenceAsset] = useState<{ id: string; name: string; url: string } | null>(null);
   const [referencePreview, setReferencePreview] = useState('');
   const [preserveComposition, setPreserveComposition] = useState(true);
   const [preservePalette, setPreservePalette] = useState(true);
@@ -154,7 +130,8 @@ export default function ImageStudio({
   const chooseReference = async (file?: File) => {
     if (!file) return;
     setReferenceFile(file);
-    setGeneratedSvg('');
+    setReferenceAsset(null);
+    setGeneratedImage(null);
     setGeneratedNotes([]);
     setError('');
     try { setReferencePreview(await imagePreview(file)); }
@@ -164,42 +141,30 @@ export default function ImageStudio({
 
   const generate = async () => {
     if (!prompt.trim()) return;
-    if (aiAction !== 'create' && !referenceFile) {
+    if (aiAction !== 'create' && !referenceFile && !referenceAsset) {
       setError('Escolha uma imagem de referência para recriar, adaptar ou refinar.');
       return;
     }
     setBusy(true);
     setError('');
-    setGeneratedSvg('');
+    setGeneratedImage(null);
     setGeneratedNotes([]);
     try {
-      const visualReferences = referenceFile ? [await prepareVisualReference(referenceFile)] : [];
-      const session = await ensureTursoSession().catch(() => null);
-      const response = await fetch('/api/mediators/think', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-        },
-        body: JSON.stringify({
-          mode: 'image-svg',
-          prompt: prompt.trim(),
-          imageAction: aiAction,
-          preserve: {
-            composition: preserveComposition,
-            palette: preservePalette,
-            silhouette: preserveSilhouette,
-          },
-          referenceNames: referenceFile ? [referenceFile.name] : [],
-          visualReferences,
-        }),
+      const visualReferences = referenceFile
+        ? [await prepareAiImageReference(referenceFile)]
+        : referenceAsset
+          ? [await urlToAiReference(referenceAsset.url, referenceAsset.name)]
+          : [];
+      const result = await generateAiImage({
+        prompt: prompt.trim(),
+        action: aiAction,
+        aspectRatio,
+        preserve: { composition: preserveComposition, palette: preservePalette, silhouette: preserveSilhouette },
+        visualReferences,
+        name: prompt.trim().split(/\s+/).slice(0,6).join('-'),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data?.generatedImage?.svg) throw new Error(data?.error || 'A IA não conseguiu gerar a imagem.');
-      setGeneratedSvg(String(data.generatedImage.svg));
-      setGeneratedNotes(Array.isArray(data.generatedImage.notes) ? data.generatedImage.notes.map(String) : []);
-      const safeName = String(data.generatedImage.name || 'imagem-gerada').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-+|-+$/g, '') || 'imagem-gerada';
-      setGeneratedName(`${safeName}.svg`);
+      setGeneratedImage(result.image);
+      setGeneratedNotes(result.notes);
     } catch (e: any) {
       setError(e?.message || 'Falha ao gerar imagem.');
     } finally {
@@ -208,12 +173,12 @@ export default function ImageStudio({
   };
 
   const saveGenerated = async () => {
-    if (!generatedSvg) return;
+    if (!generatedImage) return;
     setBusy(true);
     setError('');
     try {
-      const file = new File([generatedSvg], generatedName, { type: 'image/svg+xml' });
-      await onGeneratedFile(file);
+      if (generatedImage.url && onGeneratedAsset) await onGeneratedAsset(generatedImage);
+      else await onGeneratedFile(await generatedImageToFile(generatedImage));
       onClose();
     } catch (e: any) {
       setError(e?.message || 'Não foi possível salvar a imagem gerada.');
@@ -361,21 +326,22 @@ export default function ImageStudio({
             <ResizableStudioGrid storageKey="image:generate" mode="sidebar" sidebarPixels={[400]} className="gap-3">
               <div className="rounded-3xl border bg-white p-5 sm:p-6">
                 <WandSparkles size={30}/><h2 className="mt-4 text-xl font-bold">Assistente visual por IA</h2>
-                <p className="mt-2 text-sm text-neutral-600">Em vez de apenas “gerar uma imagem”, o fluxo lê a referência, entende o que você quer preservar e atua sobre ela. A saída continua sendo SVG editável.</p>
+                <p className="mt-2 text-sm text-neutral-600">Geração visual real com o modelo de imagem do Gemini. Você pode criar do zero ou usar uma imagem do projeto como referência; depois, se precisar de vetor, use a aba VETORIZAR.</p>
                 <div className="mt-5 grid grid-cols-2 gap-2">
                   {([
-                    ['create','CRIAR NOVO'],['recreate','RECRIAR EM VETOR'],['adapt','ADAPTAR'],['refine','REFINAR'],
+                    ['create','CRIAR NOVO'],['recreate','RECRIAR'],['adapt','ADAPTAR'],['refine','REFINAR'],
                   ] as Array<[AiImageAction,string]>).map(([value,label]) => <button key={value} onClick={() => setAiAction(value)} className={`min-h-10 rounded-xl border px-2 text-[10px] font-bold ${aiAction === value ? 'bg-black text-white' : ''}`}>{label}</button>)}
                 </div>
-                {aiAction !== 'create' && <div className="mt-4 rounded-2xl border bg-neutral-50 p-3"><input ref={referenceRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => void chooseReference(event.target.files?.[0])}/><button onClick={() => referenceRef.current?.click()} className="h-10 w-full rounded-xl border bg-white text-xs font-bold flex items-center justify-center gap-2"><Upload size={14}/>{referenceFile ? 'TROCAR REFERÊNCIA' : 'ESCOLHER REFERÊNCIA'}</button>{referencePreview && <div className="mt-3 h-36 rounded-xl overflow-hidden bg-white border flex items-center justify-center"><img src={referencePreview} alt="Referência" className="w-full h-full object-contain"/></div>}<div className="mt-3 text-[9px] font-mono text-neutral-500">PRESERVAR</div><div className="mt-2 grid gap-2 text-xs"><label className="flex gap-2"><input type="checkbox" checked={preserveComposition} onChange={(e) => setPreserveComposition(e.target.checked)}/>Composição</label><label className="flex gap-2"><input type="checkbox" checked={preservePalette} onChange={(e) => setPreservePalette(e.target.checked)}/>Paleta</label><label className="flex gap-2"><input type="checkbox" checked={preserveSilhouette} onChange={(e) => setPreserveSilhouette(e.target.checked)}/>Silhueta / estrutura</label></div></div>}
+                {aiAction !== 'create' && <div className="mt-4 rounded-2xl border bg-neutral-50 p-3"><input ref={referenceRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => void chooseReference(event.target.files?.[0])}/><button onClick={() => referenceRef.current?.click()} className="h-10 w-full rounded-xl border bg-white text-xs font-bold flex items-center justify-center gap-2"><Upload size={14}/>{referenceFile ? 'TROCAR REFERÊNCIA' : 'ENVIAR REFERÊNCIA'}</button>{referenceAssets.length > 0 && <label className="mt-3 block text-[9px] font-mono text-neutral-500">OU USAR DO PROJETO<select value={referenceAsset?.id || ''} onChange={(event)=>{const asset=referenceAssets.find(item=>item.id===event.target.value)||null;setReferenceAsset(asset);setReferenceFile(null);setReferencePreview(asset?.url || '');setGeneratedImage(null);}} className="mt-1 h-10 w-full rounded-xl border bg-white px-2 text-xs"><option value="">Selecionar imagem…</option>{referenceAssets.map((asset)=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}{referencePreview && <div className="mt-3 h-36 rounded-xl overflow-hidden bg-white border flex items-center justify-center"><img src={referencePreview} alt="Referência" className="w-full h-full object-contain"/></div>}<div className="mt-3 text-[9px] font-mono text-neutral-500">PRESERVAR</div><div className="mt-2 grid gap-2 text-xs"><label className="flex gap-2"><input type="checkbox" checked={preserveComposition} onChange={(e) => setPreserveComposition(e.target.checked)}/>Composição</label><label className="flex gap-2"><input type="checkbox" checked={preservePalette} onChange={(e) => setPreservePalette(e.target.checked)}/>Paleta</label><label className="flex gap-2"><input type="checkbox" checked={preserveSilhouette} onChange={(e) => setPreserveSilhouette(e.target.checked)}/>Silhueta / estrutura</label></div></div>}
+                <label className="block mt-5 text-xs font-bold">FORMATO</label><div className="mt-2 grid grid-cols-5 gap-1">{['1:1','4:5','3:2','16:9','9:16'].map((ratio)=><button key={ratio} type="button" onClick={()=>setAspectRatio(ratio)} className={`min-h-9 rounded-xl border text-[10px] font-bold ${aspectRatio===ratio?'bg-black text-white':''}`}>{ratio}</button>)}</div>
                 <label className="block mt-5 text-xs font-bold">Diga o trabalho, não só o resultado</label>
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={8} placeholder={aiAction === 'create' ? 'Ex.: crie uma ilustração botânica de araucária, line art minimalista, fundo transparente...' : 'Ex.: mantenha a composição, simplifique em 4 cores, transforme em line art editorial e preserve a silhueta principal...'} className="mt-2 w-full rounded-xl border p-3 resize-y"/>
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={8} placeholder={aiAction === 'create' ? 'Ex.: ilustração editorial de araucária, traço expressivo, fundo claro, composição vertical...' : 'Ex.: mantenha a composição, simplifique a paleta, torne o acabamento mais editorial e preserve a silhueta principal...'} className="mt-2 w-full rounded-xl border p-3 resize-y"/>
                 <button type="button" onClick={() => void generate()} disabled={busy || !prompt.trim()} className="mt-4 h-12 w-full rounded-xl bg-black text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">{busy ? <Loader2 size={18} className="animate-spin"/> : <Sparkles size={18}/>}EXECUTAR COM IA</button>
-                <div className="mt-4 rounded-xl bg-[#E6F6F2] border border-[#A8DED4] p-3 text-[11px] text-[#174C46]"><b>Fluxo de produção:</b> a IA recebe sua instrução e, quando houver referência, a imagem junto. Ela devolve vetor editável, não uma camada raster achatada.</div>
+                <div className="mt-4 rounded-xl bg-[#E6F6F2] border border-[#A8DED4] p-3 text-[11px] text-[#174C46]"><b>Fluxo universal:</b> a imagem gerada entra na Biblioteca do Projeto e pode ser usada em Game Design, Wireframe, Vídeo, Identidade, Grafismos e demais ateliês. Se precisar de SVG, gere primeiro e depois use VETORIZAR.</div>
               </div>
               <div className="rounded-3xl border bg-[#EEECE5] min-h-[560px] p-5 sm:p-6 flex flex-col">
-                <div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">RESULTADO EDITÁVEL</div><b className="text-sm">SVG produzido pela IA</b></div>{generatedSvg && <button type="button" onClick={() => void saveGenerated()} disabled={busy} className="h-10 rounded-xl bg-[#27877D] text-white px-4 text-xs font-bold flex items-center gap-2"><ImagePlus size={15}/>USAR NO CANVAS</button>}</div>
-                <div className="mt-4 flex-1 min-h-[420px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-5">{generatedSvg ? <img alt="Imagem gerada" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(generatedSvg)}`} className="max-h-[620px] max-w-full object-contain"/> : <div className="max-w-md text-center text-sm text-neutral-400">A prévia aparecerá aqui. Nos modos de referência, a IA primeiro recebe a imagem e as regras do que deve preservar; depois recria, adapta ou refina.</div>}</div>
+                <div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">RESULTADO IA</div><b className="text-sm">Imagem pronta para a Biblioteca</b></div>{generatedImage && <button type="button" onClick={() => void saveGenerated()} disabled={busy} className="h-10 rounded-xl bg-[#27877D] text-white px-4 text-xs font-bold flex items-center gap-2"><ImagePlus size={15}/>USAR NO PROJETO</button>}</div>
+                <div className="mt-4 flex-1 min-h-[420px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-5">{generatedImage ? <img alt="Imagem gerada" src={generatedImagePreviewUrl(generatedImage)} className="max-h-[620px] max-w-full object-contain"/> : <div className="max-w-md text-center text-sm text-neutral-400">A prévia aparecerá aqui. A geração usa um modelo de imagem de verdade; referências do projeto podem ser preservadas e reinterpretadas.</div>}</div>
                 {!!generatedNotes.length && <div className="mt-4 rounded-2xl bg-white border p-4"><div className="text-[9px] font-mono text-neutral-500">O QUE FOI FEITO</div><ul className="mt-2 space-y-1 text-xs text-neutral-700">{generatedNotes.map((note,index) => <li key={index}>• {note}</li>)}</ul></div>}
               </div>
             </ResizableStudioGrid>
