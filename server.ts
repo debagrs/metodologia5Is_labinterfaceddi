@@ -41,6 +41,8 @@ async function startServer() {
   // Use the same character, video and chat handler in development and Vercel.
   const thinkHandler = (await import("./api/mediators/think.js")).default;
   app.post("/api/mediators/think", thinkHandler);
+  const generateImageHandler = (await import("./api/generate-image.js")).default;
+  app.post("/api/generate-image", generateImageHandler);
 
   if (process.env.NODE_ENV === "production") {
     const dist = path.resolve("dist");
