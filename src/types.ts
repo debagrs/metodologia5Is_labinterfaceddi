@@ -204,6 +204,8 @@ export type WireframeBlockType = 'column' | 'row' | 'container' | 'stack' | 'wra
 
 export interface WireframeBlock {
   opacity?: number;
+  assetUrl?: string;
+  assetName?: string;
   children?: WireframeBlock[];
   direction?: WireframeDirection;
   align?: WireframeAlign;
