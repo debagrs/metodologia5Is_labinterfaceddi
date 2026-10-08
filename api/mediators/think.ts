@@ -1001,29 +1001,36 @@ async function callGeminiWireframe(system, user, source, maxOutputTokens = 3600,
   }
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY não foi encontrada nas variáveis da Vercel.');
-  const model = (process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite').trim();
+  const preferredModel = (process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash').trim();
+  const models = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-3.1-flash-lite']));
   const imageResponse = await fetchWithTimeout(String(source.url), {}, 12000);
   if (!imageResponse.ok) throw new Error('Não foi possível ler a imagem enviada para interpretar o wireframe.');
   const mimeType = String(imageResponse.headers.get('content-type') || 'image/png').split(';')[0];
   if (!mimeType.startsWith('image/')) throw new Error('A origem enviada não é uma imagem válida.');
   const bytes = Buffer.from(await imageResponse.arrayBuffer());
   if (bytes.length > 4 * 1024 * 1024) throw new Error('A imagem é grande demais para interpretação. Use até 4 MB.');
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
-  const response = await fetchWithTimeout(endpoint, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }, { inlineData: { mimeType, data: bytes.toString('base64') } }] }],
-      generationConfig: { temperature: 0.12, responseMimeType: 'application/json', maxOutputTokens }
-    })
-  }, timeoutMs);
-  const raw = await response.text();
-  let data = {};
-  try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`O Gemini devolveu resposta inválida (HTTP ${response.status}).`); }
-  if (!response.ok) throw new Error(`Gemini ${model}: ${data?.error?.message || `HTTP ${response.status}`}`);
-  const text = data?.candidates?.[0]?.content?.parts?.map((part) => typeof part?.text === 'string' ? part.text : '').join('').trim();
-  if (!text) throw new Error('O Gemini não devolveu a estrutura do wireframe.');
-  return { text, provider: 'Gemini', model };
+  const errors = [];
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+      const response = await fetchWithTimeout(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: user }, { inlineData: { mimeType, data: bytes.toString('base64') } }] }],
+          generationConfig: { temperature: 0.12, responseMimeType: 'application/json', maxOutputTokens }
+        })
+      }, timeoutMs);
+      const raw = await response.text();
+      let data = {};
+      try { data = raw ? JSON.parse(raw) : {}; } catch { throw new Error(`resposta inválida (HTTP ${response.status})`); }
+      if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+      const text = data?.candidates?.[0]?.content?.parts?.map((part) => typeof part?.text === 'string' ? part.text : '').join('').trim();
+      if (!text) throw new Error('não devolveu estrutura');
+      return { text, provider: 'Gemini', model };
+    } catch (error) { errors.push(`${model}: ${error?.message || error}`); }
+  }
+  throw new Error(`A IA não conseguiu interpretar este esboço. ${errors[0] || ''}`.trim());
 }
 
 function cleanUXWritingJson(text) {
