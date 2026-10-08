@@ -639,7 +639,7 @@ export interface CharacterSpriteDocument {
 export type GameSceneType = 'menu' | 'level' | 'boss' | 'cutscene' | 'result';
 export type GameSprintStatus = 'todo' | 'doing' | 'done';
 
-export type GameActionVerb = 'entrar' | 'andar' | 'falar' | 'coletar' | 'pular' | 'esperar' | 'sair';
+export type GameActionVerb = 'entrar' | 'andar' | 'falar' | 'coletar' | 'pular' | 'esperar' | 'sair' | 'girar' | 'mostrar' | 'esconder' | 'redimensionar';
 
 export interface GameCharacterAction {
   id: string;
@@ -649,6 +649,31 @@ export interface GameCharacterAction {
   x?: number;
   y?: number;
   durationMs?: number;
+  rotation?: number;
+  scale?: number;
+}
+
+export type GameProgramBlockKind =
+  | 'when-play' | 'when-tap' | 'when-scene' | 'when-message'
+  | 'move' | 'jump' | 'go-to' | 'rotate'
+  | 'say' | 'show' | 'hide' | 'set-size'
+  | 'wait' | 'repeat' | 'if-touching' | 'broadcast'
+  | 'set-variable' | 'change-variable' | 'random';
+
+export interface GameProgramBlock {
+  id: string;
+  kind: GameProgramBlockKind;
+  actorId?: string;
+  targetActorId?: string;
+  text?: string;
+  message?: string;
+  variable?: string;
+  value?: number;
+  value2?: number;
+  x?: number;
+  y?: number;
+  durationMs?: number;
+  repeat?: number;
 }
 
 export interface GameScene {
@@ -659,9 +684,11 @@ export interface GameScene {
   mechanics: string[];
   background: string;
   nextSceneId?: string;
+  /** IDs de atores/elementos visuais usados na cena. Mantido como spriteIds por compatibilidade com projetos antigos. */
   spriteIds?: string[];
   script?: string;
   actions?: GameCharacterAction[];
+  blocks?: GameProgramBlock[];
 }
 
 export interface GameSprintItem {
@@ -826,6 +853,27 @@ export interface DataStoryDocument {
   mapGeoJson?: string;
   mapValueProperty?: string;
   geoApiPath?: string;
+  mapSource?: 'natural-earth' | 'custom';
+  mapScope?: 'world' | 'continent' | 'country';
+  mapContinent?: string;
+  mapCountry?: string;
+  mapJoinGeoProperty?: string;
+  mapJoinDataField?: string;
+  mapDataValueField?: string;
+  mapVisualEncoding?: 'fill' | 'bubble' | 'fill-bubble' | 'outline';
+  mapColorMode?: 'sequential' | 'diverging' | 'categorical';
+  mapColorCount?: number;
+  mapHuePath?: 'short' | 'long';
+  mapColorStart?: string;
+  mapColorMid?: string;
+  mapColorEnd?: string;
+  mapBackground?: 'light' | 'dark' | 'transparent';
+  mapShowTooltips?: boolean;
+  mapShowLabels?: boolean;
+  mapLabelProperty?: string;
+  mapBubbleScale?: number;
+  mapStrokeColor?: string;
+  mapStrokeWidth?: number;
   metabaseUrl?: string;
   infographicFormat: DataInfographicFormat;
   infographicElements: DataStoryElement[];
