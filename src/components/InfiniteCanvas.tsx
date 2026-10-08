@@ -29,7 +29,7 @@ import GameDesignStudio, { GameDesignPreview, blankGameDesign } from './GameDesi
 import ApiConnectionsStudio, { ApiConnectionsPreview, blankApiConnections } from './ApiConnectionsStudio';
 import VisualIdentityStudio, { VisualIdentityPreview, blankVisualIdentity } from './VisualIdentityStudio';
 import DataStoryStudio, { DataStoryPreview, blankDataStory } from './DataStoryStudio';
-import GraphicsStudio, { GraphicsPreview, blankGraphicSystem } from './GraphicsStudio';
+import GraphicsStudio, { GraphicsPreview, blankGraphicSystem, graphicSystemToSvg } from './GraphicsStudio';
 import TextStudio, { TextStudioPreview, blankTextStudio } from './TextStudio';
 import { readStoredTursoSession } from '../lib/turso';
 
@@ -219,14 +219,19 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     return [];
   });
 
-  const projectGameAssets = projectNodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character'].includes(item.type)).map((item) => {
+  const projectGameAssets = projectNodes.filter((item) => ['canvas-image','drawing-sheet','interactive-lab','wireframe-board','sound-board','video-board','design-system','sprite-character','graphic-system','visual-identity','data-story','text-system'].includes(item.type)).map((item) => {
     const spriteAnimation = item.sprite?.animations?.find((animation) => animation.id === item.sprite?.activeAnimationId) || item.sprite?.animations?.[0];
     const spriteUrl = spriteAnimation?.frames?.[0]?.url || (item.sprite ? svgDataUrl(item.sprite.generatedSvg || buildCharacterSvg(item.sprite, item.sprite.activeView || 'front', item.sprite.activeExpression || 'neutral', item.sprite.activePose || 'neutral')) : undefined);
+    const drawingUrl = item.drawing ? svgDataUrl(drawingToSvgString(item.drawing)) : undefined;
+    const wireframeUrl = item.wireframe ? svgDataUrl(wireframeToSvgString(item.wireframe, projectDesignSystem?.fontFamilies?.text || projectDesignSystem?.primaryFont)) : undefined;
+    const graphicUrl = item.graphicSystem ? svgDataUrl(graphicSystemToSvg(item.graphicSystem)) : undefined;
+    const identityUrl = item.visualIdentity?.logo?.assetUrl || (item.visualIdentity?.logo?.sketchSvg ? svgDataUrl(item.visualIdentity.logo.sketchSvg) : undefined);
+    const interactiveUrl = item.interactive?.asset?.url;
     return {
       id: item.id,
-      name: item.imageName || item.drawingName || item.interactiveName || item.wireframeName || item.soundName || item.videoName || item.designSystemName || item.spriteName || item.title,
+      name: item.imageName || item.drawingName || item.interactiveName || item.wireframeName || item.soundName || item.videoName || item.designSystemName || item.spriteName || item.graphicSystemName || item.visualIdentityName || item.dataStoryName || item.textStudioName || item.title,
       type: item.type,
-      url: item.imageUrl || item.video?.generatedUrl || item.video?.sourceUrl || spriteUrl || undefined,
+      url: item.imageUrl || drawingUrl || interactiveUrl || wireframeUrl || item.video?.generatedUrl || item.video?.sourceUrl || spriteUrl || graphicUrl || identityUrl || undefined,
     };
   });
 
