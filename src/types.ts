@@ -40,6 +40,7 @@ export interface SharedProjectSummary {
   collaborationId: string;
   ownerId: string;
   ownerName: string;
+  ownerEmail?: string;
   projectId: string;
   projectName: string;
   projectProblem: string;
@@ -1079,6 +1080,10 @@ export interface Classroom {
   code: string;
   createdAt: string;
   studentIds: string[];
+  /** Projetos da própria professora vinculados visualmente a esta turma (ex.: Canvas da Disciplina Acessível). */
+  linkedAdvisorProjectIds?: string[];
+  /** Projetos compartilhados por comunidade/parceiros vinculados à rede desta turma. Chave: ownerId:projectId. */
+  linkedCommunityProjectRefs?: string[];
 }
 
 export interface StudentProfile {
