@@ -3,12 +3,13 @@ import {
   Users, Plus, GraduationCap, ChevronRight, BookOpen, 
   Trash2, ArrowLeft, LogOut, CheckCircle, Clock, Sparkles, Send, Settings, RefreshCw, FolderOpen, Layers3
 } from 'lucide-react';
-import { AdminProjectSummary, Classroom, StudentProfile, Project, UserProfile, SharedProjectSummary } from '../types';
+import { AdminProjectSummary, Classroom, StudentProfile, Project, ProjectWorkspace, UserProfile, SharedProjectSummary } from '../types';
 import { readAuthSession } from '../lib/auth';
 import InviteClassroomPanel from './InviteClassroomPanel';
 import AdminPanel from './AdminPanel';
 import { AgendaLauncher } from './Agenda5Is';
 import TutorialCoach from './TutorialCoach';
+import AdvisorCanvasNetwork from './AdvisorCanvasNetwork';
 
 interface AdvisorDashboardProps {
   advisor: UserProfile;
@@ -21,6 +22,9 @@ interface AdvisorDashboardProps {
   onDeleteStudent: (studentId: string) => void;
   onLogout: () => void;
   onOpenOwnProjects?: () => void;
+  advisorProjects: ProjectWorkspace[];
+  onOpenAdvisorProject?: (projectId: string) => void;
+  onUpdateClassroomLinks: (classroomId: string, patch: Partial<Classroom>) => void;
   onOpenAdminProject?: (project: AdminProjectSummary) => void;
   loadingStudentWorkspace?: boolean;
   studentWorkspaceError?: string;
@@ -41,6 +45,9 @@ export default function AdvisorDashboard({
   onDeleteStudent,
   onLogout,
   onOpenOwnProjects,
+  advisorProjects,
+  onOpenAdvisorProject,
+  onUpdateClassroomLinks,
   onOpenAdminProject,
   loadingStudentWorkspace = false,
   studentWorkspaceError = '',
@@ -70,6 +77,7 @@ export default function AdvisorDashboard({
   const [loadingCourseResources, setLoadingCourseResources] = useState(true);
   const [savingCourseResources, setSavingCourseResources] = useState(false);
   const [courseResourcesError, setCourseResourcesError] = useState('');
+  const [dashboardMode, setDashboardMode] = useState<'network' | 'management'>('network');
 
   useEffect(() => {
     const auth = readAuthSession();
@@ -161,7 +169,20 @@ export default function AdvisorDashboard({
   }, [selectedClassId]);
 
   const activeClassroom = classrooms.find(c => c.id === selectedClassId);
-  const activeClassStudents = useMemo(() => invitedStudents, [invitedStudents]);
+  const activeClassStudents = useMemo(() => {
+    const localStudents = students.filter((student) => student.classroomId === selectedClassId);
+    const merged = new Map<string, StudentProfile>();
+    for (const student of localStudents) {
+      const key = (student.email || student.name || student.id).trim().toLowerCase();
+      merged.set(key, student);
+    }
+    for (const student of invitedStudents) {
+      if (student.classroomId !== selectedClassId) continue;
+      const key = (student.email || student.name || student.id).trim().toLowerCase();
+      merged.set(key, student);
+    }
+    return [...merged.values()];
+  }, [invitedStudents, students, selectedClassId]);
 
   const handleCreateClassroom = (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,10 +268,10 @@ export default function AdvisorDashboard({
     }
   };
 
-  // Set first class as selected if nothing is selected yet
-  if (!selectedClassId && classrooms.length > 0) {
-    setSelectedClassId(classrooms[0].id);
-  }
+  useEffect(() => {
+    if (classrooms.some((classroom) => classroom.id === selectedClassId)) return;
+    setSelectedClassId(classrooms[0]?.id || null);
+  }, [classrooms, selectedClassId]);
 
   // Get project analytics
   const getPhaseColor = (phase: string) => {
@@ -267,7 +288,7 @@ export default function AdvisorDashboard({
   return (
     <div className="min-h-screen bg-[#FDFDFB] font-sans p-4 sm:p-8 select-none">
       <TutorialCoach scope="advisor" userId={advisor.id} />
-      <div className="max-w-6xl mx-auto space-y-6" data-tour="advisor-header">
+      <div className={`${dashboardMode === 'network' ? 'max-w-[1600px]' : 'max-w-6xl'} mx-auto space-y-6`} data-tour="advisor-header">
         
         {/* HEADER */}
         <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-[#E0E0DE] pb-6 gap-4">
@@ -285,6 +306,22 @@ export default function AdvisorDashboard({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <div className="p-1 rounded-xl border border-[#E0E0DE] bg-white shadow-sm flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDashboardMode('network')}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wide cursor-pointer transition-colors ${dashboardMode === 'network' ? 'bg-black text-white' : 'text-neutral-500 hover:text-black'}`}
+              >
+                Rede de canvases
+              </button>
+              <button
+                type="button"
+                onClick={() => setDashboardMode('management')}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wide cursor-pointer transition-colors ${dashboardMode === 'management' ? 'bg-black text-white' : 'text-neutral-500 hover:text-black'}`}
+              >
+                Gestão
+              </button>
+            </div>
             <div data-tour="advisor-agenda">
               <AgendaLauncher
               currentUser={advisor}
@@ -318,6 +355,28 @@ export default function AdvisorDashboard({
             </button>
           </div>
         </header>
+
+        {dashboardMode === 'network' ? (
+          <AdvisorCanvasNetwork
+            advisor={advisor}
+            classrooms={classrooms}
+            selectedClassId={selectedClassId}
+            onSelectClass={setSelectedClassId}
+            students={activeClassStudents}
+            advisorProjects={advisorProjects}
+            sharedProjects={sharedProjects}
+            sharedProjectsLoading={sharedProjectsLoading}
+            onViewStudentProject={onViewStudentProject}
+            onOpenAdvisorProject={onOpenAdvisorProject}
+            onOpenOwnProjects={onOpenOwnProjects}
+            onOpenShared={onOpenShared}
+            onRefreshShared={onRefreshShared}
+            onRefreshStudents={() => selectedClassId && void loadInvitedStudents(selectedClassId)}
+            onUpdateClassroomLinks={onUpdateClassroomLinks}
+            onOpenManagement={() => setDashboardMode('management')}
+          />
+        ) : (
+          <>
 
         {/* METRICS ROW */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -662,8 +721,10 @@ export default function AdvisorDashboard({
 
         </div>
 
+          </>
+        )}
       </div>
-      {onOpenShared && (
+      {dashboardMode === 'management' && onOpenShared && (
         <section data-tour="advisor-shared" className="max-w-6xl mx-auto mt-6 rounded-3xl border border-[#DFDFDC] bg-white p-5 sm:p-6 shadow-sm">
           <div className="flex items-start sm:items-center justify-between gap-3 mb-5">
             <div>
