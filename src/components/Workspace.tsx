@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, Compass, Activity, Heart, UserCheck, Layout, BookOpen, 
   ChevronRight, ArrowLeft, Loader2, PlayCircle, Globe, Milestone, Check, RefreshCw,
-  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone, HelpCircle
+  Menu, X, ShieldCheck, Code2, MessageCircle, Trash2, Users, Orbit, Bot, ExternalLink, Mic, Square as StopSquare, FileText, Megaphone, HelpCircle, Copy, ClipboardPaste
 } from 'lucide-react';
 import { Project, Phase, ThoughtNode, Mediator, UserProfile, CollaborationPermission, DrawingDocument, ProjectCanvasPage } from '../types';
 import InfiniteCanvas, { InfiniteCanvasHandle } from './InfiniteCanvas';
@@ -1584,6 +1584,7 @@ export default function Workspace({
   const canvasRef = useRef<InfiniteCanvasHandle>(null);
   const [activeCanvasPage, setActiveCanvasPage] = useState<ProjectCanvasPage>('process');
   const [saveState, setSaveState] = useState<'connecting'|'synced'|'local'|'error'|'disabled'>('synced');
+  const [clipboardNotice, setClipboardNotice] = useState('');
 
   React.useEffect(() => {
     const handler = (event: Event) => {
@@ -2345,9 +2346,14 @@ export default function Workspace({
           <button type="button" className={activeCanvasPage==='experiments'?'active':''} onClick={()=>setActiveCanvasPage('experiments')}>
             <span className="project-page-tabs__icon">03</span><span><b>EXPERIMENTAÇÕES</b><small>rabiscos · linguagem · código</small></span>
           </button>
+          <div className="project-page-tabs__clipboard" aria-label="Copiar e colar entre páginas e projetos">
+            <button type="button" onClick={()=>{ const ok=canvasRef.current?.copySelectedNode(); setClipboardNotice(ok?'Elemento copiado. Abra outra página ou projeto e cole.':'Selecione primeiro um elemento do canvas.'); window.setTimeout(()=>setClipboardNotice(''),2200); }} title="Copiar elemento selecionado"><Copy size={14}/><span>COPIAR</span></button>
+            <button type="button" onClick={()=>{ const ok=canvasRef.current?.pasteCopiedNode(); setClipboardNotice(ok?'Cópia inserida nesta página.':'Não há elemento copiado.'); window.setTimeout(()=>setClipboardNotice(''),2200); }} title="Colar nesta página"><ClipboardPaste size={14}/><span>COLAR</span></button>
+          </div>
           <div className="project-page-tabs__hint">Todas as ferramentas funcionam em todas as páginas</div>
         </div>
       </nav>
+      {clipboardNotice ? <div className="fixed left-1/2 top-28 z-[210] -translate-x-1/2 rounded-full bg-black px-4 py-2 text-xs font-bold text-white shadow-xl">{clipboardNotice}</div> : null}
 
       {isCollaboratorsOpen && canManageCollaborators && (
         <ProjectCollaboratorsPanel project={project} onClose={() => setIsCollaboratorsOpen(false)} />
