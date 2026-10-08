@@ -101,7 +101,7 @@ export default async function handler(req: any, res: any) {
       const action = String(req.query?.action || 'project');
       if (action === 'mine') {
         const [result] = await pipeline([{ sql: `SELECT
-          pc.id, pc.owner_id, COALESCE(u.name, 'Pessoa'), pc.project_id,
+          pc.id, pc.owner_id, COALESCE(u.name, 'Pessoa'), COALESCE(u.email, ''), pc.project_id,
           pc.permission, pc.label, pc.status, pc.created_at,
           w.payload, w.updated_at
           FROM project_collaborators pc
@@ -111,20 +111,52 @@ export default async function handler(req: any, res: any) {
           ORDER BY pc.created_at DESC`, args: [arg(requesterId)] }]);
         const projects = (result?.rows || []).map((row: any[]) => {
           let snapshot: any = {};
-          try { snapshot = JSON.parse(String(cellValue(row[8]) || '{}')); } catch {}
+          try { snapshot = JSON.parse(String(cellValue(row[9]) || '{}')); } catch {}
           const workspaces = Array.isArray(snapshot.projectWorkspaces) ? snapshot.projectWorkspaces : [];
-          const ws = workspaces.find((x: any) => x?.project?.id === String(cellValue(row[3]))) ||
-            (snapshot.soloProject?.id === String(cellValue(row[3])) ? { project: snapshot.soloProject, nodes: snapshot.soloNodes || [], updatedAt: cellValue(row[9]) } : null);
+          const ws = workspaces.find((x: any) => x?.project?.id === String(cellValue(row[4]))) ||
+            (snapshot.soloProject?.id === String(cellValue(row[4])) ? { project: snapshot.soloProject, nodes: snapshot.soloNodes || [], updatedAt: cellValue(row[10]) } : null);
           if (!ws?.project) return null;
           return {
             collaborationId: String(cellValue(row[0])), ownerId: String(cellValue(row[1])), ownerName: String(cellValue(row[2])),
-            projectId: String(cellValue(row[3])), projectName: ws.project.name || 'Projeto compartilhado',
+            ownerEmail: String(cellValue(row[3]) || '') || undefined,
+            projectId: String(cellValue(row[4])), projectName: ws.project.name || 'Projeto compartilhado',
             projectProblem: ws.project.problem || '', activePhase: ws.project.activePhase || 'Ideação',
-            permission: String(cellValue(row[4]) || 'comment'), label: String(cellValue(row[5]) || 'colega'),
-            updatedAt: ws.updatedAt || String(cellValue(row[9]) || new Date().toISOString()), nodeCount: Array.isArray(ws.nodes) ? ws.nodes.length : 0,
+            permission: String(cellValue(row[5]) || 'comment'), label: String(cellValue(row[6]) || 'colega'),
+            updatedAt: ws.updatedAt || String(cellValue(row[10]) || new Date().toISOString()), nodeCount: Array.isArray(ws.nodes) ? ws.nodes.length : 0,
           };
         }).filter(Boolean);
         return res.status(200).json({ projects });
+      }
+
+      if (action === 'network') {
+        const [result, workspaceResult] = await pipeline([
+          { sql: `SELECT pc.id, pc.owner_id, pc.project_id, pc.collaborator_id,
+            pc.collaborator_email, COALESCE(u.name, ''), pc.permission, pc.label, pc.status, pc.created_at
+            FROM project_collaborators pc
+            LEFT JOIN users u ON u.id = pc.collaborator_id
+            WHERE pc.owner_id = ?
+            ORDER BY pc.created_at DESC`, args: [arg(requesterId)] },
+          { sql: 'SELECT payload FROM workspace_snapshots WHERE owner_id = ? LIMIT 1', args: [arg(requesterId)] },
+        ]);
+        let snapshot: any = {};
+        try { snapshot = JSON.parse(String(cellValue(workspaceResult?.rows?.[0]?.[0]) || '{}')); } catch {}
+        const projectNames = new Map<string, string>();
+        for (const workspace of Array.isArray(snapshot.projectWorkspaces) ? snapshot.projectWorkspaces : []) {
+          if (workspace?.project?.id) projectNames.set(String(workspace.project.id), String(workspace.project.name || 'Projeto'));
+        }
+        if (snapshot.soloProject?.id) projectNames.set(String(snapshot.soloProject.id), String(snapshot.soloProject.name || 'Projeto'));
+        const collaborators = (result?.rows || []).map((r: any[]) => {
+          const projectId = String(cellValue(r[2]));
+          return {
+            id: String(cellValue(r[0])), ownerId: String(cellValue(r[1])), projectId,
+            projectName: projectNames.get(projectId) || 'Projeto',
+            collaboratorId: cellValue(r[3]) ? String(cellValue(r[3])) : undefined,
+            collaboratorEmail: String(cellValue(r[4])), collaboratorName: String(cellValue(r[5]) || '') || undefined,
+            permission: String(cellValue(r[6]) || 'comment'), label: String(cellValue(r[7]) || 'colega'),
+            status: String(cellValue(r[8]) || 'pending'), createdAt: String(cellValue(r[9]) || ''),
+          };
+        });
+        return res.status(200).json({ collaborators });
       }
 
       const projectId = String(req.query?.projectId || '').trim();
