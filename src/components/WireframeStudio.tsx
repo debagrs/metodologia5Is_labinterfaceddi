@@ -26,13 +26,14 @@ interface Props {
   title?: string;
   canEdit?: boolean;
   availableDrawings?: Array<{ id: string; name: string; drawing: DrawingDocument }>;
+  availableAssets?: Array<{ id: string; name: string; url: string }>;
   initialSource?: WireframeImportSource | null;
   onSave: (document: WireframeDocument) => void;
   onClose: () => void;
 }
 
 type PaletteItem = { type: WireframeBlockType; label: string; icon: React.ElementType; group: 'layout' | 'basic' | 'input' | 'navigation' | 'data' };
-type DragPayload = { kind: 'palette'; type: WireframeBlockType } | { kind: 'block'; id: string } | { kind: 'component'; id: string };
+type DragPayload = { kind: 'palette'; type: WireframeBlockType } | { kind: 'block'; id: string } | { kind: 'component'; id: string } | { kind: 'asset'; id: string; name: string; url: string };
 type MobilePane = 'library' | 'canvas' | 'inspector';
 
 const uid = (p: string) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -224,7 +225,7 @@ function LeafPreview({ b, ds }: { b: WireframeBlock; ds?: DesignSystemDocument }
   };
   if (b.type === 'spacer') return <div style={{ height: typeof b.height === 'number' ? b.height : 24 }} />;
   if (b.type === 'divider') return <div style={{ height: 1, background: b.color || '#CCC', width: '100%', margin: b.margin }} />;
-  if (b.type === 'image') return <div style={style} className="border border-dashed border-black/20 flex items-center justify-center text-[10px] text-neutral-400"><ImageIcon size={18} /></div>;
+  if (b.type === 'image') return b.assetUrl ? <div style={style} className="border border-black/10 overflow-hidden bg-white"><img src={b.assetUrl} alt={b.assetName || b.label} className="w-full h-full object-contain" /></div> : <div style={style} className="border border-dashed border-black/20 flex items-center justify-center text-[10px] text-neutral-400"><ImageIcon size={18} /></div>;
   if (b.type === 'video') return <div style={style} className="border border-dashed border-black/20 flex items-center justify-center gap-2 text-[10px] text-neutral-400"><Play size={18} /> vídeo</div>;
   if (b.type === 'map') return <div style={style} className="border border-black/10 relative overflow-hidden text-[10px] text-neutral-400 flex items-center justify-center"><div className="absolute inset-0 opacity-40" style={{backgroundImage:'linear-gradient(#bbb 1px,transparent 1px),linear-gradient(90deg,#bbb 1px,transparent 1px)',backgroundSize:'18px 18px'}}/><span className="relative rounded-full bg-white px-2 py-1 border">Mapa / localização</span></div>;
   if (b.type === 'webview') return <div style={style} className="border border-black/10 overflow-hidden"><div className="h-7 border-b bg-white flex items-center px-2 text-[9px] text-neutral-400">https://…</div><div className="h-24 flex items-center justify-center text-[10px] text-neutral-400">WebView</div></div>;
@@ -353,7 +354,7 @@ export function WireframePreview({ document, designSystem, className = '' }: { d
 
 const drawingUrl = (d: DrawingDocument) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawingToSvgString(d))}`;
 
-export default function WireframeStudio({ document, designSystem, title = 'Wireframes', canEdit = true, availableDrawings = [], initialSource = null, onSave, onClose }: Props) {
+export default function WireframeStudio({ document, designSystem, title = 'Wireframes', canEdit = true, availableDrawings = [], availableAssets = [], initialSource = null, onSave, onClose }: Props) {
   const [draft, setDraft] = useState<WireframeDocument>(() => {
     const cloned = JSON.parse(JSON.stringify(document || blankWireframe(designSystem))) as WireframeDocument;
     if (!cloned.frames?.length) return blankWireframe(designSystem);
@@ -451,6 +452,7 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
     let moving: WireframeBlock | null = null;
     let blocks = activeFrame.blocks;
     if (payload.kind === 'palette') moving = blockDefault(payload.type, designSystem);
+    else if (payload.kind === 'asset') { moving = { ...blockDefault('image', designSystem), label: payload.name, assetUrl: payload.url, assetName: payload.name, height: 180, background: '#FFFFFF' }; }
     else if (payload.kind === 'component') {
       const component = draft.componentLibrary?.find(item => item.id === payload.id);
       moving = component ? cloneBlock(component) : null;
@@ -653,6 +655,12 @@ export default function WireframeStudio({ document, designSystem, title = 'Wiref
         return <div key={group} className="mt-3"><div className="text-[9px] font-mono uppercase text-neutral-400 mb-1.5">{labels[group]}</div><div className="grid grid-cols-2 gap-1.5">{items.map(item => { const I = item.icon; return <button key={item.type} draggable onDragStart={e => { e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'palette', type: item.type } satisfies DragPayload)); e.dataTransfer.effectAllowed = 'copy'; }} onClick={() => addBlock(item.type)} className="min-h-11 rounded-lg border border-black/10 px-2 flex items-center gap-2 text-[9px] text-left hover:border-black cursor-grab active:cursor-grabbing"><I size={13} />{item.label}</button>; })}</div></div>;
       })}
     </section>
+
+    {availableAssets.length > 0 ? <section className="border-t pt-3">
+      <div className="text-[10px] font-mono font-bold uppercase tracking-wider">Biblioteca do projeto</div>
+      <div className="mt-2 grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">{availableAssets.map(asset => <button key={asset.id} draggable onDragStart={e=>{e.dataTransfer.setData('text/plain',JSON.stringify({kind:'asset',id:asset.id,name:asset.name,url:asset.url} satisfies DragPayload));e.dataTransfer.effectAllowed='copy';}} onClick={()=>{if(!activeFrame)return;const block={...blockDefault('image',designSystem),label:asset.name,assetUrl:asset.url,assetName:asset.name,height:180,background:'#FFFFFF'};patchActiveFrame({blocks:[...activeFrame.blocks,block]});setSelectedId(block.id);setMobilePane('inspector');}} className="rounded-xl border p-2 text-left hover:border-black"><div className="aspect-video rounded-lg bg-neutral-100 overflow-hidden"><img src={asset.url} alt="" className="w-full h-full object-contain"/></div><div className="mt-1 text-[9px] font-bold truncate">{asset.name}</div></button>)}</div>
+      <div className="mt-2 text-[9px] text-neutral-500">Arraste imagens, desenhos, marcas e personagens diretamente para qualquer frame.</div>
+    </section> : null}
 
     {!!draft.componentLibrary?.length && <section className="border-t pt-3">
       <div className="text-[10px] font-mono font-bold uppercase tracking-wider">Componentes salvos</div>
