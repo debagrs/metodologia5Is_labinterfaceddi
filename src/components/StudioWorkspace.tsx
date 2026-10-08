@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { ChevronLeft, PanelLeftOpen } from 'lucide-react';
+import { ChevronLeft, PanelLeftOpen, Sparkles } from 'lucide-react';
 
 const clampWidth = (value:number, split:'default'|'equal') => split === 'equal'
   ? Math.max(320, Math.min(620, value))
@@ -52,9 +52,12 @@ export function StudioWorkspace({ tools, children, split = 'default' }: {
 
   return <div ref={rootRef} className={`studio-workspace ${open?'is-open':''} studio-workspace--${split}`} style={{'--studio-tools-width':`${desktopWidth}px`,'--studio-tools-ratio-mobile':`${mobileRatio}%`} as React.CSSProperties}>
     <aside className="studio-sidebar" aria-label="Ferramentas e edição">
-      <button type="button" className="studio-panel-toggle" aria-expanded={open} aria-controls={panelId} onClick={()=>setOpen(!open)} title={open?'Recolher ferramentas':'Abrir ferramentas'}>
-        {open?<ChevronLeft size={18}/>:<PanelLeftOpen size={18}/>}<span>{open?'Ferramentas e edição':'Ferramentas'}</span>
-      </button>
+      <div className="studio-sidebar-toolbar">
+        <button type="button" className="studio-panel-toggle" aria-expanded={open} aria-controls={panelId} onClick={()=>setOpen(!open)} title={open?'Recolher ferramentas':'Abrir ferramentas'}>
+          {open?<ChevronLeft size={18}/>:<PanelLeftOpen size={18}/>}<span>{open?'Ferramentas e edição':'Ferramentas'}</span>
+        </button>
+        <button type="button" className="studio-ai-image-button" onClick={()=>window.dispatchEvent(new CustomEvent('5is:open-ai-image'))} title="Gerar imagem com IA e salvar na Biblioteca do Projeto"><Sparkles size={15}/><span>IA IMAGEM</span></button>
+      </div>
       <div id={panelId} className="studio-tools" hidden={!open}>{tools}</div>
     </aside>
     {open?<div className="studio-resize-handle" role="separator" aria-orientation={isMobile?'horizontal':'vertical'} aria-label="Redimensionar ferramentas e visual" tabIndex={0} onPointerDown={beginResize} onDoubleClick={reset} onKeyDown={e=>{
