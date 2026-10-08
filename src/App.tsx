@@ -404,6 +404,14 @@ export default function App() {
     if (viewingStudent?.id === studentId) setViewingStudent(null);
   };
 
+  const handleUpdateClassroomLinks = (classroomId: string, patch: Partial<Classroom>) => {
+    const updatedClassrooms = classrooms.map((classroom) =>
+      classroom.id === classroomId ? { ...classroom, ...patch } : classroom,
+    );
+    setClassrooms(updatedClassrooms);
+    localStorage.setItem(STORAGE_CLASSROOMS_KEY, JSON.stringify(updatedClassrooms));
+  };
+
   const handleViewStudentProject = async (student: StudentProfile) => {
     setLoadingStudentWorkspace(true);
     setStudentWorkspaceError('');
@@ -1034,6 +1042,12 @@ export default function App() {
           setShowStudentProjectForm(false);
           localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
         }}
+        advisorProjects={projectWorkspaces}
+        onOpenAdvisorProject={(projectId) => {
+          setShowAdvisorProjects(true);
+          handleOpenStudentProject(projectId);
+        }}
+        onUpdateClassroomLinks={handleUpdateClassroomLinks}
         onOpenAdminProject={handleOpenAdminProject}
         loadingStudentWorkspace={loadingStudentWorkspace}
         studentWorkspaceError={studentWorkspaceError}
