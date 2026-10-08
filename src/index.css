@@ -173,7 +173,7 @@ select {
 .studio-workspace { display:flex; flex:1; min-height:0; min-width:0; overflow:hidden; }
 .studio-sidebar { width:48px; flex:none; display:flex; flex-direction:column; background:white; border-right:1px solid #d8d7d2; min-height:0; overflow:hidden; }
 .studio-workspace.is-open .studio-sidebar { width:var(--studio-tools-width,360px); max-width:min(500px,42vw); flex:0 0 var(--studio-tools-width,360px); }
-.studio-panel-toggle { display:flex; align-items:center; gap:8px; min-height:48px; padding:12px; border-bottom:1px solid #d8d7d2; flex:none; font-size:14px; font-weight:600; width:100%; text-align:left; }
+.studio-sidebar-toolbar{display:flex;align-items:stretch;flex:0 0 auto;border-bottom:1px solid #d8d7d2;background:white}.studio-panel-toggle { display:flex; align-items:center; gap:8px; min-height:48px; padding:12px; border:0; flex:1 1 auto; min-width:0; font-size:14px; font-weight:600; text-align:left; }.studio-ai-image-button{margin:6px;min-height:36px;flex:0 0 auto;border:1px solid #111;border-radius:10px;background:#111;color:#fff;padding:6px 10px;display:flex;align-items:center;justify-content:center;gap:5px;font:700 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.03em}.studio-workspace:not(.is-open) .studio-ai-image-button{display:none}
 .studio-workspace:not(.is-open) .studio-panel-toggle span { display:none; }
 .studio-tools { overflow:auto; min-height:0; min-width:0; flex:1; padding:12px; overscroll-behavior:contain; }
 .studio-tools[hidden] { display:none; }
@@ -307,10 +307,8 @@ select {
 
 
 @media(min-width:1024px){
- .resizable-studio-grid[data-grid-mode="three-pane"] > :not(.studio-grid-divider),
- .resizable-studio-grid[data-grid-mode="sidebar"] > :not(.studio-grid-divider){min-width:0;max-width:100%;overflow:hidden;}
- .resizable-studio-grid[data-grid-mode="three-pane"] > :first-child,
- .resizable-studio-grid[data-grid-mode="three-pane"] > :last-child{background:#fff;}
+ .resizable-studio-grid[data-grid-mode="three-pane"] > :not(.studio-grid-divider):not(.studio-grid-ai-image-button),
+ .resizable-studio-grid[data-grid-mode="sidebar"] > :not(.studio-grid-divider):not(.studio-grid-ai-image-button){min-width:0;max-width:100%;overflow:hidden;}
 }
 /* Video editor: preview, visual timeline and labelled tools occupy separate rows. */
 .video-editor { display:flex; flex-direction:column; background:#17191b; color:#f7f7f7; overflow:hidden; }
@@ -525,7 +523,7 @@ body.studio-is-resizing{user-select:none!important;cursor:col-resize;}
  .canvas-bottom-tools .canvas-tool-button svg{width:22px;height:22px;}
  .canvas-bottom-tools .canvas-tool-label,.canvas-bottom-tools .canvas-tool-button>span{font-size:11px;line-height:1.25;overflow-wrap:normal;}
 }
-.resizable-studio-grid{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;overflow:hidden;gap:0!important;}
+.resizable-studio-grid{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;overflow:hidden;gap:0!important;position:relative;}
 .studio-grid-divider{display:none;}
 @media(min-width:768px){
  .resizable-studio-grid{display:grid!important;grid-template-columns:var(--studio-columns)!important;grid-auto-flow:column;align-items:stretch;}
@@ -628,3 +626,9 @@ body.studio-is-resizing{user-select:none!important;cursor:col-resize;}
   .font-picker--compact .font-picker__trigger{min-height:38px}
   .font-picker--compact .font-picker__selected-name{font-size:13px}
 }
+
+/* Geração de imagem IA universal: acessível dentro de qualquer ateliê. */
+.studio-grid-ai-image-button{position:absolute;right:12px;bottom:12px;z-index:45;min-height:38px;border:1px solid #111;border-radius:999px;background:#111;color:#fff;padding:8px 12px;display:flex;align-items:center;justify-content:center;gap:6px;font:700 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.studio-grid-ai-image-button:hover,.studio-ai-image-button:hover{background:#1f7d74;border-color:#1f7d74}
+@media(max-width:1023px){.studio-sidebar-toolbar{min-height:52px}.studio-ai-image-button{margin:7px 8px 7px 0}.studio-grid-ai-image-button{right:10px;bottom:10px;min-height:44px;padding:10px 13px}.studio-grid-ai-image-button span{font-size:10px}}
+@media(max-width:430px){.studio-ai-image-button span{display:none}.studio-ai-image-button{width:42px;padding:0}.studio-grid-ai-image-button span{display:none}.studio-grid-ai-image-button{width:46px;height:46px;padding:0}}
