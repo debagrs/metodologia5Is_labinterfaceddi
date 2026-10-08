@@ -172,6 +172,21 @@ export default function ImageStudio({
     }
   };
 
+  const refineGeneratedResult = async () => {
+    if (!generatedImage) return;
+    setBusy(true); setError('');
+    try {
+      const file = await generatedImageToFile(generatedImage);
+      setReferenceFile(file);
+      setReferenceAsset(null);
+      setReferencePreview(generatedImagePreviewUrl(generatedImage));
+      setAiAction('refine');
+      setGeneratedNotes([]);
+      // Mantém a imagem visível como referência; a próxima execução trabalha sobre ela.
+    } catch (e: any) { setError(e?.message || 'Não foi possível usar o resultado como referência para refino.'); }
+    finally { setBusy(false); }
+  };
+
   const saveGenerated = async () => {
     if (!generatedImage) return;
     setBusy(true);
@@ -340,7 +355,7 @@ export default function ImageStudio({
                 <div className="mt-4 rounded-xl bg-[#E6F6F2] border border-[#A8DED4] p-3 text-[11px] text-[#174C46]"><b>Fluxo universal:</b> a imagem gerada entra na Biblioteca do Projeto e pode ser usada em Game Design, Wireframe, Vídeo, Identidade, Grafismos e demais ateliês. Se precisar de SVG, gere primeiro e depois use VETORIZAR.</div>
               </div>
               <div className="rounded-3xl border bg-[#EEECE5] min-h-[560px] p-5 sm:p-6 flex flex-col">
-                <div className="flex items-center justify-between gap-3"><div><div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">RESULTADO IA</div><b className="text-sm">Imagem pronta para a Biblioteca</b></div>{generatedImage && <button type="button" onClick={() => void saveGenerated()} disabled={busy} className="h-10 rounded-xl bg-[#27877D] text-white px-4 text-xs font-bold flex items-center gap-2"><ImagePlus size={15}/>USAR NO PROJETO</button>}</div>
+                <div className="flex items-center justify-between gap-3 flex-wrap"><div><div className="text-[10px] font-mono uppercase tracking-[0.14em] text-neutral-500">RESULTADO IA</div><b className="text-sm">Imagem pronta para continuar ou salvar</b></div>{generatedImage && <div className="flex gap-2 flex-wrap"><button type="button" onClick={() => void refineGeneratedResult()} disabled={busy} className="h-10 rounded-xl border border-black bg-white px-3 text-xs font-bold flex items-center gap-2"><Sparkles size={15}/>REFINAR ESTE RESULTADO</button><button type="button" onClick={() => void saveGenerated()} disabled={busy} className="h-10 rounded-xl bg-[#27877D] text-white px-4 text-xs font-bold flex items-center gap-2"><ImagePlus size={15}/>USAR NO PROJETO</button></div>}</div>
                 <div className="mt-4 flex-1 min-h-[420px] rounded-2xl border bg-white flex items-center justify-center overflow-hidden p-5">{generatedImage ? <img alt="Imagem gerada" src={generatedImagePreviewUrl(generatedImage)} className="max-h-[620px] max-w-full object-contain"/> : <div className="max-w-md text-center text-sm text-neutral-400">A prévia aparecerá aqui. A geração usa um modelo de imagem de verdade; referências do projeto podem ser preservadas e reinterpretadas.</div>}</div>
                 {!!generatedNotes.length && <div className="mt-4 rounded-2xl bg-white border p-4"><div className="text-[9px] font-mono text-neutral-500">O QUE FOI FEITO</div><ul className="mt-2 space-y-1 text-xs text-neutral-700">{generatedNotes.map((note,index) => <li key={index}>• {note}</li>)}</ul></div>}
               </div>
