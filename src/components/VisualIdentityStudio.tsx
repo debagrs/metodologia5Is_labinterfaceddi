@@ -554,28 +554,34 @@ function SketchCanvas({ value, onChange, fullscreen = false }: { value?: string;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const snapshotRef = useRef(value || '');
 
+  // Só redesenha quando chega um valor realmente externo. O próprio traço não é apagado
+  // por um rerender do React enquanto a pessoa continua desenhando.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#111111';
     ctx.lineWidth = 3;
-    if (value) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      };
-      img.src = value;
-    }
+    if (value && value === snapshotRef.current) return;
+    const paintBlank = () => { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height); };
+    if (!value) { paintBlank(); snapshotRef.current = ''; return; }
+    const img = new Image();
+    img.onload = () => { paintBlank(); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); snapshotRef.current = value; };
+    img.src = value;
   }, [value]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || value) return;
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111111'; ctx.lineWidth = 3;
+  }, []);
 
   const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -602,12 +608,19 @@ function SketchCanvas({ value, onChange, fullscreen = false }: { value?: string;
     ctx.stroke();
     lastPointRef.current = current;
   };
+  const commit = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    snapshotRef.current = dataUrl;
+    onChange(dataUrl);
+  };
   const end = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
     drawingRef.current = false;
     lastPointRef.current = null;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    const canvas = canvasRef.current;
-    if (canvas) onChange(canvas.toDataURL('image/png'));
+    try { if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+    commit();
   };
   const clear = () => {
     const canvas = canvasRef.current;
@@ -615,16 +628,12 @@ function SketchCanvas({ value, onChange, fullscreen = false }: { value?: string;
     if (!canvas || !ctx) return;
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    onChange(canvas.toDataURL('image/png'));
+    commit();
   };
-  const save = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    onChange(canvas.toDataURL('image/png'));
-  };
+  const save = () => commit();
 
   return <div className={fullscreen ? 'h-full w-full bg-[#F4F2ED] p-3 sm:p-5 flex flex-col' : 'rounded-2xl border bg-[#FAFAF7] p-3'}>
-    <canvas ref={canvasRef} width={fullscreen ? 1600 : 720} height={fullscreen ? 1000 : 420} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerLeave={end} className={fullscreen ? 'min-h-0 flex-1 w-full rounded-2xl border-2 border-black bg-white touch-none' : 'w-full rounded-xl border bg-white touch-none'} style={fullscreen ? undefined : { aspectRatio: '12 / 7' }} />
+    <canvas ref={canvasRef} width={fullscreen ? 1600 : 720} height={fullscreen ? 1000 : 420} onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onPointerLeave={(event)=>{ if (drawingRef.current && event.buttons === 0) end(event); }} className={fullscreen ? 'min-h-0 flex-1 w-full rounded-2xl border-2 border-black bg-white touch-none' : 'w-full rounded-xl border bg-white touch-none'} style={fullscreen ? undefined : { aspectRatio: '12 / 7' }} />
     <div className="mt-3 grid grid-cols-2 gap-2">
       <button type="button" onClick={clear} className="h-10 rounded-xl border text-[10px] font-bold">LIMPAR</button>
       <button type="button" onClick={save} className="h-10 rounded-xl bg-black text-white text-[10px] font-bold">SALVAR ESBOÇO</button>
@@ -841,7 +850,7 @@ export default function VisualIdentityStudio({ document, title = 'Identidade vis
       </div>
     </StudioWorkspace>
 
-    {sketchOpen && <div className="fixed inset-0 z-[205] bg-[#F4F2ED] flex flex-col"><div className="h-16 shrink-0 border-b bg-white px-3 sm:px-5 flex items-center gap-3"><div className="flex-1"><div className="text-[9px] font-mono text-neutral-400">ESBOÇO LIVRE · MARCA</div><b className="text-sm sm:text-base">Desenhe ocupando toda a tela</b></div><button type="button" onClick={()=>setSketchOpen(false)} className="h-11 rounded-xl bg-black px-4 text-[10px] font-bold text-white">FECHAR E SALVAR</button></div><div className="min-h-0 flex-1"><SketchCanvas fullscreen value={draft.logo.sketchSvg} onChange={(dataUrl)=>patch({logo:{...draft.logo,sketchSvg:dataUrl}})} /></div></div>}
+    {sketchOpen && <div className="fixed inset-0 z-[205] bg-[#F4F2ED] flex flex-col"><div className="h-16 shrink-0 border-b bg-white px-3 sm:px-5 flex items-center gap-3"><div className="flex-1"><div className="text-[9px] font-mono text-neutral-400">ESBOÇO LIVRE · MARCA</div><b className="text-sm sm:text-base">Desenhe ocupando toda a tela</b></div><button type="button" onClick={()=>setSketchOpen(false)} className="h-11 rounded-xl bg-black px-4 text-[10px] font-bold text-white">FECHAR E SALVAR</button></div><div className="min-h-0 flex-1"><SketchCanvas fullscreen value={draft.logo.sketchSvg} onChange={(dataUrl)=>setDraft(current=>({...current,logo:{...current.logo,sketchSvg:dataUrl},updatedAt:new Date().toISOString()}))} /></div></div>}
 
     {guideOpen && <div className="fixed inset-0 z-[180] bg-black/50 p-3 sm:p-8 flex items-end sm:items-center justify-center" onClick={() => setGuideOpen(false)}><div className="w-full max-w-3xl max-h-[88vh] overflow-auto rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-7" onClick={(e) => e.stopPropagation()}><div className="flex items-start gap-3"><div className="flex-1"><div className="text-[9px] font-mono text-neutral-400">DICAS · REFERÊNCIAS</div><b className="text-xl">O que uma identidade visual precisa resolver?</b></div><button onClick={() => setGuideOpen(false)} className="h-10 w-10 rounded-xl border flex items-center justify-center"><X size={16} /></button></div><div className="mt-4 grid sm:grid-cols-2 gap-3"><div className="rounded-2xl bg-[#111] text-white p-4"><b>Pontos essenciais</b><ul className="mt-3 space-y-2 text-xs text-white/75"><li>• Estratégia e posicionamento antes da estética.</li><li>• Logotipo e símbolo reconhecíveis em diferentes escalas.</li><li>• Paleta com função definida, contraste e acessibilidade.</li><li>• Tipografia com papéis claros e hierarquia.</li><li>• Linguagem gráfica: grid, formas, ícones, ilustrações e texturas.</li><li>• Photobrief consistente.</li><li>• Aplicações reais e manual de uso.</li></ul></div><div className="space-y-2">{REFERENCES.map((ref) => <div key={ref.author} className="rounded-xl border p-3"><b className="text-xs">{ref.author}</b><div className="text-[10px] font-mono text-neutral-500">{ref.work}</div><p className="mt-1 text-[10px] text-neutral-600">{ref.note}</p></div>)}</div></div></div></div>}
   </div>;
