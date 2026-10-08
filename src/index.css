@@ -632,3 +632,6 @@ body.studio-is-resizing{user-select:none!important;cursor:col-resize;}
 .studio-grid-ai-image-button:hover,.studio-ai-image-button:hover{background:#1f7d74;border-color:#1f7d74}
 @media(max-width:1023px){.studio-sidebar-toolbar{min-height:52px}.studio-ai-image-button{margin:7px 8px 7px 0}.studio-grid-ai-image-button{right:10px;bottom:10px;min-height:44px;padding:10px 13px}.studio-grid-ai-image-button span{font-size:10px}}
 @media(max-width:430px){.studio-ai-image-button span{display:none}.studio-ai-image-button{width:42px;padding:0}.studio-grid-ai-image-button span{display:none}.studio-grid-ai-image-button{width:46px;height:46px;padding:0}}
+
+/* Clipboard universal do canvas: cópia atravessa páginas e projetos no mesmo navegador. */
+.project-page-tabs__clipboard{display:flex;gap:.4rem;align-items:center;flex:0 0 auto}.project-page-tabs__clipboard button{min-height:38px;padding:0 .7rem;border:1px solid #d9d9d5;border-radius:12px;background:#fff;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.project-page-tabs__clipboard button:hover{border-color:#111}.project-page-tabs__clipboard button:active{background:#111;color:#fff}@media(max-width:640px){.project-page-tabs__clipboard button{min-width:42px;padding:0 .55rem}.project-page-tabs__clipboard button span{display:none}}
