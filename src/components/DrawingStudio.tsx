@@ -1,4 +1,4 @@
-import {useGraphicFonts} from '../lib/graphicFonts';
+import {FontPicker,useGraphicFonts} from '../lib/graphicFonts';
 import ImageLibrary from './ImageLibrary';
 import PhotopeaEditor from './PhotopeaEditor';
 import {imageCredit,type OpenImage} from '../lib/openImages';
@@ -900,9 +900,7 @@ export default function DrawingStudio({ drawing, defaultFontFamily = 'Inter', ti
           {tool === 'text' && (
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               <span className="text-[9px] font-mono text-neutral-400 uppercase">Tipografia</span>
-              <select value={fontFamily} onChange={(event) => setFontFamily(event.target.value)} className="h-8 w-[180px] lg:w-[220px] rounded-lg border border-black/10 bg-white px-2 text-[10px]" style={{ fontFamily }}>
-                {fontFamilies.map((family) => <option key={family} value={family}>{family}</option>)}
-              </select>
+              <div className="w-[220px] max-w-full"><FontPicker value={fontFamily} onChange={setFontFamily} preferred={fontFamilies} compact previewText="Aa Bb Cc 0123 · Texto no desenho" /></div>
               <input type="range" min="12" max="180" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))} className="w-28" />
               <span className="text-[10px] font-mono w-10">{fontSize}px</span>
             </div>
