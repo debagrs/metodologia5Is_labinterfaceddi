@@ -32,6 +32,7 @@ import DataStoryStudio, { DataStoryPreview, blankDataStory } from './DataStorySt
 import GraphicsStudio, { GraphicsPreview, blankGraphicSystem, graphicSystemToSvg } from './GraphicsStudio';
 import TextStudio, { TextStudioPreview, blankTextStudio } from './TextStudio';
 import { readStoredTursoSession } from '../lib/turso';
+import type { AiGeneratedImage } from '../lib/aiImage';
 
 export interface InfiniteCanvasHandle {
   getCenteredCardPosition: (cardWidth?: number, cardHeight?: number) => { x: number; y: number };
@@ -138,6 +139,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   } | null>(null);
   const [drawingEditorNodeId, setDrawingEditorNodeId] = useState<string | null>(null);
   const [imageStudioOpen,setImageStudioOpen]=useState(false);
+  const [imageStudioInitialTab,setImageStudioInitialTab]=useState<'upload'|'search'|'edit'|'trace'|'generate'>('upload');
   const [imageLibraryOpen,setImageLibraryOpen]=useState(false);
   const [photoEditor,setPhotoEditor]=useState<{url?:string;name:string;nodeId?:string}|null>(null);
   const [newDrawing, setNewDrawing] = useState<DrawingDocument | null>(null);
@@ -200,6 +202,13 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     return () => document.body.classList.remove('atelier-open');
   }, [atelierOpen]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const openAiImage = () => { setImageStudioInitialTab('generate'); setImageStudioOpen(true); };
+    window.addEventListener('5is:open-ai-image', openAiImage as EventListener);
+    return () => window.removeEventListener('5is:open-ai-image', openAiImage as EventListener);
+  }, []);
+
   useGraphicFonts([projectDesignSystem?.primaryFont,...Object.values(projectDesignSystem?.fontFamilies || {})]);
   const projectVideoMedia = projectNodes.flatMap((item) => {
     const media: Array<{ id: string; kind: 'image' | 'video'; url: string; name: string; source: 'project' }> = [];
@@ -212,6 +221,10 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
     (item.attachments || []).forEach((attachment) => { if (attachment.url && (attachment.type === 'image' || attachment.type === 'video')) media.push({ id: `${item.id}:${attachment.id}`, kind: attachment.type, url: attachment.url, name: attachment.name || `Mídia de ${item.title}`, source: 'project' }); });
     return media;
   });
+
+  const projectImageReferenceAssets = projectVideoMedia
+    .filter((item) => item.kind === 'image' && item.url)
+    .map((item) => ({ id: item.id, name: item.name, url: item.url }));
 
   const projectSpriteAssets: SpriteAssetOption[] = projectNodes.flatMap((item) => {
     if (item.type === 'canvas-image' && item.imageUrl) return [{ id: item.id, name: item.imageName || item.title || 'Imagem do projeto', url: item.imageUrl, source: 'project' as const }];
@@ -337,6 +350,19 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
   });
 
   const addOpenImage=async(image:OpenImage)=>{if(!canEditCanvas)return;const ratio=(image.width || 640)/Math.max(1,image.height || 480),width=ratio>=1?320:Math.max(100,320*ratio),height=width/ratio,position=getCenteredPosition(width,height);onAddNode({type:'canvas-image',title:image.title,content:'',phase:activePhase,x:position.x,y:position.y,width,height,imageUrl:image.url,imageName:image.title,imageContentType:'image/*',aspectRatio:ratio,imageCredit:imageCredit(image),connections:[]});setImageLibraryOpen(false);setImageStudioOpen(false);};
+  const addGeneratedImageAsset = async (image: AiGeneratedImage) => {
+    if (!canEditCanvas || !image.url) return;
+    const [rw,rh] = String(image.aspectRatio || '1:1').split(':').map(Number);
+    const ratio = Number.isFinite(rw) && Number.isFinite(rh) && rh > 0 ? rw / rh : 1;
+    const width = ratio >= 1 ? 360 : Math.max(180, 360 * ratio);
+    const height = width / ratio;
+    const position = getCenteredPosition(width, height);
+    onAddNode({
+      type:'canvas-image', title:image.name || 'Imagem IA', content:'Gerada com IA', phase:activePhase,
+      x:position.x, y:position.y, width, height, imageUrl:image.url, imageName:image.name || 'imagem-ia.png',
+      imageContentType:image.mimeType || 'image/png', aspectRatio:ratio, connections:[],
+    });
+  };
   const uploadCanvasImage = async (file: File,replaceNodeId?:string) => {
     if (!canEditCanvas) return;
     if (!file.type.startsWith('image/')) {
@@ -1988,7 +2014,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
           {canEditCanvas && (
             <>
               <div className="canvas-tool-separator w-px h-5 bg-[#E0E0DE] mx-1" />
-              <button type="button" onClick={() => setImageStudioOpen(true)} disabled={uploadingCanvasImage} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Imagem · upar, buscar Creative Commons, vetorizar, editar com Photopea ou gerar com IA">{uploadingCanvasImage ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}<span>IMAGEM</span></button>
+              <button type="button" onClick={() => { setImageStudioInitialTab('upload'); setImageStudioOpen(true); }} disabled={uploadingCanvasImage} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Imagem · upar, buscar Creative Commons, vetorizar, editar com Photopea ou gerar com IA">{uploadingCanvasImage ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}<span>IMAGEM</span></button>
               <button type="button" data-tour="atelier-texts" onClick={() => setNewTextStudio(blankTextStudio(projectDesignSystem))} className="canvas-tool-button rounded-2xl border border-[#E0E0DE] bg-white hover:border-black flex items-center justify-center gap-1.5 text-xs font-mono font-medium transition-colors cursor-pointer" title="Textos · caligrafia, lettering, tipografia e design de tipos"><Languages size={14}/><span className="canvas-tool-label">TEXTOS</span></button>
               <button
                 type="button"
@@ -2044,7 +2070,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
 
       {collaborationNodeId && (()=>{ const active=nodes.find(n=>n.id===collaborationNodeId); return active ? <NodeCollaborationPanel node={active} user={currentUser} onClose={()=>setCollaborationNodeId(null)} onChange={onUpdateNode} allowAttachments={!collaborationPermission || collaborationPermission === 'edit'}/> : null; })()}
 
-      {imageStudioOpen && <ImageStudio onUpload={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível adicionar a imagem ao canvas.');}} onChooseOpenImage={addOpenImage} onOpenEditor={()=>{setImageStudioOpen(false);setPhotoEditor({name:'Novo projeto'});}} onGeneratedFile={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível salvar a imagem gerada.');}} onClose={()=>setImageStudioOpen(false)}/>}
+      {imageStudioOpen && <ImageStudio initialTab={imageStudioInitialTab} referenceAssets={projectImageReferenceAssets} onUpload={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível adicionar a imagem ao canvas.');}} onChooseOpenImage={addOpenImage} onOpenEditor={()=>{setImageStudioOpen(false);setPhotoEditor({name:'Novo projeto'});}} onGeneratedAsset={addGeneratedImageAsset} onGeneratedFile={async(file)=>{const ok=await uploadCanvasImage(file);if(!ok)throw new Error('Não foi possível salvar a imagem gerada.');}} onClose={()=>setImageStudioOpen(false)}/>}
       {imageLibraryOpen && <ImageLibrary onChoose={addOpenImage} onClose={()=>setImageLibraryOpen(false)}/>}
       {photoEditor && <PhotopeaEditor key={photoEditor.nodeId || photoEditor.name} url={photoEditor.url} name={photoEditor.name} onSave={async file=>{const result=await uploadCanvasImage(file,photoEditor.nodeId);if(!result)throw new Error('Não foi possível salvar a imagem. Verifique sua sessão e envie uma versão PNG de até 4 MB.');}} onClose={()=>setPhotoEditor(null)}/>}
       {newDrawing && (
