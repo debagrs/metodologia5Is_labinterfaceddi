@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 
 type StudioGridMode = 'ratio' | 'balanced' | 'sidebar' | 'three-pane';
 
@@ -100,6 +101,7 @@ export default function ResizableStudioGrid({
     data-grid-mode={isThree ? 'three-pane' : isSidebar ? 'sidebar' : mode}
     style={{'--studio-columns': columns} as React.CSSProperties}
   >
+    <button type="button" className="studio-grid-ai-image-button" onClick={()=>window.dispatchEvent(new CustomEvent('5is:open-ai-image'))} title="Gerar imagem com IA e salvar na Biblioteca do Projeto"><Sparkles size={14}/><span>IA IMAGEM</span></button>
     {panes.map((pane,index)=><React.Fragment key={index}>{pane}{index < panes.length-1 && <div
       className="studio-grid-divider studio-resize-handle"
       role="separator"
