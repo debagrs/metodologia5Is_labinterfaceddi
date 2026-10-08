@@ -37,6 +37,8 @@ import type { AiGeneratedImage } from '../lib/aiImage';
 export interface InfiniteCanvasHandle {
   getCenteredCardPosition: (cardWidth?: number, cardHeight?: number) => { x: number; y: number };
   focusNode: (nodeId: string, openCollaboration?: boolean) => void;
+  copySelectedNode: () => boolean;
+  pasteCopiedNode: () => boolean;
 }
 
 
@@ -757,7 +759,35 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
       setSelectedNodeId(nodeId);
       if (openCollaboration) setCollaborationNodeId(nodeId);
     },
-  }), [nodes, panOffset.x, panOffset.y, zoom]);
+    copySelectedNode: () => {
+      const node = nodes.find((item) => item.id === selectedNodeId);
+      if (!node || node.type === 'core') return false;
+      try {
+        const clone = JSON.parse(JSON.stringify(node));
+        delete clone.id; delete clone.createdAt; delete clone.canvasPage;
+        clone.connections = [];
+        window.localStorage.setItem('5is:canvas-node-clipboard:v1', JSON.stringify({ version: 1, node: clone, copiedAt: new Date().toISOString() }));
+        return true;
+      } catch { return false; }
+    },
+    pasteCopiedNode: () => {
+      if (!canEditCanvas) return false;
+      try {
+        const raw = window.localStorage.getItem('5is:canvas-node-clipboard:v1');
+        if (!raw) return false;
+        const payload = JSON.parse(raw); const source = payload?.node;
+        if (!source || typeof source !== 'object') return false;
+        const dimensions = getNodeDimensions(source as ThoughtNode);
+        const position = getCenteredPosition(dimensions.width, dimensions.height);
+        const clone = JSON.parse(JSON.stringify(source));
+        delete clone.id; delete clone.createdAt; delete clone.canvasPage;
+        clone.phase = activePhase; clone.x = position.x; clone.y = position.y; clone.connections = [];
+        clone.title = clone.title ? `${clone.title} · cópia` : 'Cópia';
+        onAddNode(clone);
+        return true;
+      } catch { return false; }
+    },
+  }), [nodes, selectedNodeId, panOffset.x, panOffset.y, zoom, canEditCanvas, activePhase, onAddNode]);
 
   // Center on project core node on mount
   useEffect(() => {
@@ -2200,6 +2230,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         canEdit={canEditCanvas}
         initialSource={newWireframeSource}
         availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))}
+        availableAssets={projectGameAssets.filter((asset)=>asset.url).map((asset)=>({id:asset.id,name:asset.name||'Recurso do projeto',url:asset.url!}))}
         onSave={(wireframe)=>{
           const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:420; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?260:320; const position=getCenteredPosition(startWidth,startHeight);
           onAddNode({type:'wireframe-board',title:'Wireframes',wireframeName:`Wireframes ${nodes.filter((item)=>item.type==='wireframe-board').length+1}`,content:'Frames, auto layout e componentes do projeto.',phase:activePhase,x:position.x,y:position.y,width:startWidth,height:startHeight,wireframe,connections:[]}); setNewWireframe(null); setNewWireframeSource(null);
@@ -2207,7 +2238,7 @@ const InfiniteCanvas = forwardRef<InfiniteCanvasHandle, InfiniteCanvasProps>(fun
         onClose={()=>{setNewWireframe(null);setNewWireframeSource(null)}}
       />} 
 
-      {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
+      {wireframeEditorNodeId && (()=>{const node=nodes.find((item)=>item.id===wireframeEditorNodeId&&item.type==='wireframe-board'); if(!node)return null; return <WireframeStudio key={node.id} document={node.wireframe||blankWireframe(projectDesignSystem)} designSystem={projectDesignSystem} title={node.wireframeName||'Wireframes'} canEdit={canEditCanvas} availableDrawings={nodes.filter((item)=>item.type==='drawing-sheet'&&item.drawing).map((item)=>({id:item.id,name:item.drawingName||item.title||'Desenho',drawing:item.drawing!}))} availableAssets={projectGameAssets.filter((asset)=>asset.url).map((asset)=>({id:asset.id,name:asset.name||'Recurso do projeto',url:asset.url!})).filter((asset)=>asset.id!==node.id)} onSave={(wireframe)=>onUpdateNode({...node,wireframe})} onClose={()=>setWireframeEditorNodeId(null)}/>})()}
 
       {newDesignSystem && <DesignSystemStudio document={newDesignSystem} visualIdentitySuggestion={projectVisualIdentity} title="Novo Design System" canEdit={canEditCanvas} onSave={(designSystem)=>{
         const startWidth=typeof window!=='undefined'&&window.innerWidth<640?320:400; const startHeight=typeof window!=='undefined'&&window.innerWidth<640?250:300; const position=getCenteredPosition(startWidth,startHeight);
