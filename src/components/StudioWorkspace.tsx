@@ -7,10 +7,12 @@ const clampWidth = (value:number, split:'default'|'equal') => split === 'equal'
 const clampMobile = (value:number)=>Math.max(24,Math.min(72,value));
 
 /** Shared editor shell: compact/resizable tools + canvas that always receives the remainder. */
-export function StudioWorkspace({ tools, children, split = 'default' }: {
+export function StudioWorkspace({ tools, children, split = 'default', aiImageButton = true }: {
   tools: React.ReactNode;
   children: React.ReactNode;
   split?: 'default' | 'equal';
+  /** Oculta o gerador de imagem global quando o ateliê possui IA contextual própria. */
+  aiImageButton?: boolean;
 }) {
   const [open, setOpen] = useState(() => typeof window === 'undefined' || window.matchMedia('(min-width: 1024px)').matches);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
@@ -56,7 +58,7 @@ export function StudioWorkspace({ tools, children, split = 'default' }: {
         <button type="button" className="studio-panel-toggle" aria-expanded={open} aria-controls={panelId} onClick={()=>setOpen(!open)} title={open?'Recolher ferramentas':'Abrir ferramentas'}>
           {open?<ChevronLeft size={18}/>:<PanelLeftOpen size={18}/>}<span>{open?'Ferramentas e edição':'Ferramentas'}</span>
         </button>
-        <button type="button" className="studio-ai-image-button" onClick={()=>window.dispatchEvent(new CustomEvent('5is:open-ai-image'))} title="Gerar imagem com IA e salvar na Biblioteca do Projeto"><Sparkles size={15}/><span>IA IMAGEM</span></button>
+        {aiImageButton ? <button type="button" className="studio-ai-image-button" onClick={()=>window.dispatchEvent(new CustomEvent('5is:open-ai-image'))} title="Gerar imagem com IA e salvar na Biblioteca do Projeto"><Sparkles size={15}/><span>IA IMAGEM</span></button> : null}
       </div>
       <div id={panelId} className="studio-tools" hidden={!open}>{tools}</div>
     </aside>
