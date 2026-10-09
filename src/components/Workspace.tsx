@@ -15,7 +15,6 @@ import AgentChatPanel from './AgentChatPanel';
 import ProjectCollaboratorsPanel from './ProjectCollaboratorsPanel';
 import { AgendaLauncher } from './Agenda5Is';
 import TutorialCoach from './TutorialCoach';
-import WorkspaceHistory from './WorkspaceHistory';
 import { ensureTursoSession } from '../lib/turso';
 
 interface MethodologyTechnique {
@@ -2235,7 +2234,7 @@ export default function Workspace({
         </div>
 
         {/* Current status telemetry & Mobile Panel toggles */}
-        <div className="workspace-top-actions order-3 sm:order-none w-full sm:w-auto flex min-w-0 items-center gap-1 sm:gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:pb-0">
+        <div className="workspace-top-actions order-3 sm:order-none w-full sm:w-auto flex min-w-0 items-center justify-center sm:justify-end gap-1.5 sm:gap-2 overflow-x-auto overscroll-x-contain pb-1 sm:pb-0 mx-auto sm:mx-0">
           {currentUser && ['advisor', 'student'].includes(currentUser.role) && (
             <AgendaLauncher
               currentUser={currentUser}
@@ -2277,7 +2276,6 @@ export default function Workspace({
             <span className="hidden xl:inline text-[11px] font-mono font-bold uppercase">Ajuda</span>
           </button>
           <div id="workspace-history-slot" className="contents" />
-          <WorkspaceHistory />
           <button
             onClick={() => {
               const first = window.confirm('Apagar todo o conteúdo do canvas? A âncora central do projeto será mantida vazia.');
@@ -2337,13 +2335,13 @@ export default function Workspace({
 
       <nav id="workspace-project-pages" data-tour="workspace-pages" className="project-page-tabs" aria-label="Páginas do projeto">
         <div className="project-page-tabs__inner">
-          <button type="button" className={activeCanvasPage==='process'?'active':''} onClick={()=>setActiveCanvasPage('process')}>
+          <button type="button" aria-current={activeCanvasPage==='process'?'page':undefined} className={activeCanvasPage==='process'?'active':''} onClick={()=>setActiveCanvasPage('process')}>
             <span className="project-page-tabs__icon">01</span><span><b>PROCESSO</b><small>pesquisa · notas · análises</small></span>
           </button>
-          <button type="button" className={activeCanvasPage==='wireframes'?'active':''} onClick={()=>setActiveCanvasPage('wireframes')}>
+          <button type="button" aria-current={activeCanvasPage==='wireframes'?'page':undefined} className={activeCanvasPage==='wireframes'?'active':''} onClick={()=>setActiveCanvasPage('wireframes')}>
             <span className="project-page-tabs__icon">02</span><span><b>WIREFRAMES</b><small>telas · fluxos · protótipos</small></span>
           </button>
-          <button type="button" className={activeCanvasPage==='experiments'?'active':''} onClick={()=>setActiveCanvasPage('experiments')}>
+          <button type="button" aria-current={activeCanvasPage==='experiments'?'page':undefined} className={activeCanvasPage==='experiments'?'active':''} onClick={()=>setActiveCanvasPage('experiments')}>
             <span className="project-page-tabs__icon">03</span><span><b>EXPERIMENTAÇÕES</b><small>rabiscos · linguagem · código</small></span>
           </button>
           <div className="project-page-tabs__clipboard" aria-label="Copiar e colar entre páginas e projetos">
