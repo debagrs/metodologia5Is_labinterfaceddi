@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import FirstExperience from './components/FirstExperience';
 import BrandMark from './components/BrandMark';
 import Workspace from './components/Workspace';
@@ -17,6 +17,9 @@ const STORAGE_PROJECT_KEY = "5is_platform_active_project";
 const STORAGE_NODES_KEY = "5is_platform_canvas_nodes";
 const STORAGE_PROJECTS_KEY = "5is_platform_project_workspaces";
 const STORAGE_ACTIVE_PROJECT_ID_KEY = "5is_platform_active_project_id";
+const BROWSER_NAV_STATE_KEY = '__5is_browser_nav__';
+
+type BrowserNavScreen = 'root' | 'advisor-projects' | 'student-projects' | 'project-form' | 'workspace';
 
 // Pre-loaded sustainable design classrooms
 const DEFAULT_CLASSROOMS: Classroom[] = [
@@ -181,6 +184,38 @@ export default function App() {
     nodes: ThoughtNode[];
   } | null>(null);
 
+  // O app usa estado React em vez de rotas para trocar dashboard/canvas.
+  // Registramos essas transições no histórico do navegador para que o botão
+  // físico/gesto "voltar" retorne ao nível anterior da plataforma antes de sair do site.
+  const browserNavProfileRef = useRef<string | null>(null);
+
+  const writeBrowserNavState = (
+    screen: BrowserNavScreen,
+    mode: 'push' | 'replace' = 'push',
+    meta: Record<string, unknown> = {},
+  ) => {
+    if (typeof window === 'undefined') return;
+    const currentState = window.history.state && typeof window.history.state === 'object'
+      ? window.history.state
+      : {};
+    const nextState = {
+      ...currentState,
+      [BROWSER_NAV_STATE_KEY]: { screen, ...meta },
+    };
+    if (mode === 'replace') window.history.replaceState(nextState, '', window.location.href);
+    else window.history.pushState(nextState, '', window.location.href);
+  };
+
+  const browserBackOr = (fallback: () => void) => {
+    if (typeof window === 'undefined') { fallback(); return; }
+    const screen = window.history.state?.[BROWSER_NAV_STATE_KEY]?.screen as BrowserNavScreen | undefined;
+    if (screen && screen !== 'root') {
+      window.history.back();
+      return;
+    }
+    fallback();
+  };
+
   const applyCloudSnapshot = (snapshot: WorkspaceSnapshot) => {
     /*
      * Um workspace remoto vazio deve continuar vazio.
@@ -295,6 +330,21 @@ export default function App() {
     if (activeProfile) void loadSharedProjects();
     else setSharedProjects([]);
   }, [activeProfile?.id]);
+
+  // Cada sessão autenticada começa em um nível-raiz do histórico interno.
+  // Em reload, isso também neutraliza um marcador antigo de canvas que tenha
+  // ficado gravado no history.state do navegador.
+  useEffect(() => {
+    if (!activeProfile || typeof window === 'undefined') {
+      browserNavProfileRef.current = null;
+      return;
+    }
+    if (browserNavProfileRef.current === activeProfile.id) return;
+    browserNavProfileRef.current = activeProfile.id;
+    writeBrowserNavState('root', 'replace', { role: activeProfile.role });
+  }, [activeProfile?.id]);
+
+
 
   // Handle Login and create Student Profile if it doesn't exist
   const handleLogin = (profile: UserProfile) => {
@@ -457,6 +507,7 @@ export default function App() {
       setViewingStudent({ ...student, remoteSnapshot: snapshot as unknown as Record<string, unknown> });
       setViewingStudentProjects(remoteProjects);
       setViewingStudentActiveProjectId(null);
+      writeBrowserNavState('student-projects', 'push', { studentId: student.id });
     } catch (error: any) {
       console.error('[5I] Falha ao abrir workspace do aluno:', error);
       setStudentWorkspaceError(error?.message || 'Não foi possível carregar os projetos deste aluno.');
@@ -501,6 +552,99 @@ export default function App() {
 
   const { project, nodes } = getActiveData();
 
+  // Perfis parceiro/individual podem restaurar uma mesa já existente logo após o login.
+  // Como nesses perfis a mesa é a própria tela ativa, cria também um degrau de histórico
+  // para que "voltar" retorne ao portal/início em vez de abandonar o site.
+  useEffect(() => {
+    if (!activeProfile || !project || typeof window === 'undefined') return;
+    if (!['partner', 'individual'].includes(activeProfile.role)) return;
+    const screen = window.history.state?.[BROWSER_NAV_STATE_KEY]?.screen as BrowserNavScreen | undefined;
+    if (screen === 'root') {
+      writeBrowserNavState('workspace', 'push', { projectId: project.id, restored: true });
+    }
+  }, [activeProfile?.id, activeProfile?.role, project?.id]);
+
+  // Faz o botão/gesto nativo "voltar" percorrer a hierarquia interna:
+  // canvas -> lista de projetos -> painel da professora/aluno -> página anterior.
+  useEffect(() => {
+    if (!activeProfile || typeof window === 'undefined') return;
+
+    const handleBrowserPopState = () => {
+      if (activeAdminProject) {
+        setActiveAdminProject(null);
+        return;
+      }
+
+      if (activeSharedProject) {
+        setActiveSharedProject(null);
+        return;
+      }
+
+      if (viewingStudent) {
+        if (viewingStudentActiveProjectId) {
+          setViewingStudentActiveProjectId(null);
+          return;
+        }
+        setViewingStudent(null);
+        setViewingStudentProjects([]);
+        setViewingStudentActiveProjectId(null);
+        return;
+      }
+
+      if (activeProfile.role === 'advisor' && showAdvisorProjects) {
+        if (activeProjectId) {
+          setActiveProjectId(null);
+          setSoloProject(null);
+          setSoloNodes([]);
+          setShowStudentProjectForm(false);
+          localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
+          return;
+        }
+        if (showStudentProjectForm) {
+          setShowStudentProjectForm(false);
+          return;
+        }
+        setShowAdvisorProjects(false);
+        return;
+      }
+
+      if (activeProfile.role === 'student') {
+        if (activeProjectId) {
+          setActiveProjectId(null);
+          setSoloProject(null);
+          setSoloNodes([]);
+          setShowStudentProjectForm(false);
+          localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
+          return;
+        }
+        if (showStudentProjectForm) {
+          setShowStudentProjectForm(false);
+          return;
+        }
+      }
+
+      // Parceiros e perfis individuais também retornam da mesa ao seu portal
+      // antes de permitir que o navegador abandone a plataforma.
+      if ((activeProfile.role === 'partner' || !['advisor', 'student'].includes(activeProfile.role)) && project) {
+        setSoloProject(null);
+        setSoloNodes([]);
+      }
+    };
+
+    window.addEventListener('popstate', handleBrowserPopState);
+    return () => window.removeEventListener('popstate', handleBrowserPopState);
+  }, [
+    activeProfile?.id,
+    activeProfile?.role,
+    activeAdminProject,
+    activeSharedProject,
+    viewingStudent,
+    viewingStudentActiveProjectId,
+    showAdvisorProjects,
+    activeProjectId,
+    showStudentProjectForm,
+    project?.id,
+  ]);
   // Helper to persist edits back to their respective sources
   const saveActiveProjectAndNodes = (updatedProject: Project | null, updatedNodes: ThoughtNode[]) => {
     if (activeSharedProject) {
@@ -660,7 +804,12 @@ export default function App() {
 
     saveActiveProjectAndNodes(newProject, [coreNode, welcomeNode]);
     setActiveProjectId(newProject.id);
+    const fromProjectForm = showStudentProjectForm;
     setShowStudentProjectForm(false);
+    writeBrowserNavState('workspace', fromProjectForm ? 'replace' : 'push', {
+      projectId: newProject.id,
+      role: activeProfile?.role || 'individual',
+    });
   };
 
   const handleUpdateNodeCoords = (id: string, x: number, y: number) => {
@@ -775,6 +924,10 @@ export default function App() {
     }
   };
 
+  const handleWorkspaceExit = () => {
+    browserBackOr(handleExit);
+  };
+
   const handleOpenStudentProject = (projectId: string) => {
     const workspace = projectWorkspaces.find((item) => item.project.id === projectId);
     if (!workspace) return;
@@ -785,18 +938,22 @@ export default function App() {
     localStorage.setItem(STORAGE_ACTIVE_PROJECT_ID_KEY, projectId);
     localStorage.setItem(STORAGE_PROJECT_KEY, JSON.stringify(workspace.project));
     localStorage.setItem(STORAGE_NODES_KEY, JSON.stringify(workspace.nodes));
+    writeBrowserNavState('workspace', 'push', { projectId });
   };
 
   const handleOpenViewingStudentProject = (projectId: string) => {
     const workspace = viewingStudentProjects.find((item) => item.project.id === projectId);
     if (!workspace) return;
     setViewingStudentActiveProjectId(projectId);
+    writeBrowserNavState('workspace', 'push', { projectId, studentId: viewingStudent?.id });
   };
 
   const handleBackFromViewingStudentProjects = () => {
-    setViewingStudent(null);
-    setViewingStudentProjects([]);
-    setViewingStudentActiveProjectId(null);
+    browserBackOr(() => {
+      setViewingStudent(null);
+      setViewingStudentProjects([]);
+      setViewingStudentActiveProjectId(null);
+    });
   };
 
   const handleOpenSharedProject = async (shared: SharedProjectSummary) => {
@@ -819,6 +976,7 @@ export default function App() {
         permission: (data?.permission || shared.permission) as CollaborationPermission,
         project: projectToOpen, nodes: ws?.nodes || snapshot.soloNodes || [],
       });
+      writeBrowserNavState('workspace', 'push', { projectId: shared.projectId, source: 'shared' });
     } catch (error: any) {
       alert(error?.message || 'Não foi possível abrir o projeto compartilhado.');
     }
@@ -848,6 +1006,7 @@ export default function App() {
         project: projectToOpen,
         nodes: workspace?.nodes || snapshot.soloNodes || [],
       });
+      writeBrowserNavState('workspace', 'push', { projectId: summary.projectId, source: 'admin' });
     } catch (error: any) {
       alert(error?.message || 'Não foi possível abrir este projeto.');
     }
@@ -892,7 +1051,7 @@ export default function App() {
             onUpdateNodes={canEditShared ? handleUpdateNodes : noOp}
             onAddNode={canEditShared ? handleAddNode : noOp}
             onUpdatePhase={canEditShared ? handleUpdatePhase : noOp}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={canEditShared ? handleClearAllContent : noOp}
             currentUser={activeProfile}
             studentName={`Projeto de ${activeSharedProject.ownerName}`}
@@ -916,7 +1075,7 @@ export default function App() {
             onUpdateNodes={noOp}
             onAddNode={noOp}
             onUpdatePhase={noOp}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={noOp}
             currentUser={activeProfile}
             studentName={`${activeAdminProject.summary.ownerRole === 'advisor' ? 'Professor(a)' : 'Comunidade'}: ${activeAdminProject.summary.ownerName}`}
@@ -956,7 +1115,7 @@ export default function App() {
             onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={viewingStudent.name}
@@ -980,7 +1139,7 @@ export default function App() {
               onUpdateNodes={handleUpdateNodes}
               onAddNode={handleAddNode}
               onUpdatePhase={handleUpdatePhase}
-              onExit={handleExit}
+              onExit={handleWorkspaceExit}
               onClearAll={handleClearAllContent}
               currentUser={activeProfile}
               studentName="Projeto do(a) professor(a)"
@@ -998,7 +1157,7 @@ export default function App() {
                 <BrandMark compact priority className="w-[38px] h-[33px]" />
                 <div><span className="text-[9px] font-bold uppercase tracking-widest text-black/40 block">Novo projeto do professor</span><span className="text-xs font-semibold">{activeProfile.name}</span></div>
               </div>
-              <button onClick={() => setShowStudentProjectForm(false)} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
+              <button onClick={() => browserBackOr(() => setShowStudentProjectForm(false))} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
             </header>
             <div className="flex-1 flex items-stretch justify-center py-0 md:items-center md:py-6"><FirstExperience onStart={handleStartProject} /></div>
           </div>
@@ -1010,14 +1169,14 @@ export default function App() {
           user={activeProfile}
           projects={projectWorkspaces}
           onOpen={handleOpenStudentProject}
-          onCreate={() => setShowStudentProjectForm(true)}
+          onCreate={() => { setShowStudentProjectForm(true); writeBrowserNavState('project-form', 'push'); }}
           onDelete={handleDeleteStudentProject}
-          onBack={() => {
+          onBack={() => browserBackOr(() => {
             setShowAdvisorProjects(false);
             setShowStudentProjectForm(false);
             setActiveProjectId(null);
             localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
-          }}
+          })}
           title="Meus projetos como professor(a)"
           emptyTitle="Você ainda não criou um projeto próprio"
           emptyDescription="Além de orientar turmas, sua conta de professor também pode criar e desenvolver projetos completos na Metodologia 5I's."
@@ -1041,10 +1200,12 @@ export default function App() {
           setActiveProjectId(null);
           setShowStudentProjectForm(false);
           localStorage.removeItem(STORAGE_ACTIVE_PROJECT_ID_KEY);
+          writeBrowserNavState('advisor-projects', 'push');
         }}
         advisorProjects={projectWorkspaces}
         onOpenAdvisorProject={(projectId) => {
           setShowAdvisorProjects(true);
+          writeBrowserNavState('advisor-projects', 'push');
           handleOpenStudentProject(projectId);
         }}
         onUpdateClassroomLinks={handleUpdateClassroomLinks}
@@ -1091,7 +1252,7 @@ export default function App() {
             onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={viewingStudent.name}
@@ -1114,7 +1275,7 @@ export default function App() {
             onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={activeProfile.institution || 'Parceiro'}
@@ -1273,7 +1434,7 @@ export default function App() {
             onUpdateNodes={canEditShared ? handleUpdateNodes : noOp}
             onAddNode={canEditShared ? handleAddNode : noOp}
             onUpdatePhase={canEditShared ? handleUpdatePhase : noOp}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={canEditShared ? handleClearAllContent : noOp}
             currentUser={activeProfile}
             studentName={`Projeto de ${activeSharedProject.ownerName}`}
@@ -1297,7 +1458,7 @@ export default function App() {
             onUpdateNodes={handleUpdateNodes}
             onAddNode={handleAddNode}
             onUpdatePhase={handleUpdatePhase}
-            onExit={handleExit}
+            onExit={handleWorkspaceExit}
             onClearAll={handleClearAllContent}
             currentUser={activeProfile}
             studentName={activeClassroom?.name || 'Sua Turma'}
@@ -1315,7 +1476,7 @@ export default function App() {
               <BrandMark compact priority className="w-[38px] h-[33px]" />
               <div><span className="text-[9px] font-bold uppercase tracking-widest text-black/40 block">Novo projeto</span><span className="text-xs font-semibold">{activeProfile.name}</span></div>
             </div>
-            <button onClick={() => setShowStudentProjectForm(false)} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
+            <button onClick={() => browserBackOr(() => setShowStudentProjectForm(false))} className="p-2 px-3 rounded-xl border border-[#E0E0DE] text-xs font-mono font-bold uppercase cursor-pointer flex items-center gap-1.5"><ArrowLeft size={14} /> Projetos</button>
           </header>
           <div className="flex-1 flex items-stretch justify-center py-0 md:items-center md:py-6"><FirstExperience onStart={handleStartProject} /></div>
         </div>
@@ -1328,7 +1489,7 @@ export default function App() {
         classroomName={activeClassroom?.name}
         projects={projectWorkspaces}
         onOpen={handleOpenStudentProject}
-        onCreate={() => setShowStudentProjectForm(true)}
+        onCreate={() => { setShowStudentProjectForm(true); writeBrowserNavState('project-form', 'push'); }}
         onDelete={handleDeleteStudentProject}
         onLogout={handleLogout}
         sharedProjects={sharedProjects}
@@ -1354,7 +1515,7 @@ export default function App() {
           onUpdateNodes={handleUpdateNodes}
           onAddNode={handleAddNode}
           onUpdatePhase={handleUpdatePhase}
-          onExit={handleExit}
+          onExit={handleWorkspaceExit}
           onClearAll={handleClearAllContent}
           currentUser={activeProfile}
         />
@@ -1388,4 +1549,3 @@ export default function App() {
     </div>
   );
 }
-
