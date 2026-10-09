@@ -507,6 +507,8 @@ export type CharacterWingStyle = 'none' | 'feather' | 'bat' | 'fin';
 export type CharacterHornStyle = 'none' | 'short' | 'long' | 'antlers' | 'antennae';
 export type CharacterSurfaceStyle = 'skin' | 'fur-short' | 'fur-long' | 'feathers' | 'scales' | 'shell' | 'chitin';
 export type CharacterFootStyle = 'feet' | 'paws' | 'hooves' | 'claws' | 'talons' | 'fins';
+export type IllustrationTechnique = 'woodcut' | 'metal-etching' | 'pencil' | 'charcoal' | 'lithography' | 'watercolor' | 'gouache' | 'acrylic' | 'collage' | 'pen-ink' | 'digital-freehand' | 'vector';
+export type IllustrationGenre = 'concept-art' | 'children' | 'comics' | 'editorial' | 'advertising' | 'packaging' | 'branding';
 
 export type CharacterAccessoryKind = 'glasses' | 'sunglasses' | 'goggles' | 'monocle' | 'hat' | 'cap' | 'beanie' | 'hood' | 'bandana' | 'headband' | 'hairclip' | 'flower' | 'tiara' | 'scarf' | 'cape' | 'backpack' | 'satchel' | 'headphones' | 'earrings' | 'necklace' | 'brooch' | 'bow' | 'crown' | 'bracelet' | 'watch' | 'belt' | 'pouch' | 'shoulderpad' | 'mask';
 export interface CharacterAccessory { id:string; kind:CharacterAccessoryKind; color:string; scale:number; x:number; y:number; }
@@ -515,6 +517,10 @@ export interface CharacterAppearance {
   artStyle?: 'illustrated' | 'cartoon' | 'anime' | 'manga' | 'comic' | 'storybook' | 'watercolor' | 'pencil' | 'ink' | 'chibi' | 'engraving' | 'lineart' | 'minimal-lineart' | 'realism' | 'psychedelic' | 'steampunk' | 'pixel-art' | 'voxel';
   /** Variação dentro da família visual. Ex.: manga-shoujo, engraving-woodcut. */
   styleVariant?: string;
+  /** Material/técnica de produção visual, independente da direção de desenho. */
+  illustrationTechnique?: IllustrationTechnique;
+  /** Gênero/finalidade da ilustração, sem apagar anatomia ou escolhas manuais. */
+  illustrationGenre?: IllustrationGenre;
   accessories?: CharacterAccessory[];
   headWidth?:number; headHeight?:number; eyeSize?:number; eyeSpacing?:number; eyeHeight?:number; irisScale?:number;
   browSize?:number; browHeight?:number; noseSize?:number; noseHeight?:number; mouthSize?:number; mouthHeight?:number;
