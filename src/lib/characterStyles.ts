@@ -1,4 +1,5 @@
 import type { CharacterAppearance } from '../types';
+import { illustrationGenreById, illustrationTechniqueById } from './illustrationSystems';
 
 type ShadingMode = 'soft' | 'flat' | 'cel' | 'dots' | 'paper' | 'hatch' | 'ink' | 'engrave' | 'ornament' | 'outline' | 'realism' | 'psychedelic' | 'metal' | 'pixel' | 'voxel';
 
@@ -141,7 +142,7 @@ export function applyStyleVariant(a: CharacterAppearance, variantId: string): Ch
 // Multiplicadores visuais operam sobre cópia; sliders continuam editáveis.
 export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
   const s = selectedStyleVariant(a);
-  const base = {
+  let result: CharacterAppearance = {
     ...a,
     eyeSize: (a.eyeSize ?? 1) * s.eyes,
     headWidth: (a.headWidth ?? 1) * s.head,
@@ -150,50 +151,218 @@ export function styledAppearance(a: CharacterAppearance): CharacterAppearance {
     ...((s.family === 'chibi' || s.id === 'manga-chibi') ? { legLength: (a.legLength ?? 1) * .72, armLength: (a.armLength ?? 1) * .8 } : {}),
   };
   if (s.family === 'realism') {
-    return {
-      ...base,
-      headWidth: (base.headWidth ?? 1) * .94,
-      headHeight: (base.headHeight ?? 1) * .96,
-      eyeSize: (base.eyeSize ?? 1) * .9,
+    result = {
+      ...result,
+      headWidth: (result.headWidth ?? 1) * .94,
+      headHeight: (result.headHeight ?? 1) * .96,
+      eyeSize: (result.eyeSize ?? 1) * .9,
       mouthSize: (a.mouthSize ?? 1) * .95,
       noseSize: (a.noseSize ?? 1) * 1.05,
-      strokeWidth: Math.max(.75, (base.strokeWidth ?? 1.2) * .9),
+      strokeWidth: Math.max(.75, (result.strokeWidth ?? 1.2) * .9),
       bodyWidth: Math.max(.94, a.bodyWidth ?? 1),
     };
-  }
-  if (s.family === 'psychedelic') {
-    return {
-      ...base,
-      headWidth: (base.headWidth ?? 1) * 1.05,
-      eyeSize: (base.eyeSize ?? 1) * 1.08,
+  } else if (s.family === 'psychedelic') {
+    result = {
+      ...result,
+      headWidth: (result.headWidth ?? 1) * 1.05,
+      eyeSize: (result.eyeSize ?? 1) * 1.08,
       hairVolume: (a.hairVolume ?? 1) * 1.12,
-      strokeWidth: (base.strokeWidth ?? 1.8) * 1.08,
+      strokeWidth: (result.strokeWidth ?? 1.8) * 1.08,
     };
-  }
-  if (s.family === 'minimal-lineart') {
-    return {
-      ...base,
-      strokeWidth: Math.max(.42, (base.strokeWidth ?? 1.1) * .52),
-      eyeSize: (base.eyeSize ?? 1) * .88,
+  } else if (s.family === 'minimal-lineart') {
+    result = {
+      ...result,
+      strokeWidth: Math.max(.42, (result.strokeWidth ?? 1.1) * .52),
+      eyeSize: (result.eyeSize ?? 1) * .88,
       irisScale: .62,
       hairVolume: (a.hairVolume ?? 1) * .84,
     };
+  } else if (s.family === 'pixel-art') {
+    result = { ...result, pixelResolution: a.pixelResolution || 32, pixelPaletteSize: a.pixelPaletteSize || 16, pixelOutline: a.pixelOutline ?? true };
+  } else if (s.family === 'voxel') {
+    result = { ...result, voxelYaw: a.voxelYaw ?? 28, voxelPitch: a.voxelPitch ?? 18, voxelDepth: a.voxelDepth ?? 1, voxelBevel: a.voxelBevel ?? 0 };
   }
-  if (s.family === 'pixel-art') {
-    return { ...base, pixelResolution: a.pixelResolution || 32, pixelPaletteSize: a.pixelPaletteSize || 16, pixelOutline: a.pixelOutline ?? true };
+
+  // A técnica é uma camada material independente da direção de desenho.
+  const technique = illustrationTechniqueById(a.illustrationTechnique);
+  if (technique && !['pixel-art','voxel'].includes(String(s.family))) {
+    result = {
+      ...result,
+      strokeWidth: Math.max(.34, (result.strokeWidth ?? 1.6) * technique.lineScale),
+      lineColor:
+        technique.id === 'woodcut' ? '#191713' :
+        technique.id === 'metal-etching' ? '#403B36' :
+        technique.id === 'pencil' ? '#56514D' :
+        technique.id === 'charcoal' ? '#292725' :
+        technique.id === 'lithography' ? '#5C5550' :
+        technique.id === 'pen-ink' ? '#151515' : result.lineColor,
+    };
   }
-  if (s.family === 'voxel') {
-    return { ...base, voxelYaw: a.voxelYaw ?? 28, voxelPitch: a.voxelPitch ?? 18, voxelDepth: a.voxelDepth ?? 1, voxelBevel: a.voxelBevel ?? 0 };
+
+  // O gênero atua como gramática de legibilidade e não substitui anatomia/espécie.
+  const genre = illustrationGenreById(a.illustrationGenre);
+  if (genre && !['pixel-art','voxel'].includes(String(s.family))) {
+    result = {
+      ...result,
+      headWidth: (result.headWidth ?? 1) * genre.headScale,
+      headHeight: (result.headHeight ?? 1) * genre.headScale,
+      eyeSize: (result.eyeSize ?? 1) * genre.eyeScale,
+      strokeWidth: Math.max(.34, (result.strokeWidth ?? 1.6) * genre.lineScale),
+      limbLength: (result.limbLength ?? 1) * genre.limbScale,
+      bodyWidth: (result.bodyWidth ?? 1) * genre.bodyScale,
+      hairVolume: a.illustrationGenre === 'branding' ? (result.hairVolume ?? 1) * .92 : result.hairVolume,
+    };
   }
-  return base;
+  return result;
 }
 
 function shift(hex: string, n: number) {
   return '#' + [1,3,5].map(i => Math.max(0,Math.min(255,parseInt(hex.slice(i,i+2),16)+n)).toString(16).padStart(2,'0')).join('');
 }
 
+function mix(hex: string, target: string, amount: number) {
+  const t = Math.max(0, Math.min(1, amount));
+  const channels = (value: string) => [1,3,5].map((i) => parseInt(value.slice(i,i+2),16));
+  const a = channels(hex), b = channels(target);
+  return '#' + a.map((value,index) => Math.round(value + (b[index]-value)*t).toString(16).padStart(2,'0')).join('');
+}
+
+function luminance(hex: string) {
+  return .2126*parseInt(hex.slice(1,3),16)+.7152*parseInt(hex.slice(3,5),16)+.0722*parseInt(hex.slice(5,7),16);
+}
+
+/**
+ * Materializa de verdade a técnica escolhida. Não é apenas um rótulo: cada técnica
+ * altera preenchimento, borda, grão, opacidade e comportamento tonal do mesmo SVG.
+ * Retorna null quando o documento usa o modo legado/automático, preservando integralmente
+ * a aparência de personagens salvos antes desta camada.
+ */
+function illustrationTechniqueMarkup(markup: string, a: CharacterAppearance) {
+  const technique = illustrationTechniqueById(a.illustrationTechnique);
+  if (!technique) return null;
+  const id = technique.id;
+  const colors = [...new Set([...markup.matchAll(/fill="(#[a-f\d]{6})"/gi)].map(m => m[1]))];
+  let defs = '';
+  const paper = '#F8F2E6';
+  const ink = id === 'woodcut' ? '#191713' : id === 'pen-ink' ? '#111111' : '#403B36';
+
+  const replaceColor = (color: string, replacement: string) => {
+    markup = markup.split(`fill="${color}"`).join(`fill="${replacement}"`);
+  };
+
+  colors.forEach((c, index) => {
+    const pid = `tech-${id}-${index}`;
+    const lum = luminance(c);
+    const darkness = Math.max(.12, Math.min(.9, 1 - lum/255));
+
+    if (id === 'woodcut') {
+      const gap = lum > 195 ? 9 : lum > 135 ? 7 : lum > 80 ? 5 : 4;
+      defs += `<pattern id="${pid}" width="${gap}" height="${gap}" patternUnits="userSpaceOnUse"><rect width="${gap}" height="${gap}" fill="${paper}"/><path d="M-${gap} ${gap}L${gap} -${gap}M0 ${gap*2}L${gap*2} 0" stroke="${ink}" stroke-width="${(1.15+darkness*2.2).toFixed(2)}" stroke-linecap="square"/></pattern>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'metal-etching') {
+      defs += `<pattern id="${pid}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="${paper}"/><path d="M-1 5L5 -1M1 7L7 1" stroke="#5B544D" stroke-width="${(.22+darkness*.48).toFixed(2)}" opacity="${(.34+darkness*.48).toFixed(2)}"/><path d="M0 0L5 5" stroke="#756C63" stroke-width=".22" opacity="${(.14+darkness*.32).toFixed(2)}"/></pattern>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'pencil') {
+      const gray = Math.round(238 - darkness*145).toString(16).padStart(2,'0');
+      defs += `<pattern id="${pid}" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#${gray}${gray}${gray}"/><path d="M-2 7L7 -2M2 9L9 2" stroke="#5C5854" stroke-width=".45" opacity="${(.18+darkness*.38).toFixed(2)}"/></pattern>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'charcoal') {
+      const base = mix('#EDE8E1','#242220',darkness*.82);
+      defs += `<linearGradient id="${pid}" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${mix(base,'#FFFFFF',.12)}"/><stop offset=".55" stop-color="${base}"/><stop offset="1" stop-color="${mix(base,'#141312',.2)}"/></linearGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'lithography') {
+      const washed = mix(c, '#E7DED0', .34);
+      defs += `<linearGradient id="${pid}" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="${mix(washed,'#FFFFFF',.18)}"/><stop offset=".5" stop-color="${washed}"/><stop offset="1" stop-color="${mix(washed,'#6C635A',.08)}"/></linearGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'watercolor') {
+      const light = mix(c,'#FFFFFF',.34), dark = mix(c,'#3F3935',.10);
+      defs += `<radialGradient id="${pid}" cx=".34" cy=".28" r=".86"><stop stop-color="${light}" stop-opacity=".64"/><stop offset=".48" stop-color="${c}" stop-opacity=".82"/><stop offset="1" stop-color="${dark}" stop-opacity=".7"/></radialGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'gouache') {
+      const light = mix(c,'#FFFFFF',.08), dark = mix(c,'#2C2926',.07);
+      defs += `<pattern id="${pid}" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="9" height="9" fill="${c}"/><circle cx="2" cy="3" r=".7" fill="${light}" opacity=".24"/><circle cx="7" cy="6" r=".6" fill="${dark}" opacity=".16"/></pattern>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'acrylic') {
+      defs += `<linearGradient id="${pid}" x1="0" y1="0" x2="1" y2=".8"><stop stop-color="${mix(c,'#FFFFFF',.18)}"/><stop offset=".36" stop-color="${c}"/><stop offset=".68" stop-color="${mix(c,'#000000',.08)}"/><stop offset="1" stop-color="${mix(c,'#FFFFFF',.04)}"/></linearGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'collage') {
+      const flat = mix(c,'#FFFFFF',.035);
+      defs += `<linearGradient id="${pid}" x1="0" y1="0" x2="0" y2="1"><stop stop-color="${mix(flat,'#FFFFFF',.08)}"/><stop offset="1" stop-color="${mix(flat,'#000000',.035)}"/></linearGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'pen-ink') {
+      const density = lum > 200 ? .12 : lum > 145 ? .3 : lum > 90 ? .52 : .78;
+      defs += `<pattern id="${pid}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${paper}"/><path d="M0 6L6 0" stroke="${ink}" stroke-width=".55" opacity="${density}"/><circle cx="1.2" cy="1.2" r=".55" fill="${ink}" opacity="${Math.min(.9,density+.08)}"/></pattern>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'digital-freehand') {
+      defs += `<linearGradient id="${pid}" x1=".15" y1="0" x2=".9" y2="1"><stop stop-color="${mix(c,'#FFFFFF',.23)}"/><stop offset=".45" stop-color="${c}"/><stop offset="1" stop-color="${mix(c,'#000000',.18)}"/></linearGradient>`;
+      replaceColor(c, `url(#${pid})`);
+    } else if (id === 'vector') {
+      replaceColor(c, c);
+    }
+  });
+
+  if (id === 'woodcut') {
+    defs += '<filter id="tech-filter" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="1" seed="8" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.15"/></filter>';
+    markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, `stroke="${ink}"`);
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'metal-etching') {
+    defs += '<filter id="tech-filter" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".09" numOctaves="1" seed="4" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".36"/></filter>';
+    markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, 'stroke="#413C37"');
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'pencil') {
+    defs += '<filter id="tech-filter" x="-7%" y="-7%" width="114%" height="114%"><feTurbulence type="fractalNoise" baseFrequency=".11" numOctaves="2" seed="13" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".42"/></filter>';
+    markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, 'stroke="#55514E"');
+    markup = `<g filter="url(#tech-filter)" opacity=".95">${markup}</g>`;
+  } else if (id === 'charcoal') {
+    defs += '<filter id="tech-filter" x="-12%" y="-12%" width="124%" height="124%"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="3" seed="23" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.25" result="d"/><feGaussianBlur in="d" stdDeviation=".22"/><feDropShadow dx="1" dy="2" stdDeviation="1.2" flood-color="#252321" flood-opacity=".2"/></filter>';
+    markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, 'stroke="#292725"');
+    markup = `<g filter="url(#tech-filter)" opacity=".96">${markup}</g>`;
+  } else if (id === 'lithography') {
+    defs += '<filter id="tech-filter" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="19" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".7"/><feColorMatrix type="saturate" values=".68"/></filter>';
+    markup = `<g filter="url(#tech-filter)" opacity=".94">${markup}</g>`;
+  } else if (id === 'watercolor') {
+    defs += '<filter id="tech-filter" x="-12%" y="-12%" width="124%" height="124%"><feTurbulence type="fractalNoise" baseFrequency=".017 .04" numOctaves="2" seed="11" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.1"/><feGaussianBlur stdDeviation=".12"/></filter>';
+    markup = `<g filter="url(#tech-filter)" opacity=".9">${markup}</g>`;
+  } else if (id === 'gouache') {
+    defs += '<filter id="tech-filter" x="-6%" y="-6%" width="112%" height="112%"><feTurbulence type="fractalNoise" baseFrequency=".085" numOctaves="1" seed="31" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".48"/></filter>';
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'acrylic') {
+    defs += '<filter id="tech-filter" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".025 .12" numOctaves="2" seed="5" result="grain"/><feDisplacementMap in="SourceGraphic" in2="grain" scale=".85"/><feColorMatrix type="saturate" values="1.18"/></filter>';
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'collage') {
+    defs += '<filter id="tech-filter" x="-14%" y="-14%" width="128%" height="128%"><feTurbulence type="fractalNoise" baseFrequency=".025" numOctaves="1" seed="17" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.05" result="cut"/><feDropShadow dx="2.2" dy="3" stdDeviation="1.5" flood-color="#4B4138" flood-opacity=".24"/></filter>';
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'pen-ink') {
+    defs += '<filter id="tech-filter" x="-6%" y="-6%" width="112%" height="112%"><feTurbulence type="fractalNoise" baseFrequency=".12" numOctaves="1" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale=".3"/></filter>';
+    markup = markup.replace(/stroke="#[a-f\d]{6}"/gi, 'stroke="#151515"');
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'digital-freehand') {
+    defs += '<filter id="tech-filter" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#1A1715" flood-opacity=".11"/></filter>';
+    markup = `<g filter="url(#tech-filter)">${markup}</g>`;
+  } else if (id === 'vector') {
+    markup = `<g style="shape-rendering:geometricPrecision;text-rendering:geometricPrecision">${markup}</g>`;
+  }
+
+  // Camada contextual do gênero: enfatiza finalidade sem destruir a materialidade.
+  if (a.illustrationGenre === 'advertising') {
+    defs += '<filter id="genre-filter"><feColorMatrix type="saturate" values="1.2"/></filter>';
+    markup = `<g filter="url(#genre-filter)">${markup}</g>`;
+  } else if (a.illustrationGenre === 'packaging') {
+    defs += '<filter id="genre-filter"><feColorMatrix type="saturate" values="1.08"/></filter>';
+    markup = `<g filter="url(#genre-filter)">${markup}</g>`;
+  } else if (a.illustrationGenre === 'branding') {
+    defs += '<filter id="genre-filter"><feColorMatrix type="saturate" values=".98"/></filter>';
+    markup = `<g filter="url(#genre-filter)">${markup}</g>`;
+  }
+
+  if (a.strokeEnabled === false) markup = markup.replace(/stroke="[^"]+"/gi, 'stroke="none"');
+  return { defs: `<defs>${defs}</defs>`, markup };
+}
+
 export function styleCharacterMarkup(markup: string, a: CharacterAppearance) {
   const s = selectedStyleVariant(a);
+  const techniqueLayer = illustrationTechniqueMarkup(markup, a);
+  if (techniqueLayer) return techniqueLayer;
   const monochrome = Boolean(s.monochrome || ['manga','pencil','ink','engraving','minimal-lineart'].includes(s.family));
   if (s.family === 'minimal-lineart') {
     const ink = a.strokeEnabled === false ? 'none' : (a.lineColor || '#252525');
